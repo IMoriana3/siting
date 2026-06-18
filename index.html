@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="zigbee_pv_model.js"></script><!-- núcleo RF (paridad con factiun_core.rf): capa de cobertura -->
 <style>
 :root{
   /* Tokens de la casa Factiun */
@@ -233,6 +234,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <label class="tg"><input type="checkbox" id="t-blocks" checked> Sombrear power blocks</label>
           <label class="tg"><input type="checkbox" id="t-grid" checked> Cuadrícula (100 m)</label>
           <label class="tg"><input type="checkbox" id="t-tables"> Dibujar mesas (tamaño real)</label>
+          <label class="tg"><input type="checkbox" id="t-rf"> Cobertura RF (orientativa · modelo físico, sesgo −33 dB)</label>
+          <label class="tg" id="rf-tilt-wrap" style="display:block">Inclinación seguidores (cobertura RF): <b id="rf-tilt-v" style="color:var(--blue);font-family:var(--mono)">30°</b>
+            <input type="range" id="rf-tilt" min="-55" max="55" value="30" step="1" style="width:100%;accent-color:var(--blue);margin-top:4px"></label>
+          <div class="hint" style="font-size:10.5px;color:var(--muted-2);line-height:1.4">RF colorea cada TCU por su margen al concentrador (verde holgado → rojo &lt;8 dB sin enlace). Es <b>orientativa</b>: a esta escala la distancia predice poco (n_eff≈0,4); manda la obstrucción local.</div>
         </div>
       </div>
 
@@ -851,7 +856,7 @@ function downloadTpl(){
 /* ===================== Estado + colores ===================== */
 const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
   p:{radius:250,capNCU:160,capGW:80,nrsu:1,reachX:40,reachY:90,gwAxis:"EW"},
-  v:{circles:false,gw:false,blocks:true,grid:true,tables:false},
+  v:{circles:false,gw:false,blocks:true,grid:true,tables:false,rf:false},
   T:{scale:1,ox:0,oy:0}, sel:null, hover:null, assignMode:false, placeMode:false, numMode:"rows", preset:false, fromAyora:false, measureMode:false, measure:{a:null,b:null}, projOX:null, projOY:null, ncuColor:{}, pbColor:{}};
 const PB_PALETTE=["#215E99","#1f9d57","#d98300","#8e44ad","#16a0a0","#c0392b"];
 function hueColor(i,light){ const h=(i*137.508)%360; return `hsl(${h.toFixed(0)} 62% ${light?64:46}%)`; }
@@ -864,6 +869,28 @@ function motorColor(m){
   const idx=S.ncuColor[m.ncu]??0;
   return hueColor(idx, S.v.gw && m.gw===2);
 }
+
+/* ── Capa de cobertura RF (orientativa) ──────────────────────────────────────
+   Usa el núcleo físico ZigbeePV (paridad con factiun_core.rf) con los parámetros
+   calibrados de El Burgo I (sesgo −33,6 dB). Por cada TCU calcula el margen al
+   concentrador (Tx); las filas de módulos intermedias se modelan como obstáculos
+   de difracción cuya cota depende de la inclinación. Constantes tipo El Burgo. */
+const RF_PITCH_M=12.0, RF_CHORD_M=2.38, RF_ANT_H=1.5;
+function rfParams(){ return (window.ZigbeePV&&ZigbeePV.defaultParamsElBurgo)?ZigbeePV.defaultParamsElBurgo():null; }
+function rfTilt(){ const el=document.getElementById("rf-tilt"); return el?(+el.value||0):30; }
+function rfObstacles(n,m){
+  const dx=m.x-n.x, D=Math.hypot(m.x-n.x,m.y-n.y); if(D<0.5||Math.abs(dx)<1e-6)return [];
+  const top=ZigbeePV.rowTopElev(0,RF_ANT_H,RF_CHORD_M,rfTilt());
+  const obs=[], lo=Math.ceil(Math.min(n.x,m.x)/RF_PITCH_M), hi=Math.floor(Math.max(n.x,m.x)/RF_PITCH_M);
+  for(let k=lo;k<=hi;k++){ const t=(k*RF_PITCH_M-n.x)/dx; if(t>0.001&&t<0.999)obs.push([t*D,top]); }
+  return obs;
+}
+function rfMargin(n,m){
+  const p=rfParams(); if(!p)return null;
+  const D=Math.hypot(m.x-n.x,m.y-n.y);
+  return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m)).marginDb;
+}
+function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
 /* ===================== Cálculo ===================== */
 function readParams(){
   S.p.radius=Math.max(20,+document.getElementById("radius").value||250);
@@ -1029,9 +1056,12 @@ function draw(){
   // motores / mesas
   const r=Math.max(1.2, Math.min(3, S.T.scale*3.2));
   const TAB=S.v.tables;
+  const _rfById={}; if(S.v.rf){ S.ncus.forEach(n=>_rfById[n.id]=n); }
   for(const m of S.motors){
     const s=w2s(m); const dim=S.sel && m.ncu!==S.sel;
-    const col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
+    let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
+    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],m) : null; col = rfColor(m._rfMargin); }
+    else { m._rfMargin = null; }
     if(TAB){
       const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
       const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a), hl=Lm/2, hw=Wm/2;
@@ -1043,6 +1073,11 @@ function draw(){
       ctx.fillStyle=col; ctx.fillRect(s.x-r,s.y-r,r*2,r*2);
     }
     if(S.T.scale>2.6 && m.tn!=null && !dim){ ctx.fillStyle="#0A1D30"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(m.tn, s.x, s.y-r-6); }
+  }
+  // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
+  if(S.v.rf){
+    for(const m of S.motors){ if(m._rfMargin==null||m._rfMargin>=8)continue; const s=w2s(m);
+      ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.strokeStyle="#e0322c"; ctx.lineWidth=1.8; ctx.stroke(); }
   }
   // cobertura: TCU fuera del radio de su NCU; violeta si la cubre un repetidor, rojo si no
   const _byId={}; S.ncus.forEach(n=>_byId[n.id]=n);
@@ -1263,7 +1298,8 @@ document.getElementById("tpl").onclick=downloadTpl;
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
 document.getElementById("rsu-use").onclick=()=>{ document.getElementById("nrsu").value=document.getElementById("rsu-sug").textContent; recompute(false); };
-["circles","gw","blocks","grid","tables"].forEach(k=>{ document.getElementById("t-"+k).onchange=e=>{ S.v[k]=e.target.checked; renderLegend(); draw(); }; });
+["circles","gw","blocks","grid","tables","rf"].forEach(k=>{ document.getElementById("t-"+k).onchange=e=>{ S.v[k]=e.target.checked; renderLegend(); draw(); }; });
+(function(){ const t=document.getElementById("rf-tilt"); if(t)t.addEventListener("input",()=>{ const v=document.getElementById("rf-tilt-v"); if(v)v.textContent=t.value+"°"; if(S.v.rf)draw(); }); })();
  ["tlen","twid"].forEach(id=>{ const el=document.getElementById(id); if(el)["input","change"].forEach(ev=>el.addEventListener(ev,()=>{ readParams(); draw(); })); });
  document.getElementById("ayora-edit").onclick=()=>{ S.preset=!S.preset; updatePanel(); draw(); };
 document.getElementById("fit").onclick=fit;
