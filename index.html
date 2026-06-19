@@ -184,6 +184,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <label class="btn btn-ghost btn-sm btn-block" style="cursor:pointer">Cargar proyecto (Excel)<input type="file" id="xlsx" accept=".xlsx,.xls" style="display:none"></label>
           <button class="btn btn-ghost btn-sm" id="tpl" title="Descargar plantilla">CSV ⬇</button>
         </div>
+        <button class="btn btn-primary btn-sm btn-block" id="autosite" style="margin-top:8px" title="Coge las TCUs del proyecto/CSV cargado y deja que el optimizador coloque las NCUs (ignora el reparto entregado) — para comparar real vs automático">⚡ Autoubicar NCUs (recalcular este proyecto)</button>
       </div>
 
       <div class="sec">
@@ -1297,6 +1298,15 @@ document.getElementById("xlsx").onchange=e=>{
   r.readAsArrayBuffer(f);
 };
 document.getElementById("tpl").onclick=downloadTpl;
+(function(){ const b=document.getElementById("autosite"); if(!b)return; b.onclick=()=>{   // recalcula NCUs automáticas sobre las TCUs ya cargadas (proyecto real o CSV/Excel)
+  if(!S.motors||!S.motors.length){ alert("Carga antes un proyecto real (botones de arriba) o un CSV/Excel de motores."); return; }
+  S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az}));   // usa las TCUs como motores; descarta el reparto NCU/GW entregado
+  S.preset=false; S.fromAyora=false; S.sel=null;
+  S.hull=convexHull(S.motors);
+  const sug=suggestRSU(S.hull); const nr=document.getElementById("nrsu"); if(nr)nr.value=sug; const rs=document.getElementById("rsu-sug"); if(rs)rs.textContent=sug;
+  document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active"));   // ya no es "proyecto real": pasa a automático
+  recompute(true);
+}; })();
 ["radius","capNCU","capGW","nrsu","reachX","reachY"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
