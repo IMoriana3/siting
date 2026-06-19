@@ -46,6 +46,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .scn{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .scn button{padding:9px 8px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface-2);font-weight:500;font-size:12.5px;transition:.13s;text-align:left;line-height:1.25}
 .scn button small{display:block;color:var(--muted-2);font-size:10.5px;font-weight:400;font-family:var(--mono);margin-top:2px}
+.scn button.wide{grid-column:1/-1}
+.scn button.real{border-color:var(--blue);color:var(--blue)}
+.scn button.auto{border-color:var(--amber);color:var(--amber)}
 .scn button:hover{border-color:var(--blue);color:var(--blue)}
 .scn button.active{background:var(--blue);color:var(--void);border-color:var(--blue)}
 .scn button.active small{color:rgba(11,15,20,.72)}
@@ -169,12 +172,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <button data-sc="archipielago">Archipiélago<small>~14 islas dispersas</small></button>
           <button data-sc="irregular">Parcela irregular<small>orgánica + estanque</small></button>
           <button data-sc="viales">Viales · corte E-O<small>~480 · pasillo 55 m</small></button>
-          <button data-sc="ayora" style="grid-column:1/-1;border-color:var(--blue);color:var(--blue)">Ayora 24025 · proyecto real<small>754 TCU · 16 NCU · doble nomenclatura</small></button>
-          <button data-sc="paramo" style="grid-column:1/-1;border-color:var(--blue);color:var(--blue)">Páramo 25019 · proyecto real<small>396 TCU · 4 NCU · 3 HSU</small></button>
-          <button data-sc="sanjose" style="grid-column:1/-1;border-color:var(--blue);color:var(--blue)">San José 24019 · proyecto real<small>2289 TCU · 21 NCU · doble nomenclatura (Acciona)</small></button>
-          <button data-sc="burgo" style="grid-column:1/-1;border-color:var(--blue);color:var(--blue)">El Burgo I 23003 · proyecto real<small>215 TCU · 2 NCU · mesas a tamaño real</small></button>
-          <button data-sc="fuv1" style="grid-column:1/-1;border-color:var(--amber);color:var(--amber)">26127 FUV I · siting automático<small>656 motores · NCU calculadas</small></button>
-          <button data-sc="fuv2" style="grid-column:1/-1;border-color:var(--amber);color:var(--amber)">26127 FUV II · siting automático<small>662 motores · NCU calculadas</small></button>
+          <button data-sc="ayora" class="wide real">Ayora 24025 · proyecto real<small>754 TCU · 16 NCU · doble nomenclatura</small></button>
+          <button data-sc="paramo" class="wide real">Páramo 25019 · proyecto real<small>396 TCU · 4 NCU · 3 HSU</small></button>
+          <button data-sc="sanjose" class="wide real">San José 24019 · proyecto real<small>2289 TCU · 21 NCU · doble nomenclatura (Acciona)</small></button>
+          <button data-sc="burgo" class="wide real">El Burgo I 23003 · proyecto real<small>215 TCU · 2 NCU · mesas a tamaño real</small></button>
+          <button data-sc="fuv1" class="wide auto">26127 FUV I · siting automático<small>656 motores · NCU calculadas</small></button>
+          <button data-sc="fuv2" class="wide auto">26127 FUV II · siting automático<small>662 motores · NCU calculadas</small></button>
         </div>
         <div class="csv-row">
           <label class="btn btn-ghost btn-sm btn-block" style="cursor:pointer">Cargar CSV de motores<input type="file" id="csv" accept=".csv" style="display:none"></label>
