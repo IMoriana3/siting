@@ -1333,6 +1333,8 @@ document.getElementById("zoom-out").onclick=()=>zoomBy(1/1.45);
 /* ===================== Arranque ===================== */
 S.motors=scenario("compacta");
 resize(); recomputeNewData();
+/* deep-link desde la cartera: ?planta=<id> abre esa planta directamente */
+(function(){ try{ var p=new URLSearchParams(location.search).get("planta"); if(!p)return; p=p.toLowerCase().trim(); if(p==="elburgo"||p==="el_burgo"||p==="el-burgo")p="burgo"; var b=document.querySelector('#scn button[data-sc="'+p+'"]'); if(b){ b.click(); b.scrollIntoView({block:"nearest"}); } }catch(e){} })();
 </script>
 <footer class="app-foot">Factiun · Demo Siting — <a href="https://imoriana3.github.io/proyectos/">Panel de Proyectos</a></footer>
 </body>
