@@ -1188,7 +1188,14 @@ function draw(){
   }
   // cobertura: TCU fuera del radio de su NCU; violeta si la cubre un repetidor, rojo si no
   const _byId={}; S.ncus.forEach(n=>_byId[n.id]=n);
-  for(const m of S.motors){ if(m.ncu==null)continue; const mn=_byId[m.ncu]; if(!mn)continue; if(Math.hypot(m.x-mn.x,m.y-mn.y)<=S.p.radius)continue; const s=w2s(m); const byRep=(S.reps||[]).some(rp=>Math.hypot(m.x-rp.x,m.y-rp.y)<=S.p.radius); ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.strokeStyle=byRep?"#8e44ad":"#e0322c"; ctx.lineWidth=1.8; ctx.stroke(); }
+  for(const m of S.motors){ if(m.ncu==null)continue; const mn=_byId[m.ncu]; if(!mn)continue; if(Math.hypot(m.x-mn.x,m.y-mn.y)<=S.p.radius)continue; const s=w2s(m); const byRep=(S.reps||[]).some(rp=>Math.hypot(m.x-rp.x,m.y-rp.y)<=S.p.radius); ctx.strokeStyle=byRep?"#8e44ad":"#e0322c"; ctx.lineWidth=1.8;
+    if(TAB){   // en modo MESAS el aro de r+2,8 px quedaba flotando en medio de una mesa de 60 m y se leía
+               // como "TCU suelta en el pasillo": se remarca el CONTORNO de su mesa, que es lo que avisa
+      const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
+      const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a), hl=Lm/2, hw=Wm/2;
+      const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+      ctx.beginPath(); ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath(); ctx.stroke();
+    } else { ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.stroke(); } }
   // RSU lines a su NCU (suave) + NCUs + RSUs
   ctx.lineWidth=1;
   // frontera GW1|GW2 (recta por la NCU; vertical si corte E-O, horizontal si corte N-S)
