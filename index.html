@@ -1181,6 +1181,18 @@ function draw(){
         ctx.fillStyle=col; ctx.fill();
         if(S.T.scale>0.45 && !dim){ ctx.strokeStyle="rgba(10,29,48,.3)"; ctx.lineWidth=0.6; ctx.stroke(); }
       }
+      /* BIELA (eje de transmisión): es lo que hace que las dos filas se lean como UN seguidor y no
+         como dos mesas sueltas. En el 3D ya existe —imShaft de terreno.html, cilindro de 2·filaZ de
+         largo y Ø 60 mm colocado en el centro del seguidor—, y aquí se usa la MISMA referencia: un
+         trazo perpendicular a las filas, a la altura del punto del tracker (donde está el motor con
+         su TCU), que cruza del centro de una fila al centro de la otra. Cada seguidor queda así como
+         una "H" tumbada. El Ø real (60 mm) es sub-píxel a escala de siting, así que se traza con un
+         grosor mínimo legible en vez de a tamaño; sin bífilo (una sola banda) no hay biela que pintar. */
+      if(sep>0.05){
+        const b1=w2s({x:m.x-sep/2*wx, y:m.y-sep/2*wy}), b2=w2s({x:m.x+sep/2*wx, y:m.y+sep/2*wy});
+        ctx.beginPath(); ctx.moveTo(b1.x,b1.y); ctx.lineTo(b2.x,b2.y);
+        ctx.strokeStyle=col; ctx.lineWidth=Math.max(1, Math.min(3, S.T.scale*1.6)); ctx.stroke();
+      }
     } else {
       ctx.fillStyle=col; ctx.fillRect(s.x-r,s.y-r,r*2,r*2);
     }
