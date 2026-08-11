@@ -184,6 +184,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <button class="btn btn-ghost btn-sm" id="tpl" title="Descargar plantilla">CSV ⬇</button>
         </div>
         <button class="btn btn-primary btn-sm btn-block" id="autosite" style="margin-top:8px" title="Coge las TCUs del proyecto/CSV cargado y deja que el optimizador coloque las NCUs (ignora el reparto entregado) — para comparar real vs automático">⚡ Autoubicar NCUs (recalcular este proyecto)</button>
+        <button class="btn btn-sm btn-block" id="autosite-zero" style="margin-top:6px" title="SIMULACIÓN: tira el reparto del plano y calcula NCUs y gateways desde cero, para comparar con lo proyectado. No conserva nada.">↻ Recalcular desde cero (simular)</button>
       </div>
 
       <div class="sec">
@@ -1403,13 +1404,48 @@ document.getElementById("xlsx").onchange=e=>{
 document.getElementById("tpl").onclick=downloadTpl;
 (function(){ const b=document.getElementById("autosite"); if(!b)return; b.onclick=()=>{   // recalcula NCUs automáticas sobre las TCUs ya cargadas (proyecto real o CSV/Excel)
   if(!S.motors||!S.motors.length){ alert("Carga antes un proyecto real (botones de arriba) o un CSV/Excel de motores."); return; }
-  S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az}));   // usa las TCUs como motores; descarta el reparto NCU/GW entregado
+  autoSite(false);   // CONSERVADOR: respeta las NCUs que ya hay y solo cubre lo que quede suelto
+}; })();
+(function(){ const b=document.getElementById("autosite-zero"); if(!b)return; b.onclick=()=>{
+  if(!S.motors||!S.motors.length){ alert("Carga antes un proyecto real (botones de arriba) o un CSV/Excel de motores."); return; }
+  const n=S.ncus?S.ncus.length:0;
+  if(n&&!confirm("Simulación: se DESCARTAN las "+n+" NCU del plano y se calcula el reparto desde cero.\n\nPara volver al reparto real, recarga la planta desde su botón.\n\n¿Continuar?"))return;
+  autoSite(true);
+}; })();
+/* Autoubicación. 'desdeCero' es la SIMULACIÓN de siempre: descarta el reparto entregado y recalcula.
+   Por defecto NO se pisa nada — el reparto del plano es un dato del proyecto, no una propuesta:
+   las NCUs existentes se conservan donde están y solo se AÑADEN las que hagan falta para cubrir las
+   TCU que queden sueltas (por radio o por capacidad). */
+function autoSite(desdeCero){
+  const previas = desdeCero ? [] : (S.ncus||[]).map(n=>({id:n.id,x:n.x,y:n.y,pb:n.pb||null,gz:n.gz,tipo:n.tipo,
+                                                        manual:true,motorIdx:[],gw:[[],[]],count:0}));
+  S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az}));
   S.preset=false; S.fromAyora=false; S.sel=null;
   S.hull=convexHull(S.motors);
-  const sug=suggestRSU(S.hull); const nr=document.getElementById("nrsu"); if(nr)nr.value=sug; const rs=document.getElementById("rsu-sug"); if(rs)rs.textContent=sug;
-  document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active"));   // ya no es "proyecto real": pasa a automático
-  recompute(true);
-}; })();
+  const sug=suggestRSU(S.hull); const nr=document.getElementById("nrsu"); if(nr)nr.value=sug;
+  const rs=document.getElementById("rsu-sug"); if(rs)rs.textContent=sug;
+  document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active"));
+  readParams();
+  if(!previas.length){ recompute(true); return; }                 // sin nada que conservar: cálculo normal
+  S.ncus=previas;
+  reassignToNearest(S.motors,S.ncus,null,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis);
+  const libres=[]; S.motors.forEach((m,i)=>{ if(m.ncu==null) libres.push(i); });
+  let anadidas=0;
+  if(libres.length){                                              // solo lo que quede suelto genera NCU nueva
+    const sub=libres.map(i=>S.motors[i]);
+    const extra=siteAll(sub,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,
+                             reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis});
+    extra.forEach(n=>S.ncus.push({id:"",x:n.x,y:n.y,pb:n.pb||null,manual:true,motorIdx:[],gw:[[],[]],count:0}));
+    anadidas=extra.length;
+    S.ncus.forEach((n,k)=>{ if(!n.id) n.id="NCU-"+String(k+1).padStart(2,"0"); });
+    reassignToNearest(S.motors,S.ncus,null,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis);
+  }
+  S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  applyNumbering(); assignColors(); updatePanel(); fit();
+  const sin=S.motors.filter(m=>m.ncu==null).length;
+  const msg=document.getElementById("msg-auto");
+  if(msg)msg.textContent="Conservadas "+previas.length+" NCU del plano · "+anadidas+" añadidas"+(sin?" · "+sin+" TCU sin cubrir":"");
+}
 ["radius","capNCU","capGW","nrsu","reachX","reachY"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
