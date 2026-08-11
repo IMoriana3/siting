@@ -843,9 +843,13 @@ function parseProjectXLSX(wb, fname){
    rectángulo macizo de 8,4 m engañaba, porque de esos 8,4 m solo hay módulos en 2 × 2,382 = 4,76 m
    y el resto es el pasillo entre filas. Afecta a El Burgo y Fayón; las demás plantas son de una
    fila y no tienen el problema. */
-function applyTablesPref(hasDims){
+function applyTablesPref(hasDims,def){
+  // Arranque: si la planta trae dimensiones reales se abre en MESAS (es lo que se quiere ver); si no,
+  // en marcas. En cuanto el usuario toca la casilla manda su elección y se conserva al cambiar de
+  // planta. Se había perdido el arranque: todas abrían en marcas aunque tuvieran medidas.
   S.hasDims=!!hasDims;
-  S.v.tables=(S.tablesUser===null||S.tablesUser===undefined)?false:S.tablesUser;
+  const arranque=(def!==undefined)?!!def:!!hasDims;
+  S.v.tables=(S.tablesUser===null||S.tablesUser===undefined)?arranque:S.tablesUser;
   var c=document.getElementById("t-tables"); if(c)c.checked=S.v.tables;
   var n=document.getElementById("t-tables-note");
   if(n)n.textContent=hasDims?(S.bifilo?"(tamaño real · bífilo)":"(tamaño real)"):"(tamaño nominal · Parámetros)";
@@ -868,7 +872,7 @@ function loadProject(P){
      envolvente de las dos filas, así que la separación entre ellas se deduce (ancho − cuerda) y no
      se repite como dato: así las dos bandas siempre rellenan exactamente la envolvente guardada. */
   S.bifilo=P.bifilo||null;
-  applyTablesPref(P.tcus.some(t=>t[6]!=null)||!!P.mesa);   // también cuenta la mesa por planta   // mesas/marcas: manda la elección del usuario si ya la hizo
+  applyTablesPref(P.tcus.some(t=>t[6]!=null)||!!P.mesa, P.tables);   // arranca en mesas si la planta las trae; luego manda el usuario si ya la hizo
   assignColors(); updatePanel(); fit();
 }
 function loadAyora(){ loadProject(AYORA); }
