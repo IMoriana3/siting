@@ -643,12 +643,12 @@ function handleRect(d){
     const mx=(d.x0-rect.left)*DPR, my=(d.y0-rect.top)*DPR;
     let bn=null,bd=15*DPR; for(const n of S.ncus){const s=w2s(n);const dd=Math.hypot(s.x-mx,s.y-my);if(dd<bd){bd=dd;bn=n;}}
     if(bn){ S.sel=bn.id; updatePanel(); return; }
-    let bm=null,bdm=11*DPR; for(let i=0;i<S.motors.length;i++){const s=w2s(S.motors[i]);const dd=Math.hypot(s.x-mx,s.y-my);if(dd<bdm){bdm=dd;bm=i;}}
+    let bm=null,bdm=11*DPR; for(let i=0;i<S.motors.length;i++){const s=w2s(tcuPt(S.motors[i]));const dd=Math.hypot(s.x-mx,s.y-my);if(dd<bdm){bdm=dd;bm=i;}}
     if(bm!=null) assignMotorsToActive([bm]);
   } else {
     const x0=Math.min(d.x0,d.x1)-rect.left, x1=Math.max(d.x0,d.x1)-rect.left;
     const y0=Math.min(d.y0,d.y1)-rect.top, y1=Math.max(d.y0,d.y1)-rect.top;
-    const sel=[]; for(let i=0;i<S.motors.length;i++){ const s=w2s(S.motors[i]); const px=s.x/DPR, py=s.y/DPR; if(px>=x0&&px<=x1&&py>=y0&&py<=y1) sel.push(i); }
+    const sel=[]; for(let i=0;i<S.motors.length;i++){ const s=w2s(tcuPt(S.motors[i])); const px=s.x/DPR, py=s.y/DPR; if(px>=x0&&px<=x1&&py>=y0&&py<=y1) sel.push(i); }
     assignMotorsToActive(sel);
   }
 }
@@ -1017,6 +1017,24 @@ function rfMargin(n,m){
   return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
+/* PUNTO DE LA TCU. La coordenada que guarda cada seguidor es la del EJE del tracker: es lo que dan
+   el DWG y el listado del cliente, y es donde va la biela. Pero la TCU no está ahí. Va atornillada a
+   la viga del MOTOR, en el extremo de la biela — la fila OESTE, como en el 3D (terreno.html: "TCU,
+   sus abarcones y chapas solo en la fila OESTE (la del motor)"). O sea a media separación entre
+   filas del eje: 3,01 m en El Burgo y Fayón.
+   Importa porque el radio está DENTRO de la TCU: la cobertura se mide desde aquí, no desde el eje,
+   y la marca se dibuja aquí, sobre su viga, en vez de flotando en mitad del pasillo. En plantas de
+   una sola fila no hay separación que aplicar y la TCU se queda en el punto, como siempre.
+   El desplazamiento va sobre el eje TRANSVERSAL del seguidor, así que sigue al azimut: en un
+   seguidor girado la TCU acompaña a su fila. Falta el corrimiento a lo largo del tubo (tcuX = 1,4 m
+   en seguidor.js): no se aplica porque no está confirmado de qué lado cae, y es un orden de
+   magnitud menor que el transversal. */
+function tcuPt(m){
+  const cu=(S.bifilo&&S.bifilo.cuerda)||0, Wm=(m.wid!=null?m.wid:S.p.twid), sep=(cu>0&&Wm>0)?(Wm-cu):0;
+  if(!(sep>0.05))return m;
+  const a=((m.az||0))*Math.PI/180;
+  return {x:m.x-sep/2*Math.cos(a), y:m.y+sep/2*Math.sin(a)};
+}
 /* ===================== Cálculo ===================== */
 function readParams(){
   S.p.radius=Math.max(20,+document.getElementById("radius").value||250);
@@ -1067,7 +1085,7 @@ function updatePanel(){
   // avisos
   const errs=[];
   const _adj=S.ncus._adj;
-  S.ncus.forEach(n=>{ if(n.count>S.p.capNCU)errs.push(`${n.id} sobre capacidad`); if(n.gw[0].length>S.p.capGW||n.gw[1].length>S.p.capGW)errs.push(`${n.id} GW sobre límite`); if(!ncuConnected(n,_adj))errs.push(`${n.id} salta un claro (malla rota)`); const _out=n.motorIdx.filter(i=>Math.hypot(S.motors[i].x-n.x,S.motors[i].y-n.y)>S.p.radius && !(S.reps||[]).some(rp=>Math.hypot(S.motors[i].x-rp.x,S.motors[i].y-rp.y)<=S.p.radius)).length; if(_out)errs.push(`${n.id}: ${_out} TCU sin cobertura`); });
+  S.ncus.forEach(n=>{ if(n.count>S.p.capNCU)errs.push(`${n.id} sobre capacidad`); if(n.gw[0].length>S.p.capGW||n.gw[1].length>S.p.capGW)errs.push(`${n.id} GW sobre límite`); if(!ncuConnected(n,_adj))errs.push(`${n.id} salta un claro (malla rota)`); const _out=n.motorIdx.filter(i=>{const q=tcuPt(S.motors[i]);return Math.hypot(q.x-n.x,q.y-n.y)>S.p.radius && !(S.reps||[]).some(rp=>Math.hypot(q.x-rp.x,q.y-rp.y)<=S.p.radius);}).length; if(_out)errs.push(`${n.id}: ${_out} TCU sin cobertura`); });
   const _orphan=S.motors.filter(m=>m.ncu==null).length; if(_orphan)errs.push(`${_orphan} TCU sin NCU (fuera de cobertura)`);
   const _empty=S.ncus.filter(n=>n.count===0).length; if(_empty)errs.push(`${_empty} NCU vacía(s)`);
   const adj=S.rsus.filter(r=>r.adjusted).length;
@@ -1167,7 +1185,7 @@ function draw(){
       const c=w2s(nsel), col=hueColor(S.ncuColor[nsel.id],false);
       let far=null, fd=-1;
       ctx.strokeStyle=col; ctx.globalAlpha=0.22; ctx.lineWidth=1; ctx.beginPath();
-      for(const i of nsel.motorIdx){ const m=S.motors[i], s=w2s(m); ctx.moveTo(c.x,c.y); ctx.lineTo(s.x,s.y); const d=Math.hypot(m.x-nsel.x,m.y-nsel.y); if(d>fd){fd=d;far=m;} }
+      for(const i of nsel.motorIdx){ const m=S.motors[i], q=tcuPt(m), s=w2s(q); ctx.moveTo(c.x,c.y); ctx.lineTo(s.x,s.y); const d=Math.hypot(q.x-nsel.x,q.y-nsel.y); if(d>fd){fd=d;far=m;} }
       ctx.stroke(); ctx.globalAlpha=1;
       if(far){ const s=w2s(far);
         ctx.strokeStyle=col; ctx.globalAlpha=0.95; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(s.x,s.y); ctx.stroke(); ctx.globalAlpha=1;
@@ -1185,9 +1203,9 @@ function draw(){
   const TAB=S.v.tables;
   const _rfById={}; if(S.v.rf){ S.ncus.forEach(n=>_rfById[n.id]=n); }
   for(const m of S.motors){
-    const s=w2s(m); const dim=S.sel && m.ncu!==S.sel;
+    const s=w2s(tcuPt(m)); const dim=S.sel && m.ncu!==S.sel;   // la marca va donde está la TCU (su viga), no en el eje
     let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
-    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],m) : null; col = rfColor(m._rfMargin); }
+    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m)) : null; col = rfColor(m._rfMargin); }
     else { m._rfMargin = null; }
     if(TAB){
       const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
@@ -1236,12 +1254,12 @@ function draw(){
   }
   // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
   if(S.v.rf){
-    for(const m of S.motors){ if(m._rfMargin==null||m._rfMargin>=8)continue; const s=w2s(m);
+    for(const m of S.motors){ if(m._rfMargin==null||m._rfMargin>=8)continue; const s=w2s(tcuPt(m));
       ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.strokeStyle="#e0322c"; ctx.lineWidth=1.8; ctx.stroke(); }
   }
   // cobertura: TCU fuera del radio de su NCU; violeta si la cubre un repetidor, rojo si no
   const _byId={}; S.ncus.forEach(n=>_byId[n.id]=n);
-  for(const m of S.motors){ if(m.ncu==null)continue; const mn=_byId[m.ncu]; if(!mn)continue; if(Math.hypot(m.x-mn.x,m.y-mn.y)<=S.p.radius)continue; const s=w2s(m); const byRep=(S.reps||[]).some(rp=>Math.hypot(m.x-rp.x,m.y-rp.y)<=S.p.radius); ctx.strokeStyle=byRep?"#8e44ad":"#e0322c"; ctx.lineWidth=1.8;
+  for(const m of S.motors){ if(m.ncu==null)continue; const mn=_byId[m.ncu]; if(!mn)continue; const q=tcuPt(m); if(Math.hypot(q.x-mn.x,q.y-mn.y)<=S.p.radius)continue; const s=w2s(q); const byRep=(S.reps||[]).some(rp=>Math.hypot(q.x-rp.x,q.y-rp.y)<=S.p.radius); ctx.strokeStyle=byRep?"#8e44ad":"#e0322c"; ctx.lineWidth=1.8;
     if(TAB){   // en modo MESAS el aro de r+2,8 px quedaba flotando en medio de una mesa de 60 m y se leía
                // como "TCU suelta en el pasillo": se remarca el CONTORNO de su mesa, que es lo que avisa
       const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
@@ -1362,7 +1380,7 @@ cv.addEventListener("pointermove",e=>{
   if(best){ S.hover=best.id; tip.style.opacity=1; tip.style.left=(e.clientX-rect.left+12)+"px"; tip.style.top=(e.clientY-rect.top+12)+"px";
     tip.innerHTML=`<span class="t-id">${best.id}</span>${best.gz?' · '+(S.altLabel||'GZ')+' '+best.gz:(best.pb?' · '+best.pb:'')}<br>${best.count} TCU · GW ${best.gw[0].length}/${best.gw[1].length}${best.tipo?' · '+best.tipo:''}${utmTip(best.x,best.y)}`; draw(); }
   else {
-    let bm=null,bdm=10*DPR; for(let i=0;i<S.motors.length;i++){ const s=w2s(S.motors[i]); const d=Math.hypot(s.x-mx,s.y-my); if(d<bdm){bdm=d;bm=i;} }
+    let bm=null,bdm=10*DPR; for(let i=0;i<S.motors.length;i++){ const s=w2s(tcuPt(S.motors[i])); const d=Math.hypot(s.x-mx,s.y-my); if(d<bdm){bdm=d;bm=i;} }
     if(bm!=null && S.motors[bm].tcu){ const mm=S.motors[bm]; if(S.hover){S.hover=null;draw();} tip.style.opacity=1; tip.style.left=(e.clientX-rect.left+12)+"px"; tip.style.top=(e.clientY-rect.top+12)+"px"; tip.innerHTML=`<span class="t-id">${mm.tcu}</span><br>${mm.pb?mm.pb+' \u00b7 ':''}${mm.ncu} \u00b7 GW${mm.gw}${utmTip(mm.x,mm.y)}`; }
     else if(S.hover){ S.hover=null; tip.style.opacity=0; draw(); }
     else { tip.style.opacity=0; }
