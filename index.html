@@ -425,13 +425,51 @@ function splitGW(motors, ncu, capGW, gwAxis){
   ncu.gw=[g1,g2];
 }
 function recomputeGW(n){ splitGW(S.motors,n,S.p.capGW,S.p.gwAxis); n.gw.forEach((arr,g)=>arr.forEach(i=>S.motors[i].gw=g+1)); }
+/* SEPARACIÓN MÍNIMA a los módulos: la NCU no puede quedar a menos de CLEAR_MOD metros de ninguna
+   mesa (requisito de instalación). Cada seguidor ocupa un rectángulo len x wid orientado por su
+   azimut; si el punto propuesto invade la banda de guarda, se EMPUJA por la normal hasta librarla.
+   Sin dimensiones de mesa se usa el ancho por defecto de Parámetros, así que la guarda existe igual. */
+const CLEAR_MOD=2.0;
+function dModulo(px,py,m,P){                       // distancia del punto al rectángulo de la mesa (0 si dentro)
+  const L=(m.len!=null?m.len:P.tlen), W=(m.wid!=null?m.wid:P.twid), a=((m.az||0))*Math.PI/180;
+  const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a);
+  const dx=px-m.x, dy=py-m.y;
+  const u=Math.abs(dx*wx+dy*wy)-W/2, v=Math.abs(dx*lx+dy*ly)-L/2;   // coords locales, fuera del borde
+  const ou=Math.max(u,0), ov=Math.max(v,0);
+  return (ou||ov)?Math.hypot(ou,ov):Math.max(u,v);                  // negativo si el punto cae dentro
+}
+function separaDeModulos(n,motors,arr,P,radius){
+  // Busca el punto MÁS CERCANO al ideal que (a) libre CLEAR_MOD de toda mesa y (b) siga cubriendo
+  // el grupo. Empujar por la normal del módulo más cercano no basta: al salir de una mesa se entra
+  // en la de al lado. Se barre en ESPIRAL (anillos de 0,5 m x 24 ángulos) y se coge el primer punto
+  // válido, que por construcción es el de menor desplazamiento.
+  const R2=radius*radius;
+  const cubre=(x,y)=>{for(const i of arr){const dx=motors[i].x-x,dy=motors[i].y-y;if(dx*dx+dy*dy>R2)return false;}return true;};
+  const holgura=(x,y)=>{let d=Infinity;for(const m of motors){const e=dModulo(x,y,m,P);if(e<d)d=e;if(d<-1e3)break;}return d;};
+  if(holgura(n.x,n.y)>=CLEAR_MOD) return;                       // ya libra: no se toca
+  const x0=n.x,y0=n.y; let mejor=null,mejorH=-Infinity;
+  for(let r=0.5;r<=30;r+=0.5){
+    const pasos=Math.max(24,Math.round(2*Math.PI*r/0.6));
+    for(let k=0;k<pasos;k++){
+      const a=2*Math.PI*k/pasos, x=x0+r*Math.cos(a), y=y0+r*Math.sin(a);
+      const h=holgura(x,y);
+      if(h>=CLEAR_MOD&&cubre(x,y)){ n.x=x; n.y=y; n.holgura=+h.toFixed(2); return; }   // primer válido = mínimo desplazamiento
+      if(h>mejorH&&cubre(x,y)){ mejorH=h; mejor=[x,y]; }
+    }
+  }
+  // Puede NO haber solución dentro del campo: si el pasillo entre mesas mide menos de 2*CLEAR_MOD
+  // (El Burgo: 12 m de paso - 8,4 de mesa = 3,6 m de pasillo -> 1,8 m como mucho), los 2 m solo se
+  // logran sacando la NCU fuera de la fila. Aquí se deja el mejor punto posible y se ANOTA la holgura
+  // real en n.holgura para que el panel pueda avisar, en vez de fingir que se cumple.
+  if(mejor){ n.x=mejor[0]; n.y=mejor[1]; n.holgura=+mejorH.toFixed(2); }
+}
 function placeCut(n,gwAxis,radius,capGW,motors){
   const arr=n.motorIdx; const R2=radius*radius;
   // 1) centro que CUBRA el grupo (1-centro aproximado): partir del centroide y acercarse al mas lejano
   let cx=0,cy=0; for(const i of arr){cx+=motors[i].x;cy+=motors[i].y;} cx/=arr.length; cy/=arr.length;
   for(let it=0;it<30;it++){ let far=-1,fd=-1; for(const i of arr){const dx=motors[i].x-cx,dy=motors[i].y-cy,d=dx*dx+dy*dy; if(d>fd){fd=d;far=i;}} if(fd<=R2) break; const st=1/(it+2); cx+=(motors[far].x-cx)*st; cy+=(motors[far].y-cy)*st; }
   n.x=cx; n.y=cy;
-  if(arr.length<=capGW) return;
+  if(arr.length<=capGW){ separaDeModulos(n,motors,arr,S.p,radius); return; }
   // 2) deslizar la frontera hacia la mediana del eje de corte sin romper cobertura
   const vals=arr.map(i=> gwAxis==="NS"?motors[i].y:motors[i].x).sort((a,b)=>a-b);
   const med=vals[Math.floor(vals.length/2)];
@@ -439,6 +477,7 @@ function placeCut(n,gwAxis,radius,capGW,motors){
   const fits=(coord)=>{ const X=gwAxis==="NS"?cx:coord, Y=gwAxis==="NS"?coord:cy; for(const i of arr){const dx=motors[i].x-X,dy=motors[i].y-Y; if(dx*dx+dy*dy>R2) return false;} return true; };
   let chosen=base; for(let k=12;k>=0;k--){ const coord=base+(k/12)*(med-base); if(fits(coord)){ chosen=coord; break; } }
   if(gwAxis==="NS"){ n.y=chosen; } else { n.x=chosen; }
+  separaDeModulos(n,motors,arr,S.p,radius);   // último paso: garantizar los 2 m a los módulos
 }
 /* Fusiona NCUs pequeñas SOLO en una vecina del mismo PB con la que haya enlace real. */
 // Consolidación aglomerativa: fusiona NCUs vecinas (mismo PB, conectadas por la malla)
