@@ -1004,17 +1004,38 @@ function motorColor(m){
 const RF_PITCH_M=12.0, RF_CHORD_M=2.38, RF_ANT_H=1.5;
 function rfParams(){ return (window.ZigbeePV&&ZigbeePV.defaultParamsElBurgo)?ZigbeePV.defaultParamsElBurgo():null; }
 function rfTilt(){ const el=document.getElementById("rf-tilt"); return el?(+el.value||0):30; }
-function rfObstacles(n,m){
+/* FILAS REALES DE MÓDULOS, que es lo que corta el enlace. Antes los obstáculos se ponían en una
+   retícula fija de 12 m anclada en x=0, y eso solo vale si la planta cae justo en esa malla. En las
+   bífilas fallaba por los dos lados: contaba UNA fila por seguidor cuando hay DOS, y las colocaba
+   donde no hay nada. Medido: en El Burgo la retícula caía a 3,01 m de la fila más próxima — o sea
+   clavada en el centro del pasillo, entre las dos filas — y contaba 45 obstáculos donde hay 90; en
+   Fayón, 13 donde hay 28, desalineados 1,44 m de media.
+   Ahora las filas se sacan del propio layout: cada seguidor aporta sus dos bandas a ±sep/2 (o una
+   sola si la planta no es bífila), sin suponer paso ni fase. Se devuelven ordenadas para poder
+   entrar por búsqueda binaria: San José tiene 2.289 seguidores y el margen se recalcula por TCU. */
+function rfRows(){
+  const cu=(S.bifilo&&S.bifilo.cuerda)||0, set=new Set();
+  for(const m of S.motors){
+    const Wm=(m.wid!=null?m.wid:S.p.twid), sep=(cu>0&&Wm>0)?(Wm-cu):0;
+    if(sep>0.05){ set.add(Math.round((m.x-sep/2)*100)/100); set.add(Math.round((m.x+sep/2)*100)/100); }
+    else set.add(Math.round(m.x*100)/100);
+  }
+  return (S._rfRows=[...set].sort((a,b)=>a-b));
+}
+function rfObstacles(n,m,rows){
   const dx=m.x-n.x, D=Math.hypot(m.x-n.x,m.y-n.y); if(D<0.5||Math.abs(dx)<1e-6)return [];
-  const top=ZigbeePV.rowTopElev(0,RF_ANT_H,RF_CHORD_M,rfTilt());
-  const obs=[], lo=Math.ceil(Math.min(n.x,m.x)/RF_PITCH_M), hi=Math.floor(Math.max(n.x,m.x)/RF_PITCH_M);
-  for(let k=lo;k<=hi;k++){ const t=(k*RF_PITCH_M-n.x)/dx; if(t>0.001&&t<0.999)obs.push([t*D,top]); }
+  const R=rows||S._rfRows||rfRows(); if(!R.length)return [];
+  const top=ZigbeePV.rowTopElev(0,RF_ANT_H,(S.bifilo&&S.bifilo.cuerda)||RF_CHORD_M,rfTilt());
+  const x0=Math.min(n.x,m.x), x1=Math.max(n.x,m.x);
+  let lo=0,hi=R.length; while(lo<hi){ const md=(lo+hi)>>1; if(R[md]<x0)lo=md+1; else hi=md; }
+  const obs=[];
+  for(let k=lo;k<R.length&&R[k]<=x1;k++){ const t=(R[k]-n.x)/dx; if(t>0.001&&t<0.999)obs.push([t*D,top]); }
   return obs;
 }
-function rfMargin(n,m){
+function rfMargin(n,m,rows){
   const p=rfParams(); if(!p)return null;
   const D=Math.hypot(m.x-n.x,m.y-n.y);
-  return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m)).marginDb;
+  return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m,rows)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
 /* PUNTO DE LA TCU. La coordenada que guarda cada seguidor es la del EJE del tracker: es lo que dan
@@ -1201,11 +1222,11 @@ function draw(){
   // motores / mesas
   const r=Math.max(1.2, Math.min(3, S.T.scale*3.2));
   const TAB=S.v.tables;
-  const _rfById={}; if(S.v.rf){ S.ncus.forEach(n=>_rfById[n.id]=n); }
+  const _rfById={}; let _rfRows=null; if(S.v.rf){ S.ncus.forEach(n=>_rfById[n.id]=n); _rfRows=rfRows(); }   // filas de módulos una vez por dibujado, no por TCU
   for(const m of S.motors){
     const s=w2s(tcuPt(m)); const dim=S.sel && m.ncu!==S.sel;   // la marca va donde está la TCU (su viga), no en el eje
     let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
-    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m)) : null; col = rfColor(m._rfMargin); }
+    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m),_rfRows) : null; col = rfColor(m._rfMargin); }
     else { m._rfMargin = null; }
     if(TAB){
       const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
@@ -1250,7 +1271,10 @@ function draw(){
     } else {
       ctx.fillStyle=col; ctx.fillRect(s.x-r,s.y-r,r*2,r*2);
     }
-    if(S.T.scale>2.6 && m.tn!=null && !dim){ ctx.fillStyle="#0A1D30"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(m.tn, s.x, s.y-r-6); }
+    /* El NÚMERO va en el eje del seguidor, NO donde la marca. La marca se fue a la viga de la TCU, y
+       la etiqueta detrás: número azul oscuro sobre la banda roja, ilegible, y partiendo la mesa en
+       dos. En el eje cae en el pasillo, sobre fondo claro, que es donde se lee. */
+    if(S.T.scale>2.6 && m.tn!=null && !dim){ const e=w2s(m); ctx.fillStyle="#0A1D30"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(m.tn, e.x, e.y-r-6); }
   }
   // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
   if(S.v.rf){
