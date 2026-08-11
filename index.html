@@ -349,7 +349,7 @@ const BURGO={"ox":683241.8,"oy":4604780.7,"sc":"burgo","name":"El Burgo I 23003"
      envolvente               8,425 m    6,012 + 2,413  (el 8,4 heredado de El Burgo era bueno)
      largo 2x1V48            55,16 m     48 modulos a paso 1,149
      largo 2x1V40            46,02 m     40 modulos a paso 1,151
-     biela                    3,58 m     cruza el pasillo LIBRE, centrada en el motor
+     biela                    6,012 m    de viga a viga (el plano solo dibuja los 3,58 visibles)
 
    Los 46,2 / 55,4 que habia antes venian derivados del paso de modulo de El Burgo y estaban un
    0,4 % largos. NO son "media mesa": ya eran el span COMPLETO. Se han doblado por error una vez
@@ -1211,14 +1211,19 @@ function draw(){
          empieza y acaba un tracker: en Fayón el pasillo interior mide 3,60 m y el hueco hasta el
          tracker vecino 3,58 m — un peine uniforme. Lo único que agrupa las bandas de dos en dos es
          la biela, igual que en el plano.
-         MEDIDA en el DWG (P06, las 24): un trazo de 3,58 m perpendicular a las filas, centrado en el
-         punto del motor (desviación máxima 1 cm en transversal) y cruzando el pasillo LIBRE, de
-         borde interior de una fila a borde interior de la otra. Por eso va de ±(sep-cu)/2 y no de
-         centro a centro de banda. Longitudinalmente el DWG la pone a ±0,7 m del motor (mediana 0),
-         así que se dibuja en el punto, sin desplazamiento por seguidor.
+         LARGO: la biela une las DOS VIGAS, que están a ±sep/2 del eje, o sea 6,01 m en Fayón. Es el
+         mismo 2·filaZ del imShaft del 3D. OJO con el plano: el P06 dibuja un trazo de 3,58 m, que NO
+         es la pieza — muere justo en el borde interior de los módulos (medido: de +1,77 a −1,78, y
+         el borde de la fila cae en ±1,80), porque en planta el resto queda TAPADO por el panel y el
+         delineante solo dibuja lo visible. Se pinta la pieza entera, de centro a centro de banda:
+         el tramo bajo los módulos queda oculto igual, y así el dato no miente si algún día la mesa
+         se dibuja hueca o traslúcida.
+         Del plano sí sale, confirmado en los 24, que va CENTRADA en el punto del motor (desviación
+         máxima 1 cm en transversal). Longitudinalmente la pone a ±0,7 m del motor (mediana 0), así
+         que se dibuja en el punto, sin desplazamiento por seguidor.
          El Ø real (60 mm) es sub-píxel a escala de siting: se traza con un grosor mínimo legible en
          vez de a tamaño. Sin bífilo (una sola banda) no hay biela que pintar. */
-      const bie=sep-cu;   // pasillo libre entre las dos filas = lo que cruza la biela en el DWG
+      const bie=sep;   // viga a viga: la biela llega a las DOS vigas, no solo al hueco visible
       if(bie>0.05){
         const b1=w2s({x:m.x-bie/2*wx, y:m.y-bie/2*wy}), b2=w2s({x:m.x+bie/2*wx, y:m.y+bie/2*wy});
         ctx.beginPath(); ctx.moveTo(b1.x,b1.y); ctx.lineTo(b2.x,b2.y);
