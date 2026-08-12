@@ -1205,14 +1205,32 @@ function draw(){
       for(let y=y0;y<=y1;y+=100){const s=w2s({x:0,y});ctx.beginPath();ctx.moveTo(0,s.y);ctx.lineTo(W,s.y);ctx.stroke();}
     }
   }
-  // power blocks (relleno faint del hull por bloque)
+  /* ZONA DE CADA BLOQUE. Era el hull CONVEXO de sus seguidores, y en una planta escalonada eso se
+     traga superficie que no es suya: los bloques se solapaban y cada uno pisaba al vecino. Ahora la
+     zona es la UNIÓN de las mesas del bloque, cada una engordada hasta la mitad del hueco que la
+     separa del seguidor de al lado. Así ocupa lo que ocupa y ni un metro más, se cierra sobre las
+     escaleras y los huecos, y NO PUEDE pisar a otro bloque: las mesas no se solapan entre sí.
+     Se acumula todo en UN camino y se rellena de una vez, que si no las mesas se pisan entre ellas
+     y el alfa se dobla en los solapes. Sin contorno: el borde de la unión no se puede trazar sin
+     dibujar también las costuras interiores de cada mesa. */
   if(S.v.blocks){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
+    const _pitch=(function(){const xs=[...new Set(S.motors.map(m=>Math.round(m.x*10)/10))].sort((a,b)=>a-b);
+      const d=[];for(let i=1;i<xs.length;i++){const v=xs[i]-xs[i-1];if(v>0.5)d.push(v);} 
+      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();   // paso entre seguidores, medido
     for(const pb of pbs){
-      const h=convexHull(recinto(S.motors.filter(m=>m.pb===pb),pb)); if(h.length<3)continue;
-      ctx.beginPath(); h.forEach((p,i)=>{const s=w2s(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);}); ctx.closePath();
-      ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.14; ctx.fill(); ctx.globalAlpha=1;
-      ctx.strokeStyle=S.pbColor[pb]; ctx.globalAlpha=0.35; ctx.lineWidth=1.5; ctx.stroke(); ctx.globalAlpha=1;
+      const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
+      const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
+      ctx.beginPath();
+      for(const m of mm){
+        const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
+        const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a);
+        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);   // hasta media calle
+        const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+        ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
+      }
+      ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.16; ctx.fill(); ctx.globalAlpha=1;
+      if(h.length<3)continue;
       // etiqueta
       const c=centroid(h); const s=w2s(c); ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.6; ctx.font="600 13px "+`'IBM Plex Mono',monospace`; ctx.textAlign="center"; ctx.fillText(pb,s.x,s.y); ctx.globalAlpha=1;
     }
