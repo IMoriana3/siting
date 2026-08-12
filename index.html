@@ -1222,6 +1222,17 @@ function draw(){
     const _pitch=(function(){const xs=[...new Set(S.motors.map(m=>Math.round(m.x*10)/10))].sort((a,b)=>a-b);
       const d=[];for(let i=1;i<xs.length;i++){const v=xs[i]-xs[i-1];if(v>0.5)d.push(v);} 
       return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();   // paso entre seguidores, medido
+    /* El margen se ENGORDA lo justo para cerrar el hueco con el vecino, y ni un metro más. A lo
+       ancho es media calle (paso - envolvente). A lo LARGO no es lo mismo: ahí el vecino es el
+       seguidor siguiente de la misma columna, que está mucho más cerca de punta a punta. Antes se
+       usaba el margen transversal también a lo largo y el bloque salía con una orla injustificada
+       por arriba y por abajo. Se mide el hueco real entre puntas y se coge la mitad. */
+    const _gapL=(function(){const col={},d=[];
+      for(const m of S.motors){const k=Math.round(m.x*10)/10;(col[k]=col[k]||[]).push(m);}
+      for(const k in col){const c=col[k].slice().sort((a,b)=>a.y-b.y);
+        for(let i=1;i<c.length;i++){const la=(c[i-1].len!=null?c[i-1].len:S.p.tlen),lb=(c[i].len!=null?c[i].len:S.p.tlen);
+          const g=(c[i].y-c[i-1].y)-(la+lb)/2; if(g>0.2&&g<40)d.push(g);}}
+      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]/2:0;})();
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
@@ -1236,8 +1247,13 @@ function draw(){
            vuelve a hacer es cerrar la mancha con un hull convexo: eso era lo que la mandaba en
            diagonal por encima del bloque de al lado. El borde lo pone el contorno de abajo, que va
            pegado a los seguidores. */
-        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);   // hasta media calle
+        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+_gapL;   // ancho: media calle · largo: medio hueco entre puntas
         const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+        ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
+      }
+      for(const o of equiposFuera(pb)){   // la HSU y los repetidores del bloque, también en la capa
+        const C=[[-_pitch/2,-_pitch/2],[_pitch/2,-_pitch/2],[_pitch/2,_pitch/2],[-_pitch/2,_pitch/2]]
+          .map(q=>w2s({x:o.x+q[0], y:o.y+q[1]}));
         ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
       }
       ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.16; ctx.fill(); ctx.globalAlpha=1;
@@ -1252,10 +1268,19 @@ function draw(){
       for(const m of mm){
         const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a2=((m.az||0))*Math.PI/180;
         const lx=Math.sin(a2), ly=Math.cos(a2), wx=Math.cos(a2), wy=-Math.sin(a2);
-        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);
+        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+_gapL;
         const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
         const i0=Math.floor(Math.min(...C.map(q=>q.x))/CEL), i1=Math.ceil(Math.max(...C.map(q=>q.x))/CEL);
         const j0=Math.floor(Math.min(...C.map(q=>q.y))/CEL), j1=Math.ceil(Math.max(...C.map(q=>q.y))/CEL);
+        for(let i=i0;i<i1;i++)for(let j=j0;j<j1;j++)oc.add(K(i,j));
+      }
+      /* La HSU y los repetidores del bloque TAMBIÉN son suyos: se quedaban fuera de la capa porque
+         esto solo recorría los motores. Se les da la huella de una calle, así que si están sueltos
+         en el campo salen como su propia islita del color del bloque, que es la verdad, y si están
+         pegados al campo de seguidores se funden con la mancha. */
+      for(const o of equiposFuera(pb)){
+        const i0=Math.floor((o.x-_pitch/2)/CEL), i1=Math.ceil((o.x+_pitch/2)/CEL);
+        const j0=Math.floor((o.y-_pitch/2)/CEL), j1=Math.ceil((o.y+_pitch/2)/CEL);
         for(let i=i0;i<i1;i++)for(let j=j0;j<j1;j++)oc.add(K(i,j));
       }
       ctx.beginPath();
