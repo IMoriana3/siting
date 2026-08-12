@@ -50,6 +50,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .scn button:hover{border-color:var(--blue);color:var(--blue)}
 .scn button.active{background:var(--blue);color:var(--void);border-color:var(--blue)}
 .scn button.active small{color:rgba(11,15,20,.72)}
+.scn-demo{grid-column:1/-1}
+.scn-demo>summary{list-style:none;cursor:pointer;padding:6px 8px;border:1px dashed var(--line-2);border-radius:7px;color:var(--muted-2);font-size:11.5px;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.scn-demo>summary::-webkit-details-marker{display:none}
+.scn-demo>summary:hover{border-color:var(--blue);color:var(--blue)}
+.scn-demo>summary span{font-family:var(--mono);font-size:10px;opacity:.8}
+.scn-demo>summary::after{content:"▸";font-size:10px;opacity:.7}
+.scn-demo[open]>summary::after{content:"▾"}
+.scn-demo>.scn{margin-top:7px}
 .csv-row{display:flex;gap:7px;margin-top:8px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;border-radius:7px;font-weight:600;transition:.13s;white-space:nowrap}
 .btn-primary{background:var(--blue);color:var(--void)}.btn-primary:hover{background:var(--blue-700)}
@@ -162,14 +170,21 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       <div class="sec">
         <h3>Escenario</h3>
         <div class="scn" id="scn">
-          <button data-sc="compacta" class="active">Compacta<small>~120 · 12×68 m</small></button>
-          <button data-sc="mediana">Mediana dispersa<small>~680 · 2 lóbulos</small></button>
-          <button data-sc="grande">Grande<small>~1.920 · Atalaya</small></button>
-          <button data-sc="blocks">3 power blocks<small>~670 · PB A/B/C</small></button>
-          <button data-sc="islas">Islas diseminadas<small>9 parcelas dispersas</small></button>
-          <button data-sc="archipielago">Archipiélago<small>~14 islas dispersas</small></button>
-          <button data-sc="irregular">Parcela irregular<small>orgánica + estanque</small></button>
-          <button data-sc="viales">Viales · corte E-O<small>~480 · pasillo 55 m</small></button>
+          <!-- Los ocho escenarios de prueba son inventados y estorban delante de los proyectos
+               reales: van plegados y solo se abren si se piden. -->
+          <details class="scn-demo">
+            <summary>Escenarios de prueba <span>8 · datos inventados</span></summary>
+            <div class="scn">
+              <button data-sc="compacta" class="active">Compacta<small>~120 · 12×68 m</small></button>
+              <button data-sc="mediana">Mediana dispersa<small>~680 · 2 lóbulos</small></button>
+              <button data-sc="grande">Grande<small>~1.920 · Atalaya</small></button>
+              <button data-sc="blocks">3 power blocks<small>~670 · PB A/B/C</small></button>
+              <button data-sc="islas">Islas diseminadas<small>9 parcelas dispersas</small></button>
+              <button data-sc="archipielago">Archipiélago<small>~14 islas dispersas</small></button>
+              <button data-sc="irregular">Parcela irregular<small>orgánica + estanque</small></button>
+              <button data-sc="viales">Viales · corte E-O<small>~480 · pasillo 55 m</small></button>
+            </div>
+          </details>
           <button data-sc="ayora" class="wide real">Ayora 24025 · proyecto real<small>754 TCU · 16 NCU · doble nomenclatura</small></button>
           <button data-sc="paramo" class="wide real">Páramo 25019 · proyecto real<small>396 TCU · 4 NCU · 3 HSU</small></button>
           <button data-sc="sanjose" class="wide real">San José 24019 · proyecto real<small>2289 TCU · 21 NCU · doble nomenclatura (Acciona)</small></button>
@@ -612,6 +627,105 @@ function equiposFuera(pb){   // HSU y repetidores; con pb, solo los de ese bloqu
   }).map(o=>({x:o.x,y:o.y}));
 }
 function recinto(motors,pb){ return esquinasMesa(motors||S.motors).concat(equiposFuera(pb)); }
+
+/* ZONA DE UN BLOQUE: los lazos cerrados (en metros) que hay que pintar para que se vea DE UN TRAZO
+   lo que es de ese bloque. Empezó siendo el hull convexo, que en una planta escalonada se traga
+   terreno del vecino; luego fue la unión de las mesas, que ceñía bien pero dejaba las HSU fuera o
+   colgando de un alambre. Ahora:
+     1. PIEZAS: cada mesa engordada hasta la mitad del hueco que la separa de la de al lado (a lo
+        ancho, media calle; a lo largo, la mitad del hueco real entre puntas), cada equipo del
+        bloque (HSU, repetidor) y una CUÑA que lleva del equipo al seguidor suyo más cercano. La
+        cuña se abre con la distancia: si el equipo está lejos, la capa se estira hacia él como se
+        haría a mano, en vez de ir con un hilo.
+     2. REJILLA + CIERRE morfológico (dilatar y erosionar el mismo radio), que se traga los dientes
+        de sierra sin mover el borde de sitio.
+     3. Se cosen las aristas de celda en lazos cerrados, con el bloque siempre a la izquierda: el
+        contorno sale antihorario y los huecos interiores al revés, así que al rellenar con la regla
+        normal los huecos quedan huecos.
+     4. Se quitan los puntos alineados y se redondean las esquinas (Chaikin con tope).
+   Relleno y borde salen de estos mismos lazos: dicen lo mismo, no hay costuras interiores y el alfa
+   no se dobla donde dos mesas se tocan. */
+function zonaBloque(mm,equipos,pitch,gapL){
+  if(!mm.length)return [];
+  const piezas=[];
+  const rect=(cx,cy,ux,uy,hw,hl)=>piezas.push([[cx-hw*ux-hl*uy,cy-hw*uy+hl*ux],[cx+hw*ux-hl*uy,cy+hw*uy+hl*ux],
+                                               [cx+hw*ux+hl*uy,cy+hw*uy-hl*ux],[cx-hw*ux+hl*uy,cy-hw*uy-hl*ux]]);
+  for(const m of mm){
+    const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
+    rect(m.x,m.y,Math.cos(a),-Math.sin(a),Wm/2+Math.max(0,(pitch-Wm)/2),Lm/2+gapL);
+  }
+  for(const o of equipos||[]){
+    rect(o.x,o.y,1,0,pitch/2,pitch/2);                            // el equipo
+    let mej=null,bd=Infinity;                                      // y la cuña hasta el seguidor más cercano
+    for(const m of mm){const d=(m.x-o.x)*(m.x-o.x)+(m.y-o.y)*(m.y-o.y); if(d<bd){bd=d;mej=m;}}
+    if(mej){ const dx=mej.x-o.x, dy=mej.y-o.y, L=Math.hypot(dx,dy);
+      if(L>1){ const nx=-dy/L, ny=dx/L, a=pitch/2, b=Math.max(pitch/2,L*0.35);
+        piezas.push([[o.x+nx*a,o.y+ny*a],[o.x-nx*a,o.y-ny*a],[mej.x-nx*b,mej.y-ny*b],[mej.x+nx*b,mej.y+ny*b]]); } }
+  }
+  const CEL=Math.max(1,pitch/3), RAD=3, PAD=RAD+2;
+  let X0=Infinity,Y0=Infinity,X1=-Infinity,Y1=-Infinity;
+  for(const P of piezas)for(const q of P){ if(q[0]<X0)X0=q[0]; if(q[0]>X1)X1=q[0];
+                                           if(q[1]<Y0)Y0=q[1]; if(q[1]>Y1)Y1=q[1]; }
+  const NX=Math.ceil((X1-X0)/CEL)+2*PAD+1, NY=Math.ceil((Y1-Y0)/CEL)+2*PAD+1;
+  const gx=i=>X0+(i-PAD)*CEL, gy=j=>Y0+(j-PAD)*CEL, ix=(i,j)=>i*NY+j;
+  const dentroP=(P,x,y)=>{ let pos=0,neg=0;                        // convexo: todos los cruces del mismo signo
+    for(let k=0;k<P.length;k++){ const A=P[k],B=P[(k+1)%P.length];
+      const cr=(B[0]-A[0])*(y-A[1])-(B[1]-A[1])*(x-A[0]);
+      if(cr>1e-9)pos++; else if(cr<-1e-9)neg++; }
+    return !(pos&&neg); };
+  let g=new Uint8Array(NX*NY);
+  for(const P of piezas){
+    let a0=Infinity,a1=-Infinity,b0=Infinity,b1=-Infinity;
+    for(const q of P){ if(q[0]<a0)a0=q[0]; if(q[0]>a1)a1=q[0]; if(q[1]<b0)b0=q[1]; if(q[1]>b1)b1=q[1]; }
+    const i0=Math.max(0,Math.floor((a0-X0)/CEL)+PAD-1), i1=Math.min(NX-1,Math.ceil((a1-X0)/CEL)+PAD);
+    const j0=Math.max(0,Math.floor((b0-Y0)/CEL)+PAD-1), j1=Math.min(NY-1,Math.ceil((b1-Y0)/CEL)+PAD);
+    for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++)
+      if(!g[ix(i,j)]&&dentroP(P,gx(i)+CEL/2,gy(j)+CEL/2))g[ix(i,j)]=1;
+  }
+  const filtro=(src,r,dil)=>{ const a=new Uint8Array(NX*NY), b=new Uint8Array(NX*NY);   // separable: en j y luego en i
+    for(let i=0;i<NX;i++)for(let j=0;j<NY;j++){ let v=dil?0:1;
+      for(let k=-r;k<=r;k++){ const jj=j+k, s=(jj<0||jj>=NY)?0:src[ix(i,jj)]; v=dil?(v|s):(v&s); }
+      a[ix(i,j)]=v; }
+    for(let i=0;i<NX;i++)for(let j=0;j<NY;j++){ let v=dil?0:1;
+      for(let k=-r;k<=r;k++){ const ii=i+k, s=(ii<0||ii>=NX)?0:a[ix(ii,j)]; v=dil?(v|s):(v&s); }
+      b[ix(i,j)]=v; }
+    return b; };
+  g=filtro(filtro(g,RAD,true),RAD,false);
+  const sal=new Map(), kv=(i,j)=>i+'|'+j;                          // aristas de borde, con el bloque a la izquierda
+  const arista=(i0,j0,i1,j1)=>{ const k=kv(i0,j0), L=sal.get(k); if(L)L.push([i1,j1]); else sal.set(k,[[i1,j1]]); };
+  for(let i=0;i<NX;i++)for(let j=0;j<NY;j++){ if(!g[ix(i,j)])continue;
+    if(j===0    ||!g[ix(i,j-1)])arista(i,j,i+1,j);
+    if(i===NX-1 ||!g[ix(i+1,j)])arista(i+1,j,i+1,j+1);
+    if(j===NY-1 ||!g[ix(i,j+1)])arista(i+1,j+1,i,j+1);
+    if(i===0    ||!g[ix(i-1,j)])arista(i,j+1,i,j);
+  }
+  const crudos=[];
+  for(const k0 of [...sal.keys()]){
+    while((sal.get(k0)||[]).length){
+      const lz=[]; let cur=k0;
+      for(let paso=0;paso<200000;paso++){
+        const L=sal.get(cur); if(!L||!L.length)break;
+        const n=L.pop(), c=cur.split('|');
+        lz.push([+c[0],+c[1]]); cur=kv(n[0],n[1]);
+        if(cur===k0)break;
+      }
+      let ar=0; for(let k=0;k<lz.length;k++){ const A=lz[k],B=lz[(k+1)%lz.length]; ar+=A[0]*B[1]-B[0]*A[1]; }
+      if(lz.length>3&&Math.abs(ar/2)>2)crudos.push(lz);            // el ruido de una celda suelta, fuera
+    }
+  }
+  const podar=(P)=>{ const Q=[];                                    // fuera los puntos alineados: solo esquinas
+    for(let k=0;k<P.length;k++){ const A=P[(k-1+P.length)%P.length],B=P[k],C=P[(k+1)%P.length];
+      if((B[0]-A[0])*(C[1]-B[1])!==(B[1]-A[1])*(C[0]-B[0]))Q.push(B); }
+    return Q.length>2?Q:P; };
+  const suave=(P,d,n)=>{ for(let it=0;it<n&&P.length>2;it++){ const Q=[], N=P.length;   // Chaikin con tope
+      for(let k=0;k<N;k++){ const A=P[(k-1+N)%N],B=P[k],C=P[(k+1)%N];
+        const l1=Math.hypot(B[0]-A[0],B[1]-A[1])||1, l2=Math.hypot(C[0]-B[0],C[1]-B[1])||1;
+        const t1=Math.min(d,l1/3)/l1, t2=Math.min(d,l2/3)/l2;
+        Q.push([B[0]+(A[0]-B[0])*t1,B[1]+(A[1]-B[1])*t1],[B[0]+(C[0]-B[0])*t2,B[1]+(C[1]-B[1])*t2]); }
+      P=Q; }
+    return P; };
+  return crudos.map(lz=>suave(podar(lz.map(c=>[gx(c[0]),gy(c[1])])),CEL*1.2,2));
+}
 
 function placeNCUat(wx,wy){
   if(S.preset||!S.motors.length) return;
@@ -1209,14 +1323,9 @@ function draw(){
       for(let y=y0;y<=y1;y+=100){const s=w2s({x:0,y});ctx.beginPath();ctx.moveTo(0,s.y);ctx.lineTo(W,s.y);ctx.stroke();}
     }
   }
-  /* ZONA DE CADA BLOQUE. Era el hull CONVEXO de sus seguidores, y en una planta escalonada eso se
-     traga superficie que no es suya: los bloques se solapaban y cada uno pisaba al vecino. Ahora la
-     zona es la UNIÓN de las mesas del bloque, cada una engordada hasta la mitad del hueco que la
-     separa del seguidor de al lado. Así ocupa lo que ocupa y ni un metro más, se cierra sobre las
-     escaleras y los huecos, y NO PUEDE pisar a otro bloque: las mesas no se solapan entre sí.
-     Se acumula todo en UN camino y se rellena de una vez, que si no las mesas se pisan entre ellas
-     y el alfa se dobla en los solapes. Sin contorno: el borde de la unión no se puede trazar sin
-     dibujar también las costuras interiores de cada mesa. */
+  /* ZONA DE CADA BLOQUE. La geometría está en zonaBloque(); aquí solo se mide lo que esa función
+     necesita —el paso entre seguidores y el hueco entre puntas, los dos MEDIDOS en la planta, no
+     supuestos— y se pinta: relleno y borde del mismo trazo, en el color del bloque. */
   if(S.v.blocks){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
     const _pitch=(function(){const xs=[...new Set(S.motors.map(m=>Math.round(m.x*10)/10))].sort((a,b)=>a-b);
@@ -1236,62 +1345,14 @@ function draw(){
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
-      /* PIEZAS DE LA MANCHA. Una sola por bloque, sin islas: las mesas, los equipos del bloque
-         (HSU y repetidores) y un BRAZO que une cada equipo con el seguidor suyo más cercano. El
-         brazo es lo que evita la islita; a cambio, cuando el equipo está lejos, ese brazo cruza
-         terreno que puede ser de la NCU vecina — es la contrapartida elegida, y solo afecta al
-         brazo, no a la mancha. Todo son rectángulos (girados con el seguidor cuando toca), y de
-         ellos salen tanto el relleno como el contorno, así que los dos dicen lo mismo. */
-      const piezas=[];
-      const rect=(cx,cy,ux,uy,hw,hl)=>piezas.push([[cx-hw*ux-hl*uy,cy-hw*uy+hl*ux],[cx+hw*ux-hl*uy,cy+hw*uy+hl*ux],
-                                                   [cx+hw*ux+hl*uy,cy+hw*uy-hl*ux],[cx-hw*ux+hl*uy,cy-hw*uy-hl*ux]]);
-      for(const m of mm){
-        const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a2=((m.az||0))*Math.PI/180;
-        rect(m.x,m.y,Math.cos(a2),-Math.sin(a2),Wm/2+Math.max(0,(_pitch-Wm)/2),Lm/2+_gapL);
-      }
-      for(const o of equiposFuera(pb)){
-        rect(o.x,o.y,1,0,_pitch/2,_pitch/2);                       // el equipo
-        let mej=null,bd=Infinity;                                   // y su brazo hasta el seguidor más cercano
-        for(const m of mm){const d=(m.x-o.x)*(m.x-o.x)+(m.y-o.y)*(m.y-o.y); if(d<bd){bd=d;mej=m;}}
-        if(mej){ const dx=mej.x-o.x, dy=mej.y-o.y, L=Math.hypot(dx,dy);
-          if(L>1) rect((o.x+mej.x)/2,(o.y+mej.y)/2,-dy/L,dx/L,_pitch/4,L/2); }
-      }
       ctx.beginPath();
-      for(const P of piezas){ const C=P.map(q=>w2s({x:q[0],y:q[1]}));
-        ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath(); }
-      ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.16; ctx.fill(); ctx.globalAlpha=1;
-      /* CONTORNO del bloque. Al pasar de hull convexo a unión de mesas se quedó sin borde, porque
-         trazar la unión dibuja también las costuras interiores de cada mesa. Se saca del propio
-         relleno: se marca en una rejilla qué celdas ocupa el bloque y se trazan solo las aristas de
-         celda que dan a una celda vacía. Eso es el borde exterior y nada más — se cierra sobre los
-         huecos y las escaleras, y sigue sin poder pisar al vecino, porque las celdas salen de las
-         mesas. La rejilla se alinea al paso del seguidor, así que el escalón no se ve en plantas en
-         retícula; en una girada (Bagnarelli) el borde queda algo dentado. */
-      /* CONTORNO SUAVE, ciñendo lo que hay. Se rasterizan las mismas piezas en una rejilla y se
-         trazan solo las aristas de celda que dan a celda vacía: eso es el borde exterior de la
-         mancha —brazo incluido— y nada más. */
-      const CEL=Math.max(1,_pitch/4), oc=new Set(), K=(i,j)=>i+','+j;
-      const dentroP=(P,x,y)=>{ let pos=0,neg=0;
-        for(let k=0;k<4;k++){ const A=P[k],B=P[(k+1)%4];
-          const cr=(B[0]-A[0])*(y-A[1])-(B[1]-A[1])*(x-A[0]);
-          if(cr>1e-9)pos++; else if(cr<-1e-9)neg++; }
-        return !(pos&&neg); };
-      for(const P of piezas){
-        const i0=Math.floor(Math.min(...P.map(q=>q[0]))/CEL), i1=Math.ceil(Math.max(...P.map(q=>q[0]))/CEL);
-        const j0=Math.floor(Math.min(...P.map(q=>q[1]))/CEL), j1=Math.ceil(Math.max(...P.map(q=>q[1]))/CEL);
-        for(let i=i0;i<i1;i++)for(let j=j0;j<j1;j++)
-          if(dentroP(P,(i+0.5)*CEL,(j+0.5)*CEL))oc.add(K(i,j));
+      for(const lz of zonaBloque(mm,equiposFuera(pb),_pitch,_gapL)){
+        const A=w2s({x:lz[0][0],y:lz[0][1]}); ctx.moveTo(A.x,A.y);
+        for(let k=1;k<lz.length;k++){ const s=w2s({x:lz[k][0],y:lz[k][1]}); ctx.lineTo(s.x,s.y); }
+        ctx.closePath();
       }
-      ctx.beginPath();
-      for(const k of oc){ const [i,j]=k.split(',').map(Number);
-        const x0=i*CEL,x1=(i+1)*CEL,y0=j*CEL,y1=(j+1)*CEL;
-        const seg=(ax,ay,bx,by)=>{const A=w2s({x:ax,y:ay}),B=w2s({x:bx,y:by});ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);};
-        if(!oc.has(K(i,j-1)))seg(x0,y0,x1,y0);
-        if(!oc.has(K(i,j+1)))seg(x0,y1,x1,y1);
-        if(!oc.has(K(i-1,j)))seg(x0,y0,x0,y1);
-        if(!oc.has(K(i+1,j)))seg(x1,y0,x1,y1);
-      }
-      ctx.strokeStyle=S.pbColor[pb]; ctx.globalAlpha=0.3; ctx.lineWidth=1; ctx.stroke(); ctx.globalAlpha=1;   // suave: separa dos bloques del mismo tono sin gritar
+      ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.14; ctx.fill();
+      ctx.strokeStyle=S.pbColor[pb]; ctx.globalAlpha=0.5; ctx.lineWidth=1.4; ctx.stroke(); ctx.globalAlpha=1;
       if(h.length<3)continue;
       // etiqueta
       const c=centroid(h); const s=w2s(c); ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.6; ctx.font="600 13px "+`'IBM Plex Mono',monospace`; ctx.textAlign="center"; ctx.fillText(pb,s.x,s.y); ctx.globalAlpha=1;
