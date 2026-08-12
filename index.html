@@ -910,10 +910,14 @@ function applyTablesPref(hasDims,def){
 function loadProject(P){
   const pad=n=>"NCU-"+String(n).padStart(2,"0");
   const usePS=P.usePS!==false, showGZ=P.showGZ!==false;
-  const pbN=n=>(n[5]!==undefined&&n[5]!=="")?"PS "+n[5]:(usePS?"PS "+String(n[1]).split(".")[0]:null);
+  /* OJO con el hueco del power block: en los datos viene a veces como null y no como undefined
+     —Ayora lo trae null en los 754 TCU—, y el guarda solo miraba undefined. Resultado: "PS "+null
+     = "PS null", los 754 motores en un bloque fantasma y la planta entera pintada como UN power
+     block en vez de sus 16. Con != null se cubren los dos. */
+  const pbN=n=>(n[5]!=null&&n[5]!=="")?"PS "+n[5]:(usePS?"PS "+String(n[1]).split(".")[0]:null);
   const psOf={}; P.ncus.forEach(n=>{ psOf[n[0]]=pbN(n); });
   var _me=P.mesa||null;   // cotas de mesa POR PLANTA cuando los TCU no las traen fila a fila
-  S.motors=P.tcus.map(t=>({x:t[0],y:t[1],pb:((t[5]!==undefined&&t[5]!=="")?"PS "+t[5]:psOf[t[2]]),ncu:pad(t[2]),gw:t[3],id:t[4],client:t[4],tcu:t[4],tn:null,len:(t[6]!=null?t[6]:(_me&&_me.len)),wid:(t[7]!=null?t[7]:(_me&&_me.wid)),az:(t[8]!=null?t[8]:undefined)}));
+  S.motors=P.tcus.map(t=>({x:t[0],y:t[1],pb:((t[5]!=null&&t[5]!=="")?"PS "+t[5]:psOf[t[2]]),ncu:pad(t[2]),gw:t[3],id:t[4],client:t[4],tcu:t[4],tn:null,len:(t[6]!=null?t[6]:(_me&&_me.len)),wid:(t[7]!=null?t[7]:(_me&&_me.wid)),az:(t[8]!=null?t[8]:undefined)}));
   S.ncus=P.ncus.map(n=>({id:pad(n[0]),gz:(showGZ?n[1]:null),tipo:n[2],x:n[3],y:n[4],pb:psOf[n[0]],manual:true,motorIdx:[],gw:[[],[]],count:0}));
   const byId={}; S.ncus.forEach(n=>byId[n.id]=n);
   S.motors.forEach((m,i)=>{ const n=byId[m.ncu]; if(n) n.motorIdx.push(i); });
@@ -1220,16 +1224,53 @@ function draw(){
       return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();   // paso entre seguidores, medido
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
+      const _cu=(S.bifilo&&S.bifilo.cuerda)||0;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
       ctx.beginPath();
       for(const m of mm){
         const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
         const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a);
-        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);   // hasta media calle
-        const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
-        ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
+        /* Se rellena por BANDA, engordada solo hacia FUERA hasta media calle: el pasillo entre las
+           dos filas se queda LIMPIO. Cubriendo la envolvente entera, el seguidor volvía a leerse
+           como una losa con dos rayas y se perdía la "H" que le da la biela. El bloque se sigue
+           viendo sólido, porque las orlas de seguidores vecinos se tocan. El CONTORNO de más abajo
+           sí sale de la envolvente, para que sea el borde exterior del bloque y no trace todos los
+           pasillos por dentro. */
+        const mar=Math.max(0,(_pitch-Wm)/2), hl=Lm/2+mar, sep=(_cu>0)?(Wm-_cu):0;
+        const tiras=(sep>0.05)?[[-Wm/2-mar,-(sep/2-_cu/2)],[(sep/2-_cu/2),Wm/2+mar]]:[[-Wm/2-mar,Wm/2+mar]];
+        for(const [o0,o1] of tiras){
+          const C=[[o0,-hl],[o1,-hl],[o1,hl],[o0,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+          ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
+        }
       }
       ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.16; ctx.fill(); ctx.globalAlpha=1;
+      /* CONTORNO del bloque. Al pasar de hull convexo a unión de mesas se quedó sin borde, porque
+         trazar la unión dibuja también las costuras interiores de cada mesa. Se saca del propio
+         relleno: se marca en una rejilla qué celdas ocupa el bloque y se trazan solo las aristas de
+         celda que dan a una celda vacía. Eso es el borde exterior y nada más — se cierra sobre los
+         huecos y las escaleras, y sigue sin poder pisar al vecino, porque las celdas salen de las
+         mesas. La rejilla se alinea al paso del seguidor, así que el escalón no se ve en plantas en
+         retícula; en una girada (Bagnarelli) el borde queda algo dentado. */
+      const CEL=Math.max(1,_pitch/4), oc=new Set(), K=(i,j)=>i+','+j;
+      for(const m of mm){
+        const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a2=((m.az||0))*Math.PI/180;
+        const lx=Math.sin(a2), ly=Math.cos(a2), wx=Math.cos(a2), wy=-Math.sin(a2);
+        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);
+        const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+        const i0=Math.floor(Math.min(...C.map(q=>q.x))/CEL), i1=Math.ceil(Math.max(...C.map(q=>q.x))/CEL);
+        const j0=Math.floor(Math.min(...C.map(q=>q.y))/CEL), j1=Math.ceil(Math.max(...C.map(q=>q.y))/CEL);
+        for(let i=i0;i<i1;i++)for(let j=j0;j<j1;j++)oc.add(K(i,j));
+      }
+      ctx.beginPath();
+      for(const k of oc){ const [i,j]=k.split(',').map(Number);
+        const x0=i*CEL,x1=(i+1)*CEL,y0=j*CEL,y1=(j+1)*CEL;
+        const seg=(ax,ay,bx,by)=>{const A=w2s({x:ax,y:ay}),B=w2s({x:bx,y:by});ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);};
+        if(!oc.has(K(i,j-1)))seg(x0,y0,x1,y0);
+        if(!oc.has(K(i,j+1)))seg(x0,y1,x1,y1);
+        if(!oc.has(K(i-1,j)))seg(x0,y0,x0,y1);
+        if(!oc.has(K(i+1,j)))seg(x1,y0,x1,y1);
+      }
+      ctx.strokeStyle=S.pbColor[pb]; ctx.globalAlpha=0.5; ctx.lineWidth=1.4; ctx.stroke(); ctx.globalAlpha=1;
       if(h.length<3)continue;
       // etiqueta
       const c=centroid(h); const s=w2s(c); ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.6; ctx.font="600 13px "+`'IBM Plex Mono',monospace`; ctx.textAlign="center"; ctx.fillText(pb,s.x,s.y); ctx.globalAlpha=1;
