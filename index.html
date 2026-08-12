@@ -1268,12 +1268,24 @@ function draw(){
         ctx.beginPath(); ctx.moveTo(b1.x,b1.y); ctx.lineTo(b2.x,b2.y);
         ctx.strokeStyle=col; ctx.lineWidth=Math.max(1, Math.min(3, S.T.scale*1.6)); ctx.stroke();
       }
+      /* LA TCU, sobre su viga. En modo mesas no se dibujaba ninguna marca: lo único que se veía era
+         el número, y el número va en el eje —si no, cae sobre la banda y no se lee—, así que la TCU
+         parecía estar en mitad del pasillo, que es justo donde NO está. Va atornillada a la viga del
+         MOTOR, la fila oeste. Se pinta un punto con reborde claro para que se vea sobre la banda, y
+         un rabito hasta el eje cuando hay sitio, que es la biela por la que llega. */
+      if(S.T.scale>1.2){
+        const rr=Math.max(1.6,Math.min(4,S.T.scale*0.5));
+        if(!dim && bie>0.05){ ctx.strokeStyle="rgba(255,255,255,.75)"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(w2s(m).x,w2s(m).y); ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,2*Math.PI);
+        ctx.fillStyle=dim?"rgba(150,160,170,.5)":"#0A1D30"; ctx.fill();
+        ctx.strokeStyle="rgba(255,255,255,.9)"; ctx.lineWidth=1.2; ctx.stroke();
+      }
     } else {
       ctx.fillStyle=col; ctx.fillRect(s.x-r,s.y-r,r*2,r*2);
     }
-    /* El NÚMERO va en el eje del seguidor, NO donde la marca. La marca se fue a la viga de la TCU, y
-       la etiqueta detrás: número azul oscuro sobre la banda roja, ilegible, y partiendo la mesa en
-       dos. En el eje cae en el pasillo, sobre fondo claro, que es donde se lee. */
+    /* El NÚMERO va en el eje del seguidor, NO donde la marca. Sobre la banda sale ilegible y además
+       parte la mesa en dos; en el eje cae en el pasillo, sobre fondo claro. La TCU la señala el punto
+       de arriba, que sí está en su viga. */
     if(S.T.scale>2.6 && m.tn!=null && !dim){ const e=w2s(m); ctx.fillStyle="#0A1D30"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(m.tn, e.x, e.y-r-6); }
   }
   // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
