@@ -667,6 +667,10 @@ function zonaBloque(mm,equipos,pitch,gapL){
         piezas.push([[o.x+nx*a,o.y+ny*a],[o.x-nx*a,o.y-ny*a],[mej.x-nx*b,mej.y-ny*b],[mej.x+nx*b,mej.y+ny*b]]); } }
   }
   const CEL=Math.max(1,pitch/3), RAD=3, PAD=RAD+2;
+  /* Un hueco más pequeño que una mesa no es un hueco, es un rincón que la rejilla no ha llegado a
+     tapar —el que quedaba entre la HSU y la primera fila, por ejemplo—. Se rellena. */
+  const mesa=(function(){ const a=mm.map(m=>(m.wid!=null?m.wid:S.p.twid)*(m.len!=null?m.len:S.p.tlen)).sort((x,y)=>x-y);
+    return a[Math.floor(a.length/2)]||0; })();
   let X0=Infinity,Y0=Infinity,X1=-Infinity,Y1=-Infinity;
   for(const P of piezas)for(const q of P){ if(q[0]<X0)X0=q[0]; if(q[0]>X1)X1=q[0];
                                            if(q[1]<Y0)Y0=q[1]; if(q[1]>Y1)Y1=q[1]; }
@@ -714,7 +718,10 @@ function zonaBloque(mm,equipos,pitch,gapL){
         if(cur===k0)break;
       }
       let ar=0; for(let k=0;k<lz.length;k++){ const A=lz[k],B=lz[(k+1)%lz.length]; ar+=A[0]*B[1]-B[0]*A[1]; }
-      if(lz.length>3&&Math.abs(ar/2)>2)crudos.push(lz);            // el ruido de una celda suelta, fuera
+      ar=ar/2*CEL*CEL;                                              // en m², con signo: fuera + , hueco −
+      if(lz.length<4)continue;
+      if(ar>0){ if(ar>CEL*CEL*2)crudos.push(lz); }                  // el ruido de una celda suelta, fuera
+      else if(-ar>mesa)crudos.push(lz);                             // un hueco menor que una mesa no es un hueco
     }
   }
   const podar=(P)=>{ const Q=[];                                    // fuera los puntos alineados: solo esquinas
@@ -1332,9 +1339,15 @@ function draw(){
      supuestos— y se pinta: relleno y borde del mismo trazo, en el color del bloque. */
   if(S.v.blocks){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
-    const _pitch=(function(){const xs=[...new Set(S.motors.map(m=>Math.round(m.x*10)/10))].sort((a,b)=>a-b);
-      const d=[];for(let i=1;i<xs.length;i++){const v=xs[i]-xs[i-1];if(v>0.5)d.push(v);} 
-      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();   // paso entre seguidores, medido
+    /* PASO ENTRE SEGUIDORES, medido dentro de cada FILA. Antes se medía sobre la lista de x
+       distintas de toda la planta, y en cuanto dos filas van desencajadas esa lista se llena de
+       saltos pequeños que no son la calle: en Ayora daba 7,9 m y en San José 6,5 m con mesas de
+       8,4 m de ancho, o sea menos que la propia mesa. Fila a fila salen los 12 m de verdad. */
+    const _pitch=(function(){const fil={},d=[];
+      for(const m of S.motors){const L=(m.len!=null?m.len:S.p.tlen);const k=Math.round(m.y/Math.max(1,L/2));(fil[k]=fil[k]||[]).push(m);}
+      for(const k in fil){const c=fil[k].slice().sort((a,b)=>a.x-b.x);
+        for(let i=1;i<c.length;i++){const v=c[i].x-c[i-1].x;if(v>0.5)d.push(v);}}
+      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();
     /* El margen se ENGORDA lo justo para cerrar el hueco con el vecino, y ni un metro más. A lo
        ancho es media calle (paso - envolvente). A lo LARGO no es lo mismo: ahí el vecino es el
        seguidor siguiente de la misma columna, que está mucho más cerca de punta a punta. Antes se
@@ -1349,8 +1362,12 @@ function draw(){
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
+      /* La NCU del bloque entra en la zona igual que la HSU o el repetidor. Suele estar en un vial,
+         entre filas o por debajo de la última, y si no se mete se queda al otro lado del borde: es
+         SU bloque, no puede quedar fuera. */
+      const _eq=equiposFuera(pb).concat((S.ncus||[]).filter(n=>(n.pb||null)===pb).map(n=>({x:n.x,y:n.y})));
       ctx.beginPath();
-      for(const lz of zonaBloque(mm,equiposFuera(pb),_pitch,_gapL)){
+      for(const lz of zonaBloque(mm,_eq,_pitch,_gapL)){
         const A=w2s({x:lz[0][0],y:lz[0][1]}); ctx.moveTo(A.x,A.y);
         for(let k=1;k<lz.length;k++){ const s=w2s({x:lz[k][0],y:lz[k][1]}); ctx.lineTo(s.x,s.y); }
         ctx.closePath();
