@@ -1224,24 +1224,21 @@ function draw(){
       return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();   // paso entre seguidores, medido
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
-      const _cu=(S.bifilo&&S.bifilo.cuerda)||0;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
       ctx.beginPath();
       for(const m of mm){
         const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
         const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a);
-        /* Se rellena por BANDA, engordada solo hacia FUERA hasta media calle: el pasillo entre las
-           dos filas se queda LIMPIO. Cubriendo la envolvente entera, el seguidor volvía a leerse
-           como una losa con dos rayas y se perdía la "H" que le da la biela. El bloque se sigue
-           viendo sólido, porque las orlas de seguidores vecinos se tocan. El CONTORNO de más abajo
-           sí sale de la envolvente, para que sea el borde exterior del bloque y no trace todos los
-           pasillos por dentro. */
-        const mar=Math.max(0,(_pitch-Wm)/2), hl=Lm/2+mar, sep=(_cu>0)?(Wm-_cu):0;
-        const tiras=(sep>0.05)?[[-Wm/2-mar,-(sep/2-_cu/2)],[(sep/2-_cu/2),Wm/2+mar]]:[[-Wm/2-mar,Wm/2+mar]];
-        for(const [o0,o1] of tiras){
-          const C=[[o0,-hl],[o1,-hl],[o1,hl],[o0,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
-          ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
-        }
+        /* CAPA CONTINUA. Se rellena la envolvente entera de cada seguidor engordada hasta media
+           calle: como las orlas de los vecinos se tocan, el bloque sale como una mancha maciza, que
+           es la lectura que se quería. Se probó a dejar el pasillo entre filas sin pintar y el
+           resultado no era una capa sino unas orlas sueltas alrededor de cada mesa. Lo que NO se
+           vuelve a hacer es cerrar la mancha con un hull convexo: eso era lo que la mandaba en
+           diagonal por encima del bloque de al lado. El borde lo pone el contorno de abajo, que va
+           pegado a los seguidores. */
+        const hw=Wm/2+Math.max(0,(_pitch-Wm)/2), hl=Lm/2+Math.max(0,(_pitch-Wm)/2);   // hasta media calle
+        const C=[[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]].map(q=>w2s({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly}));
+        ctx.moveTo(C[0].x,C[0].y); for(let k=1;k<4;k++)ctx.lineTo(C[k].x,C[k].y); ctx.closePath();
       }
       ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.16; ctx.fill(); ctx.globalAlpha=1;
       /* CONTORNO del bloque. Al pasar de hull convexo a unión de mesas se quedó sin borde, porque
