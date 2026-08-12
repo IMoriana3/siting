@@ -1339,26 +1339,34 @@ function draw(){
      supuestos— y se pinta: relleno y borde del mismo trazo, en el color del bloque. */
   if(S.v.blocks){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
+    /* Las dos medidas se toman en el EJE DEL SEGUIDOR, no en el de la pantalla: p a lo ancho (de
+       mesa a mesa) y q a lo largo (de punta a punta). Así valen igual en una planta en retícula que
+       en una girada como Bagnarelli (23,7°), donde medir sobre x e y mezcla filas distintas y sale
+       una calle que no existe. */
+    const _med=a=>a.length?a.slice().sort((x,y)=>x-y)[Math.floor(a.length/2)]:null;
+    const _A=(_med(S.motors.map(m=>m.az||0))||0)*Math.PI/180;
+    const _wx=Math.cos(_A), _wy=-Math.sin(_A), _lx=Math.sin(_A), _ly=Math.cos(_A);
+    const _pp=m=>m.x*_wx+m.y*_wy, _qq=m=>m.x*_lx+m.y*_ly;
     /* PASO ENTRE SEGUIDORES, medido dentro de cada FILA. Antes se medía sobre la lista de x
        distintas de toda la planta, y en cuanto dos filas van desencajadas esa lista se llena de
        saltos pequeños que no son la calle: en Ayora daba 7,9 m y en San José 6,5 m con mesas de
        8,4 m de ancho, o sea menos que la propia mesa. Fila a fila salen los 12 m de verdad. */
     const _pitch=(function(){const fil={},d=[];
-      for(const m of S.motors){const L=(m.len!=null?m.len:S.p.tlen);const k=Math.round(m.y/Math.max(1,L/2));(fil[k]=fil[k]||[]).push(m);}
-      for(const k in fil){const c=fil[k].slice().sort((a,b)=>a.x-b.x);
-        for(let i=1;i<c.length;i++){const v=c[i].x-c[i-1].x;if(v>0.5)d.push(v);}}
-      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]:12;})();
+      for(const m of S.motors){const L=(m.len!=null?m.len:S.p.tlen);const k=Math.round(_qq(m)/Math.max(1,L/2));(fil[k]=fil[k]||[]).push(m);}
+      for(const k in fil){const c=fil[k].slice().sort((a,b)=>_pp(a)-_pp(b));
+        for(let i=1;i<c.length;i++){const v=_pp(c[i])-_pp(c[i-1]);if(v>0.5)d.push(v);}}
+      return _med(d)||12;})();
     /* El margen se ENGORDA lo justo para cerrar el hueco con el vecino, y ni un metro más. A lo
        ancho es media calle (paso - envolvente). A lo LARGO no es lo mismo: ahí el vecino es el
        seguidor siguiente de la misma columna, que está mucho más cerca de punta a punta. Antes se
        usaba el margen transversal también a lo largo y el bloque salía con una orla injustificada
        por arriba y por abajo. Se mide el hueco real entre puntas y se coge la mitad. */
     const _gapL=(function(){const col={},d=[];
-      for(const m of S.motors){const k=Math.round(m.x*10)/10;(col[k]=col[k]||[]).push(m);}
-      for(const k in col){const c=col[k].slice().sort((a,b)=>a.y-b.y);
+      for(const m of S.motors){const k=Math.round(_pp(m)*2)/2;(col[k]=col[k]||[]).push(m);}
+      for(const k in col){const c=col[k].slice().sort((a,b)=>_qq(a)-_qq(b));
         for(let i=1;i<c.length;i++){const la=(c[i-1].len!=null?c[i-1].len:S.p.tlen),lb=(c[i].len!=null?c[i].len:S.p.tlen);
-          const g=(c[i].y-c[i-1].y)-(la+lb)/2; if(g>0.2&&g<40)d.push(g);}}
-      return d.length?d.sort((a,b)=>a-b)[Math.floor(d.length/2)]/2:0;})();
+          const g=(_qq(c[i])-_qq(c[i-1]))-(la+lb)/2; if(g>0.2&&g<40)d.push(g);}}
+      return d.length?_med(d)/2:0;})();
     for(const pb of pbs){
       const mm=S.motors.filter(m=>m.pb===pb); if(!mm.length)continue;
       const h=convexHull(recinto(mm,pb));                     // solo para colocar la etiqueta
