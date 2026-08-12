@@ -585,6 +585,34 @@ function reassignToNearest(motors, ncus, adj, radius, capNCU, capGW, gwAxis){
   return ncus;
 }
 function nextNcuId(ncus){ const used=new Set(ncus.map(n=>parseInt(String(n.id).replace("NCU-",""))||0)); let k=1; while(used.has(k))k++; return "NCU-"+String(k).padStart(2,"0"); }
+/* PUNTOS QUE TIENE QUE ENCERRAR EL POLÍGONO DE LA PLANTA.
+   Antes el hull se hacía con el PUNTO de cada seguidor, y por eso el polígono cortaba los trackers
+   por la mitad en vez de contenerlos: el punto está en el centro de una mesa de 46 a 74 m de largo.
+   Ahora entran las CUATRO ESQUINAS de cada mesa (envolvente real, girada con su azimut), que es lo
+   que ocupa la planta de verdad. Y entran también las HSU (que aquí se llaman rsus) y los
+   REPETIDORES: son equipos a cubrir y quedaban fuera del recinto.
+   Lo usan el hull de la planta, el relleno por power block, el encuadre de "Ajustar" y el reparto de
+   RSU sobre el perímetro; así los cuatro hablan del mismo recinto. */
+function esquinasMesa(motors){
+  const out=[];
+  for(const m of motors){
+    const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
+    const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a), hl=Lm/2, hw=Wm/2;
+    for(const q of [[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]]) out.push({x:m.x+q[0]*wx+q[1]*lx, y:m.y+q[0]*wy+q[1]*ly});
+  }
+  return out;
+}
+function equiposFuera(pb){   // HSU y repetidores; con pb, solo los de ese bloque (por el seguidor más cercano)
+  const otros=(S.rsus||[]).concat(S.reps||[]);
+  return otros.filter(o=>{
+    if(pb===undefined)return true;
+    let mejor=null,bd=Infinity;
+    for(const m of S.motors){const dx=m.x-o.x,dy=m.y-o.y,d=dx*dx+dy*dy; if(d<bd){bd=d;mejor=m.pb||null;}}
+    return mejor===pb;
+  }).map(o=>({x:o.x,y:o.y}));
+}
+function recinto(motors,pb){ return esquinasMesa(motors||S.motors).concat(equiposFuera(pb)); }
+
 function placeNCUat(wx,wy){
   if(S.preset||!S.motors.length) return;
   let pb=null,bd=Infinity; for(const m of S.motors){const dx=m.x-wx,dy=m.y-wy,d=dx*dx+dy*dy; if(d<bd){bd=d;pb=m.pb||null;}}
@@ -892,7 +920,7 @@ function loadProject(P){
   S.ncus.forEach(n=>{ n.count=n.motorIdx.length; n.gw=[[],[]]; n.motorIdx.forEach(i=>{ n.gw[S.motors[i].gw===2?1:0].push(i); }); [0,1].forEach(g=>n.gw[g].forEach((i,k)=>{S.motors[i].tn=k+1;})); });
   S.rsus=P.hsus.map(h=>({id:h[0],gz:h[1],x:h[2],y:h[3],idnum:h[4],adjusted:false}));
   S.reps=(P.reps||[]).map(r=>({id:r[0],gz:r[1],x:r[2],y:r[3],idnum:r[4]}));
-  S.altLabel=P.alt||"GZ"; S.projOX=(P.ox!=null?P.ox:null); S.projOY=(P.oy!=null?P.oy:null); S.hull=convexHull(S.motors); S.sc=P.sc||"ayora"; S.projName=P.name||"Ayora 24025"; S.sel=null; S.preset=true; S.fromAyora=true;
+  S.altLabel=P.alt||"GZ"; S.projOX=(P.ox!=null?P.ox:null); S.projOY=(P.oy!=null?P.oy:null); S.hull=convexHull(recinto()); S.sc=P.sc||"ayora"; S.projName=P.name||"Ayora 24025"; S.sel=null; S.preset=true; S.fromAyora=true;
   /* Seguidor BÍFILO: 'cuerda' = ancho REAL de módulo de UNA fila. El ancho del TCU (8,4 m) es la
      envolvente de las dos filas, así que la separación entre ellas se deduce (ancho − cuerda) y no
      se repite como dato: así las dos bandas siempre rellenan exactamente la envolvente guardada. */
@@ -1072,7 +1100,7 @@ function recompute(refit){
   readParams();
   if(S.fromAyora){ assignColors(); updatePanel(); if(refit) fit(); else draw(); return; }
   S.ncus=siteAll(S.motors,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis});
-  S.hull=convexHull(S.motors);
+  S.hull=convexHull(recinto());
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
   applyNumbering();
   assignColors(); S.sel=null;
@@ -1082,7 +1110,7 @@ function recompute(refit){
 function recomputeNewData(){ // tras cambiar escenario/CSV: recalcular sugerencia y prefijarla
   S.preset=false; S.fromAyora=false; S.projOX=null; S.projOY=null;
   S.bifilo=null;   // el bífilo es del proyecto cargado: si no se limpia, un escenario o un CSV posterior heredaría las dos filas de El Burgo/Fayón. (En "Autoubicar NCUs" NO se limpia: allí los seguidores siguen siendo los del proyecto real.)
-  S.hull=convexHull(S.motors);
+  S.hull=convexHull(recinto());
   const sug=suggestRSU(S.hull);
   document.getElementById("rsu-sug").textContent=sug;
   document.getElementById("nrsu").value=sug;
@@ -1181,7 +1209,7 @@ function draw(){
   if(S.v.blocks){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
     for(const pb of pbs){
-      const h=convexHull(S.motors.filter(m=>m.pb===pb)); if(h.length<3)continue;
+      const h=convexHull(recinto(S.motors.filter(m=>m.pb===pb),pb)); if(h.length<3)continue;
       ctx.beginPath(); h.forEach((p,i)=>{const s=w2s(p);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y);}); ctx.closePath();
       ctx.fillStyle=S.pbColor[pb]; ctx.globalAlpha=0.14; ctx.fill(); ctx.globalAlpha=1;
       ctx.strokeStyle=S.pbColor[pb]; ctx.globalAlpha=0.35; ctx.lineWidth=1.5; ctx.stroke(); ctx.globalAlpha=1;
@@ -1496,7 +1524,7 @@ document.getElementById("scn").querySelectorAll("button").forEach(b=>b.onclick=(
   if(b.dataset.sc==="sanjose"){ loadProject(SANJOSE); return; }
   if(b.dataset.sc==="burgo"){ loadProject(BURGO); return; }
   if(b.dataset.sc==="fayon"){ loadProject(FAYON); return; }
-  if(b.dataset.sc==="fuv1"||b.dataset.sc==="fuv2"){ const P=(b.dataset.sc==="fuv1")?FUV1:FUV2; S.sc=b.dataset.sc; S.motors=P.pts.map((p,i)=>({x:p[0],y:p[1],pb:null,id:"M"+(i+1)})); S.preset=false; S.fromAyora=false; S.projOX=P.ox; S.projOY=P.oy; applyTablesPref(false); S.hull=convexHull(S.motors); var _sg=suggestRSU(S.hull); var _rs=document.getElementById("rsu-sug"); if(_rs)_rs.textContent=_sg; var _nr=document.getElementById("nrsu"); if(_nr)_nr.value=_sg; recompute(true); return; }
+  if(b.dataset.sc==="fuv1"||b.dataset.sc==="fuv2"){ const P=(b.dataset.sc==="fuv1")?FUV1:FUV2; S.sc=b.dataset.sc; S.motors=P.pts.map((p,i)=>({x:p[0],y:p[1],pb:null,id:"M"+(i+1)})); S.preset=false; S.fromAyora=false; S.projOX=P.ox; S.projOY=P.oy; applyTablesPref(false); S.hull=convexHull(recinto()); var _sg=suggestRSU(S.hull); var _rs=document.getElementById("rsu-sug"); if(_rs)_rs.textContent=_sg; var _nr=document.getElementById("nrsu"); if(_nr)_nr.value=_sg; recompute(true); return; }
   S.sc=b.dataset.sc; S.motors=scenario(S.sc); recomputeNewData();
 });
 document.getElementById("csv").onchange=e=>{
@@ -1535,7 +1563,7 @@ function autoSite(desdeCero){
                                                         manual:true,motorIdx:[],gw:[[],[]],count:0}));
   S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az}));
   S.preset=false; S.fromAyora=false; S.sel=null;
-  S.hull=convexHull(S.motors);
+  S.hull=convexHull(recinto());
   const sug=suggestRSU(S.hull); const nr=document.getElementById("nrsu"); if(nr)nr.value=sug;
   const rs=document.getElementById("rsu-sug"); if(rs)rs.textContent=sug;
   document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active"));
