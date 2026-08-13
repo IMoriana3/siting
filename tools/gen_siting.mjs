@@ -94,12 +94,22 @@ if (!isFinite(cE) || !isFinite(cN)) {
    Fayón salía con la mesa de El Burgo —64,73 m en vez de los 55,16 medidos en su plano P06—, que
    es exactamente la trampa que TRASPASO.md lleva avisando desde que cayó tres veces. Sin cotas se
    emiten las posiciones y punto, y el siting usa las suyas. */
-const tieneCotas = (L.modW != null && L.mods != null && L.filaZ != null);
-const modW = L.modW || 1.134, modsAla = L.mods || 28, filaZ = (L.filaZ != null) ? +L.filaZ : 3.0;
-const cuerda = L.modH || 2.382;
-const spanFull = 2 * modsAla * (modW + 0.012) + 0.55;
+/* COTAS MEDIDAS EN EL DWG. Si el layout trae `mesa` —lo escribe cobertura-zigbee/tools/
+   extract_dwg_cotas.mjs midiendo el propio DWG— manda ella, y el largo de cada seguidor sale de SU
+   bloque, no de una razón sobre un largo genérico. Importa: el hueco del motor NO escala, así que
+   multiplicar por `mr` daba 24 cm de menos en el 1V21 de Ayora y 47 en el 1V14. */
+const MESA = L.mesa || null;
+const tieneCotas = !!MESA || (L.modW != null && L.mods != null && L.filaZ != null);
+const modW = L.modW || 1.134, modsAla = L.mods || 28;
+const filaZ = MESA ? (MESA.filaZ != null ? MESA.filaZ : 3.0) : ((L.filaZ != null) ? +L.filaZ : 3.0);
+const cuerda = MESA ? MESA.modH : (L.modH || 2.382);
+/* N-1 huecos por ala, que es lo que miden los tres DWG (54 huecos para 56 módulos en Ayora, 62
+   para 64 en San José, 46 para 48 en Fayón). Antes se metía uno de más. */
+const spanFull = MESA ? Math.max(...Object.values(MESA.tipos).map(z => z.largo))
+                      : 2 * (modsAla * modW + (modsAla - 1) * 0.012) + 0.55;
 const ancho = +(2 * filaZ + cuerda).toFixed(3);
 const largoDe = t => {
+  if (MESA && t.blk && MESA.tipos[t.blk]) return +MESA.tipos[t.blk].largo.toFixed(2);
   const mr = (typeof t.mr === 'number' && t.mr > 0 && t.mr < 1) ? t.mr
            : (/^medio/i.test(t.t || '') ? 0.504 : 1);
   return +(spanFull * mr).toFixed(2);
@@ -108,24 +118,65 @@ const largoDe = t => {
    posición del seguidor ES la del motor (así se generó del DWG), por eso se traslada y ya.
    Formato de la fila: [x, y, ncu, gw, id, pb, len, wid, az] — el siting ya sabe leer largo, ancho
    y AZIMUT por seguidor, que es lo que hace falta para Bagnarelli, girada en el DWG. */
+/* POWER BLOCK POR SEGUIDOR. El layout del DWG no lo trae —es reparto eléctrico, no geometría— y sí
+   lo tienen los datasets que ya están publicados: Ayora reparte sus 754 seguidores en 11 bloques
+   con 16 NCU, y San José 2.289 en 19 con 21 NCU. Regenerando sin más, el pb salía null y cada NCU
+   pasaba a ser su propio bloque: Ayora 11→16 y San José 19→21, con la leyenda y los colores
+   cambiados. Se conserva el que ya hubiera, emparejado por identificador. */
+const PREVIO = (() => {
+  try {
+    const h = readFileSync(DESTINOS[destinos[0]], 'utf8');
+    const i = h.indexOf('const ' + nomVar + '='); if (i < 0) return null;
+    const j = h.indexOf('\n', i);
+    return (new Function(h.slice(i, j) + '; return ' + nomVar + ';'))();
+  } catch (e) { return null; }
+})();
+const PB_PREVIO = (() => {
+  if (!PREVIO) return null;
+  const m = new Map();
+  for (const f of (PREVIO.tcus || [])) if (f[5] != null && f[5] !== '') m.set(f[4], f[5]);
+  return m.size ? m : null;
+})();
+if (PB_PREVIO) console.log(`  se conserva el power block de ${PB_PREVIO.size} seguidores del dataset que ya estaba`);
+
 const tcus = trk.map((t, i) => {
-  const fila = [r2(t.x - minx), r2(t.n - minn), t.ncu || 1, t.gw || t.ncu || 1,
-                t.id || ('T' + String(i + 1).padStart(3, '0'))];
+  const idt = t.id || ('T' + String(i + 1).padStart(3, '0'));
+  const fila = [r2(t.x - minx), r2(t.n - minn), t.ncu || 1, t.gw || t.ncu || 1, idt];
   const az = +t.rot || 0;
-  if (tieneCotas) { fila.push(null, largoDe(t), ancho); if (az) fila.push(+az.toFixed(2)); }
-  else if (az) fila.push(null, null, null, +az.toFixed(2));
+  const pb = (PB_PREVIO && PB_PREVIO.get(idt)) || null;
+  if (tieneCotas) { fila.push(pb, largoDe(t), ancho); if (az) fila.push(+az.toFixed(2)); }
+  else if (pb || az) fila.push(pb, null, null, az ? +az.toFixed(2) : null);
   return fila;
 });
-const ncus = (L.ncus || []).map((n, i) => [i + 1, String(i + 1), 'ETH', r2(n.x - minx), r2(n.n - minn)]);
-const hsus = (L.meteo || []).map((m, i) => [m.name || ('HSU ' + (i + 1)), String(i + 1),
-                                            r2(m.x - minx), r2(m.n - minn), 1]);
-const reps = (L.reps || []).map((p, i) => [i + 1, String(i + 1), r2(p.x - minx), r2(p.n - minn)]);
+/* NCU, HSU y REPETIDORES: si ya están publicados, se conservan TAL CUAL. Este generador solo sabe
+   de geometría —lo que mide el DWG—; las etiquetas de NCU son reparto eléctrico y nomenclatura de
+   cliente, y no salen del layout. Emitiéndolas de cero, Ayora perdía su doble nomenclatura
+   ("4.1", "4.2", "5.1"...) y sus 16 NCU pasaban a ser 16 bloques en vez de los 11 reales; San José
+   perdía los "MU-01_1-21" de Acciona y pasaba de 19 bloques a 21. Las posiciones son las mismas
+   —salen del mismo DWG— así que no se pierde nada por conservarlas. */
+const mismos = (a, b) => a === b;
+const ncus = (PREVIO && mismos((PREVIO.ncus || []).length, (L.ncus || []).length) && PREVIO.ncus.length)
+  ? PREVIO.ncus
+  : (L.ncus || []).map((n, i) => [i + 1, String(i + 1), 'ETH', r2(n.x - minx), r2(n.n - minn)]);
+const hsus = (PREVIO && mismos((PREVIO.hsus || []).length, (L.meteo || []).length) && PREVIO.hsus.length)
+  ? PREVIO.hsus
+  : (L.meteo || []).map((m, i) => [m.name || ('HSU ' + (i + 1)), String(i + 1), r2(m.x - minx), r2(m.n - minn), 1]);
+const reps = (PREVIO && mismos((PREVIO.reps || []).length, (L.reps || []).length) && PREVIO.reps.length)
+  ? PREVIO.reps
+  : (L.reps || []).map((p, i) => [i + 1, String(i + 1), r2(p.x - minx), r2(p.n - minn)]);
+if (PREVIO) console.log(`  se conservan del dataset publicado: ${ncus === PREVIO.ncus ? ncus.length + ' NCU' : 'NCU no (cambió el número)'} · ${hsus === PREVIO.hsus ? hsus.length + ' HSU' : 'HSU no'} · ${reps === PREVIO.reps ? reps.length + ' repetidores' : 'repetidores no'}`);
 
 const TIT = { bagnarelli: 'Bagnarelli 24030', tunez: 'Túnez 24021', paramo: 'Páramo 25019',
               fayon: 'Fayón 24007', ayora: 'Ayora 24025', sanjose: 'San José 24019', elburgo: 'El Burgo I 23003' };
 const P = { ox: +cE.toFixed(1) + minx, oy: +cN.toFixed(1) + minn, sc: SC[planta] || planta,
-            name: L.title || TIT[planta] || planta,
-            usePS: true, showGZ: false, ncus, tcus, hsus, reps };
+            name: (PREVIO && PREVIO.name) || L.title || TIT[planta] || planta,
+            /* showGZ y alt son presentación, no geometría: solo Ayora y San José tienen doble
+               nomenclatura y se les rotula. Si ya venían puestos, se respetan. */
+            usePS: PREVIO && PREVIO.usePS != null ? PREVIO.usePS : true,
+            showGZ: PREVIO && PREVIO.showGZ != null ? PREVIO.showGZ : false,
+            ncus, tcus, hsus, reps };
+if (PREVIO && PREVIO.alt) P.alt = PREVIO.alt;
+if (PREVIO && PREVIO.tables != null) P.tables = PREVIO.tables;
 if (!tieneCotas) { /* sin cotas en el layout no se declara nada de la mesa */ }
 else if (filaZ > 0.05) P.bifilo = { cuerda: cuerda };       // dos filas: el siting deduce el pasillo = ancho − cuerda
 else P.monofila = true;                                     // filaZ 0: una sola banda
@@ -137,7 +188,8 @@ console.log(`planta ${planta} · ${L.crs} · origen UTM ${origen}`);
 console.log(`  ${tcus.length} TCU · ${ncus.length} NCU · ${hsus.length} HSU · ${reps.length} repetidores`);
 console.log(`  esquina (0,0) en UTM ${P.ox} ${P.oy}  ·  campo ${(Math.max(...trk.map(t => t.x)) - minx).toFixed(1)} × ${(Math.max(...trk.map(t => t.n)) - minn).toFixed(1)} m`);
 if (!tieneCotas) console.log('  ⚠ el layout NO trae modW/mods/filaZ: se emiten solo las posiciones, sin cotas de mesa (inventarlas daría la mesa de El Burgo)');
-else console.log(`  mesa: ${spanFull.toFixed(2)} m de largo (${modsAla} mod/ala x ${modW} m) x ${ancho} m de ancho ${filaZ > 0.05 ? `(bifila, filas a +-${filaZ} m, cuerda ${cuerda})` : '(monofila)'}`);
+else if (MESA) console.log(`  mesa: ${spanFull.toFixed(2)} m la más larga · módulo ${MESA.modW} x ${MESA.modH} · hueco ${MESA.gapMod} · motor ${MESA.gapDrive} · ancho ${ancho} (filas a +-${filaZ}) — MEDIDO: ${MESA.fuente}`);
+else console.log(`  mesa: ${spanFull.toFixed(2)} m de largo (${modsAla} mod/ala x ${modW} m) x ${ancho} m de ancho ${filaZ > 0.05 ? `(bifila, filas a +-${filaZ} m, cuerda ${cuerda})` : '(monofila)'} — DERIVADO, su DWG no se ha medido`);
 if (tieneCotas) { const largos = [...new Set(tcus.map(t => t[6]))].sort((a, b) => b - a);
   console.log(`  longitudes distintas: ${largos.join(' · ')} m`); }
 if (nRot) console.log(`  ${nRot} seguidores girados (rot != 0) -> se pasa como azimut por seguidor, que el siting si dibuja`);
@@ -186,8 +238,12 @@ for (const d of destinos) {
   let h = readFileSync(ruta, 'utf8');
   const marca = 'const ' + nomVar + '=';
   if (h.includes(marca)) {
-    const i = h.indexOf(marca), j = h.indexOf('\nconst ', i + 5);
-    h = h.slice(0, i) + literal + h.slice(j > 0 ? j : i + marca.length);
+    /* Se sustituye SOLO su línea. Antes se borraba desde la marca hasta el siguiente "\nconst ", y
+       en el SCADA los datasets van seguidos y el último tiene DEBAJO código, no otro const: al
+       regenerar FAYON se llevó por delante convexHull() y delNCU(). El literal es una línea, así
+       que el corte natural es el salto de línea. */
+    const i = h.indexOf(marca), j = h.indexOf('\n', i);
+    h = h.slice(0, i) + literal + h.slice(j > 0 ? j : h.length);
   } else {
     const anc = 'const BURGO=';                            // se inserta junto a los demás
     if (!h.includes(anc)) { console.error(`  ✗ ${d}: no encuentro dónde insertarlo (falta ${anc})`); process.exit(1); }
