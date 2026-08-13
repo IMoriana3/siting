@@ -11,9 +11,12 @@
  * San José, en tres zonas distintas— con 3 mm de error en el peor caso, y coincide además con el
  * origen que la ficha del 3D tiene anotado para Fayón (E 275719,936 N 4567402,475).
  *
- *   node tools/gen_siting.mjs <planta>            informe, no escribe
- *   node tools/gen_siting.mjs <planta> --write    inyecta el literal en index.html
- *   node tools/gen_siting.mjs paramo --verifica   lo compara con el que ya hay (prueba del convenio)
+ *   node tools/gen_siting.mjs <planta>                          informe, no escribe
+ *   node tools/gen_siting.mjs <planta> --write                  inyecta el literal en el siting
+ *   node tools/gen_siting.mjs <planta> --write --destino=ambos  ...y en el SCADA de operación
+ *   node tools/gen_siting.mjs paramo --verifica                 lo compara con el que ya hay (prueba del convenio)
+ *
+ * Plantas: ayora · sanjose · elburgo · paramo · fayon · bagnarelli · tunez  (= los layouts que hay).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -21,7 +24,28 @@ const RAIZ = new URL('..', import.meta.url).pathname;
 const LAYOUTS = '/home/user/Cobertura-Zigbee/';
 const [planta, ...rest] = process.argv.slice(2);
 const WRITE = rest.includes('--write'), VERIFICA = rest.includes('--verifica');
-if (!planta) { console.error('uso: node tools/gen_siting.mjs <planta> [--write|--verifica]'); process.exit(2); }
+if (!planta) { console.error('uso: node tools/gen_siting.mjs <planta> [--write|--verifica] [--destino=siting|scada|ambos]'); process.exit(2); }
+
+/* DESTINOS. El SCADA de operación dibuja la planta con el MISMO motor que el siting —lo dice su
+   propio README: «sobre el mismo plano que usa la herramienta de siting»— y tenía los datos
+   escritos a mano por separado. Se habían separado: en el SCADA los seguidores de Ayora y San José
+   no traían cotas de mesa, Páramo y El Burgo salían sin zonas de color, y no existían Fayón,
+   Bagnarelli ni Túnez. Un solo generador, un solo origen (el DWG), dos consumidores. */
+const DESTINOS = {
+  siting: RAIZ + 'index.html',
+  scada: '/home/user/SCADA/index.html',
+};
+const dArg = (rest.find(a => a.startsWith('--destino=')) || '--destino=siting').slice(10);
+const destinos = (dArg === 'ambos' ? ['siting', 'scada'] : dArg.split(','))
+  .map(d => { if (!DESTINOS[d]) { console.error('destino desconocido: ' + d + ' (siting|scada|ambos)'); process.exit(2); } return d; });
+
+/* El nombre del layout y el de la variable en la app no siempre coinciden: el layout se llama
+   `elburgo_layout.json` y en las dos apps la constante es BURGO y el escenario "burgo". Sin este
+   mapa, `--write` metía un `const ELBURGO=` nuevo al lado del BURGO de siempre y la planta quedaba
+   declarada dos veces, con el botón apuntando a la vieja. */
+const VAR = { elburgo: 'BURGO' };
+const SC = { elburgo: 'burgo' };
+const nomVar = VAR[planta] || planta.toUpperCase();
 
 /* ---------- WGS84/ETRS89 -> UTM (serie de Krüger) ---------- */
 function utm(lat, lon, zona, sur) {
@@ -99,7 +123,7 @@ const reps = (L.reps || []).map((p, i) => [i + 1, String(i + 1), r2(p.x - minx),
 
 const TIT = { bagnarelli: 'Bagnarelli 24030', tunez: 'Túnez 24021', paramo: 'Páramo 25019',
               fayon: 'Fayón 24007', ayora: 'Ayora 24025', sanjose: 'San José 24019', elburgo: 'El Burgo I 23003' };
-const P = { ox: +cE.toFixed(1) + minx, oy: +cN.toFixed(1) + minn, sc: planta,
+const P = { ox: +cE.toFixed(1) + minx, oy: +cN.toFixed(1) + minn, sc: SC[planta] || planta,
             name: L.title || TIT[planta] || planta,
             usePS: true, showGZ: false, ncus, tcus, hsus, reps };
 if (!tieneCotas) { /* sin cotas en el layout no se declara nada de la mesa */ }
@@ -121,37 +145,54 @@ if (nRot) console.log(`  ${nRot} seguidores girados (rot != 0) -> se pasa como a
 if (VERIFICA) {
   /* Prueba del convenio: se regenera una planta que YA está en el siting y se compara punto a
      punto por vecino más próximo (los identificadores no coinciden entre las dos fuentes). */
-  const h = readFileSync(RAIZ + 'index.html', 'utf8');
-  const nom = planta.toUpperCase();
-  const ini = h.indexOf('const ' + nom + '='); if (ini < 0) { console.error('esa planta no está en index.html'); process.exit(1); }
+  const h = readFileSync(DESTINOS[destinos[0]], 'utf8');
+  const nom = nomVar;
+  const ini = h.indexOf('const ' + nom + '='); if (ini < 0) { console.error('esa planta no está en ' + destinos[0]); process.exit(1); }
   const fin = h.indexOf('\nconst ', ini + 5);
   const VIEJO = (new Function(h.slice(ini, fin > 0 ? fin : undefined) + '; return ' + nom + ';'))();
+  /* SE COMPARA EN UTM ABSOLUTO, no en el sistema local de cada dataset.
+     La esquina (0,0) de un dataset es un convenio interno: si dos versiones la ponen en un sitio
+     distinto, TODOS los puntos salen desplazados en local aunque estén en el mismo sitio del mundo,
+     porque el ox/oy compensa exactamente ese desplazamiento. El Burgo daba así 11,00 m de error
+     —y son 0,00 m reales, con el origen 11 m más al norte y las Y 11 m más bajas—. Esta trampa ya
+     me la comí una vez midiendo en local; medir en absoluto es lo único que dice la verdad. */
+  const georref = (VIEJO.ox || 0) !== 0 || (VIEJO.oy || 0) !== 0;
+  const AX = georref ? P.ox : 0, AY = georref ? P.oy : 0;
+  const BX = georref ? VIEJO.ox : 0, BY = georref ? VIEJO.oy : 0;
   let peor = 0, sum = 0;
   for (const t of tcus) {
     let d = Infinity;
-    for (const v of VIEJO.tcus) { const q = Math.hypot(v[0] - t[0], v[1] - t[1]); if (q < d) d = q; }
+    for (const v of VIEJO.tcus) { const q = Math.hypot((BX + v[0]) - (AX + t[0]), (BY + v[1]) - (AY + t[1])); if (q < d) d = q; }
     sum += d; if (d > peor) peor = d;
   }
-  console.log(`\nVERIFICACIÓN contra el ${nom} que ya está en el siting:`);
+  console.log(`\nVERIFICACIÓN contra el ${nom} que ya está en ${destinos[0]}${georref ? ' (en UTM absoluto)' : ' (EN LOCAL: el que hay no tiene georreferencia)'}:`);
   console.log(`  ${tcus.length} vs ${VIEJO.tcus.length} TCU · distancia media ${(sum / tcus.length).toFixed(3)} m · peor ${peor.toFixed(3)} m`);
-  console.log(`  ox ${P.ox} vs ${VIEJO.ox} (${(P.ox - VIEJO.ox).toFixed(2)} m) · oy ${P.oy} vs ${VIEJO.oy} (${(P.oy - VIEJO.oy).toFixed(2)} m)`);
-  const bien = peor < 0.15 && Math.abs(P.ox - VIEJO.ox) < 1 && Math.abs(P.oy - VIEJO.oy) < 1;
-  console.log(bien ? '  ✓ el convenio de coordenadas es el mismo' : '  ✗ NO coincide: no generes nada hasta entenderlo');
+  console.log(`  ox ${P.ox} vs ${VIEJO.ox} (${(P.ox - VIEJO.ox).toFixed(2)} m) · oy ${P.oy} vs ${VIEJO.oy} (${(P.oy - VIEJO.oy).toFixed(2)} m)` +
+              (georref ? '' : '   ← sin georreferencia no hay nada que comparar en absoluto'));
+  /* Tolerancia 0,30 m y no 0,15: en absoluto ya no se cancela el redondeo. El origen va a 0,1 m y
+     cada coordenada también, en las dos versiones, así que el peor caso legítimo es 0,1+0,1 por eje.
+     Páramo se queda en 0,200 justo por eso; por encima de 0,30 ya no es redondeo, es geometría. */
+  const bien = peor < 0.30 && georref;
+  console.log(bien ? '  ✓ mismo sitio del mundo: el convenio es el mismo' : '  ✗ NO coincide: no generes nada hasta entenderlo');
   process.exit(bien ? 0 : 1);
 }
 
 const js = o => JSON.stringify(o);
-const literal = `const ${planta.toUpperCase()}=${js(P)};`;
-if (!WRITE) { console.log('\n(dry-run: pasa --write para inyectarlo en index.html)'); console.log(literal.slice(0, 300) + '…'); process.exit(0); }
+const literal = `const ${nomVar}=${js(P)};`;
+if (!WRITE) { console.log(`\n(dry-run: pasa --write para inyectarlo en ${destinos.join(' y ')})`); console.log(literal.slice(0, 300) + '…'); process.exit(0); }
 
-let h = readFileSync(RAIZ + 'index.html', 'utf8');
-const nom = planta.toUpperCase(), marca = 'const ' + nom + '=';
-if (h.includes(marca)) {
-  const i = h.indexOf(marca), j = h.indexOf('\nconst ', i + 5);
-  h = h.slice(0, i) + literal + h.slice(j > 0 ? j : i + marca.length);
-} else {
-  const anc = 'const BURGO=';                              // se inserta junto a los demás
-  h = h.replace(anc, literal + '\n' + anc);
+for (const d of destinos) {
+  const ruta = DESTINOS[d];
+  let h = readFileSync(ruta, 'utf8');
+  const marca = 'const ' + nomVar + '=';
+  if (h.includes(marca)) {
+    const i = h.indexOf(marca), j = h.indexOf('\nconst ', i + 5);
+    h = h.slice(0, i) + literal + h.slice(j > 0 ? j : i + marca.length);
+  } else {
+    const anc = 'const BURGO=';                            // se inserta junto a los demás
+    if (!h.includes(anc)) { console.error(`  ✗ ${d}: no encuentro dónde insertarlo (falta ${anc})`); process.exit(1); }
+    h = h.replace(anc, literal + '\n' + anc);
+  }
+  writeFileSync(ruta, h);
+  console.log(`  inyectado en ${d} (${ruta})`);
 }
-writeFileSync(RAIZ + 'index.html', h);
-console.log('\ninyectado en index.html');
