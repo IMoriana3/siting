@@ -671,6 +671,59 @@ function zonaBloque(mm,equipos,pitch,gapL){
         piezas.push([[o.x+nx*a,o.y+ny*a],[o.x-nx*a,o.y-ny*a],[mej.x-nx*b,mej.y-ny*b],[mej.x+nx*b,mej.y+ny*b]]); } }
   }
   const CEL=Math.max(1,pitch/3), RAD=3, PAD=RAD+2;
+  /* ISLAS DEL MISMO BLOQUE, COSIDAS.
+     El cierre morfológico de abajo solo junta lo que está a menos de 2·RAD·CEL, o sea un par de
+     pasos de fila. Una NCU repartida en varias islas —Panbianco tiene bloques así— salía como
+     varias manchas sueltas del mismo color, y no lo son: es UN ámbito. Se agrupan las piezas por
+     proximidad, con el MISMO alcance que ya une el cierre (así lo que aquí sale «isla» es
+     exactamente lo que allí saldría separado), y se cose cada isla con la más cercana por un
+     PASILLO de un paso de fila de ancho.
+     ESTRECHO A PROPÓSITO: une sin reclamar terreno que no es suyo. Ensanchar el radio del cierre
+     habría hecho lo mismo de un modo más simple y se habría tragado la parcela del vecino, que es
+     justo lo que esta función lleva evitando desde que dejó de ser un hull convexo.
+     Es un árbol de recubrimiento mínimo: n−1 pasillos para n islas, sin lazos redundantes. */
+  if(piezas.length>1){
+    const bb=P=>{let a0=Infinity,b0=Infinity,a1=-Infinity,b1=-Infinity;
+      for(const q of P){ if(q[0]<a0)a0=q[0]; if(q[0]>a1)a1=q[0]; if(q[1]<b0)b0=q[1]; if(q[1]>b1)b1=q[1]; }
+      return [a0,b0,a1,b1,(a0+a1)/2,(b0+b1)/2];};
+    const B=piezas.map(bb), UNE=2*RAD*CEL;
+    const pa=B.map((_,i)=>i), fnd=i=>{ while(pa[i]!==i){ pa[i]=pa[pa[i]]; i=pa[i]; } return i; };
+    const dBB=(A,C)=>Math.hypot(Math.max(0,Math.max(A[0]-C[2],C[0]-A[2])),Math.max(0,Math.max(A[1]-C[3],C[1]-A[3])));
+    for(let i=0;i<B.length;i++)for(let j=i+1;j<B.length;j++)
+      if(dBB(B[i],B[j])<=UNE){ const a=fnd(i),b=fnd(j); if(a!==b)pa[a]=b; }
+    const islas={}; for(let i=0;i<B.length;i++){ const r=fnd(i); (islas[r]=islas[r]||[]).push(i); }
+    const claves=Object.keys(islas);
+    if(claves.length>1){
+      /* par de piezas más próximo entre cada dos islas: por ahí se cose, que es el cruce más corto
+         y el que menos se mete en terreno ajeno */
+      const mejor={};
+      for(let a=0;a<claves.length;a++)for(let c=a+1;c<claves.length;c++){
+        let bd=Infinity,bp=null;
+        for(const i of islas[claves[a]])for(const j of islas[claves[c]]){
+          const d=dBB(B[i],B[j]); if(d<bd){ bd=d; bp=[i,j]; } }
+        mejor[a+'-'+c]={d:bd,p:bp};
+      }
+      const dentro=[0], fuera=claves.map((_,k)=>k).slice(1);
+      while(fuera.length){
+        let bd=Infinity,ba=-1,bc=-1,bi=-1;
+        for(const a of dentro)for(let k=0;k<fuera.length;k++){ const c=fuera[k];
+          const e=mejor[Math.min(a,c)+'-'+Math.max(a,c)];
+          if(e&&e.d<bd){ bd=e.d; ba=a; bc=c; bi=k; } }
+        if(bc<0)break;
+        const e=mejor[Math.min(ba,bc)+'-'+Math.max(ba,bc)];
+        if(e&&e.p){ const A=B[e.p[0]], C=B[e.p[1]];
+          const dx=C[4]-A[4], dy=C[5]-A[5], L=Math.hypot(dx,dy);
+          /* El ancho del pasillo NO se ata al `pitch`, que es un valor DERIVADO y en una planta sin
+             rejilla regular sale muy corto —en Panbianco, 4 m, porque sus 1.476 seguidores ocupan
+             959 abscisas distintas—: con eso el pasillo quedaba tan fino que la rejilla se lo comía
+             y las islas seguían sueltas. Se ata al ANCHO DE MESA, que está medido en el DWG. */
+          const ANCHO=Math.max(pitch,(S.p&&S.p.twid)||0)/2;
+          if(L>1){ const nx=-dy/L*ANCHO, ny=dx/L*ANCHO;
+            piezas.push([[A[4]+nx,A[5]+ny],[A[4]-nx,A[5]-ny],[C[4]-nx,C[5]-ny],[C[4]+nx,C[5]+ny]]); } }
+        dentro.push(bc); fuera.splice(bi,1);
+      }
+    }
+  }
   /* Un hueco más pequeño que una mesa no es un hueco, es un rincón que la rejilla no ha llegado a
      tapar —el que quedaba entre la HSU y la primera fila, por ejemplo—. Se rellena. */
   const mesa=(function(){ const a=mm.map(m=>(m.wid!=null?m.wid:S.p.twid)*(m.len!=null?m.len:S.p.tlen)).sort((x,y)=>x-y);
