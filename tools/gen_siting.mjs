@@ -157,7 +157,12 @@ const tcus = trk.map((t, i) => {
 const mismos = (a, b) => a === b;
 const ncus = (PREVIO && mismos((PREVIO.ncus || []).length, (L.ncus || []).length) && PREVIO.ncus.length)
   ? PREVIO.ncus
-  : (L.ncus || []).map((n, i) => [i + 1, String(i + 1), 'ETH', r2(n.x - minx), r2(n.n - minn)]);
+  /* El TIPO DE ENLACE se ponía a 'ETH' para todas, y no siempre lo es: el layout de comunicaciones
+     rotula cada NCU con el suyo —«NCU 02 (F.O)»— y el layout lo trae en `enlace`. En Benante 4 de
+     sus 6 NCU van por FIBRA y en Panbianco 2 de 12; escribirlas todas como Ethernet es tirar un
+     dato que el plano SÍ dice. Si el layout no lo trae, se mantiene 'ETH', que es lo que había. */
+  : (L.ncus || []).map((n, i) => [i + 1, String(i + 1),
+      /^f\.?\s*o/i.test(n.enlace || '') ? 'FO' : 'ETH', r2(n.x - minx), r2(n.n - minn)]);
 const hsus = (PREVIO && mismos((PREVIO.hsus || []).length, (L.meteo || []).length) && PREVIO.hsus.length)
   ? PREVIO.hsus
   : (L.meteo || []).map((m, i) => [m.name || ('HSU ' + (i + 1)), String(i + 1), r2(m.x - minx), r2(m.n - minn), 1]);
