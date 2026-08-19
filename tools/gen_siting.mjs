@@ -134,7 +134,10 @@ const PREVIO = (() => {
 const PB_PREVIO = (() => {
   if (!PREVIO) return null;
   const m = new Map();
-  for (const f of (PREVIO.tcus || [])) if (f[5] != null && f[5] !== '') m.set(f[4], f[5]);
+  /* La clave lleva la NCU delante: el identificador de un seguidor es su NUMERO DE ESCLAVO, y ese
+     numero se repite entre NCU -cada una es su propio bus-. En El Burgo hay un 57 en la NCU 1 y
+     otro en la NCU 2, y con la clave a secas el power block de uno pisaba al del otro. */
+  for (const f of (PREVIO.tcus || [])) if (f[5] != null && f[5] !== '') m.set(f[2] + '/' + f[4], f[5]);
   return m.size ? m : null;
 })();
 if (PB_PREVIO) console.log(`  se conserva el power block de ${PB_PREVIO.size} seguidores del dataset que ya estaba`);
@@ -143,7 +146,7 @@ const tcus = trk.map((t, i) => {
   const idt = t.id || ('T' + String(i + 1).padStart(3, '0'));
   const fila = [r2(t.x - minx), r2(t.n - minn), t.ncu || 1, t.gw || t.ncu || 1, idt];
   const az = +t.rot || 0;
-  const pb = (PB_PREVIO && PB_PREVIO.get(idt)) || null;
+  const pb = (PB_PREVIO && PB_PREVIO.get((t.ncu || 1) + '/' + idt)) || null;
   if (tieneCotas) { fila.push(pb, largoDe(t), ancho); if (az) fila.push(+az.toFixed(2)); }
   else if (pb || az) fila.push(pb, null, null, az ? +az.toFixed(2) : null);
   return fila;
