@@ -76,6 +76,21 @@ const libro = rows => ({ SheetNames: ['H1'], Sheets: { H1: { __rows: rows } } })
     anchoEnUso(p[0]) + ' / ' + anchoEnUso(p[1]));
 }
 
+// Centinelas UNIDOS. La #29 —otra sesión, mismo síntoma— cubría `nat`,
+// `undefined` y los números no finitos; esta rama cubría `na`, `none` y los
+// guiones. Cada centinela que falte vuelve a ser una etiqueta de cliente con un
+// nombre que nadie escribió, así que se comprueban los de las dos.
+[['', 'vacío'], ['nan', 'NaN de texto'], ['NaT', 'NaT de pandas'],
+ ['n/a', 'n/a'], ['#N/A', 'error de Excel'], ['null', 'null de texto'],
+ ['none', 'None de Python'], ['undefined', 'undefined'], ['-', 'guión'],
+ ['--', 'doble guión'], [NaN, 'NaN de verdad'], [Infinity, 'Infinity']
+].forEach(([v, nombre]) => {
+  check(`«${nombre}» se lee como ausencia, no como nombre`,
+    ctx.visTxt(v) === null, 'devuelve ' + JSON.stringify(ctx.visTxt(v)));
+});
+check('y un nombre de verdad sobrevive intacto', ctx.visTxt('  A-01 ') === 'A-01',
+  JSON.stringify(ctx.visTxt('  A-01 ')));
+
 // ── 2) CONTEOS: lo que no entra, se manifiesta ─────────────────────────────
 {
   const p = ctx.parseCSV(['x,y,id', '10,20,M1', 'abc,20,M2', '30,,M3', '40,50,M4'].join('\n'));
