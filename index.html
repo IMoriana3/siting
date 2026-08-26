@@ -1016,7 +1016,7 @@ function scatter(shapes,W,H,mx,my,tries=500){
 }
 function parseProjectXLSX(wb, fname){
   if(typeof XLSX==="undefined"){ alert("No se pudo cargar el lector de Excel (sin conexión)."); return null; }
-  const tcus=[], ncusRaw=[], hsus=[], reps=[]; let hasPS=false, altName="CLI";
+  const tcus=[], ncusRaw=[], hsus=[], reps=[], excluidas=[]; let hasPS=false, altName="CLI";
   wb.SheetNames.forEach(sh=>{
     const ws=wb.Sheets[sh]; if(!ws) return;
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
@@ -1030,13 +1030,25 @@ function parseProjectXLSX(wb, fname){
     let iTr=idx("ACCIONA"); if(iTr<0)iTr=idx("CLIENT"); if(iTr<0)iTr=idx("TCU");
     if(iPS>=0) hasPS=true;
     for(let ri=1; ri<rows.length; ri++){ const r=rows[ri]; if(!r) continue;
-      const x=Number(r[iX]), y=Number(r[iY]), nv=r[iN];
-      if(isFinite(x)&&isFinite(y)&&nv!=null&&/^\d+$/.test(String(nv).trim())){
-        tcus.push({x,y,ncu:parseInt(String(nv).trim(),10),
-          gw:(iGW>=0&&isFinite(Number(r[iGW])))?parseInt(r[iGW],10):1,
-          cli:(iCli>=0&&r[iCli]!=null)?String(r[iCli]).trim():"",
-          ps:(iPS>=0&&r[iPS]!=null)?String(r[iPS]).trim():"",
-          tr:(iTr>=0&&r[iTr]!=null)?String(r[iTr]).trim():""});
+      /* VIS-01. Antes: `String(r[iCli]).trim()` con "" cuando faltaba, y las filas
+         que no cuadraban se caían sin dejar rastro. Dos consecuencias medidas:
+           · una celda con el texto "NaN" —lo que deja un export de pandas— pasaba
+             tal cual, y como `mode()` descarta "" por falsy pero NO "NaN", la
+             etiqueta de cliente de la NCU acababa siendo la cadena "NaN". Y así
+             se exportaba.
+           · de cuatro filas de datos entraban tres y nadie lo decía.
+         Ahora `visTxt` devuelve null ante el centinela, y lo descartado se anota. */
+      const x=visNum(r[iX]), y=visNum(r[iY]), nv=visTxt(r[iN]);
+      if(x!=null&&y!=null&&nv!=null&&/^\d+$/.test(nv)){
+        tcus.push({x,y,ncu:parseInt(nv,10),
+          gw:(iGW>=0&&visNum(r[iGW])!=null)?parseInt(visNum(r[iGW]),10):1,
+          cli:(iCli>=0)?visTxt(r[iCli]):null,
+          ps:(iPS>=0)?visTxt(r[iPS]):null,
+          tr:(iTr>=0)?visTxt(r[iTr]):null});
+      } else if(r.some(c=>c!=null&&String(c).trim()!=="")){
+        excluidas.push({hoja:sh,fila:ri+1,
+          motivo:(x==null||y==null)?"coordenada no numérica"
+                :(nv==null)?"sin NCU":"la NCU no es un número entero"});
       }
       for(let c=9;c<r.length;c++){ const v=r[c]; if(typeof v!=="string") continue; const up=v.trim().toUpperCase();
         if(up.indexOf("NCU ")===0||up.indexOf("HSU")===0||up.indexOf("REP")===0){
@@ -1050,7 +1062,10 @@ function parseProjectXLSX(wb, fname){
     }
   });
   if(!tcus.length||!ncusRaw.length){ alert("No se reconoció el formato del Excel. Se esperan pestañas con columnas 'Coordenada X', 'Coordenada Y', 'NCU' y la posición de NCU/HSU/REP a la derecha."); return null; }
-  const mode=arr=>{ const c={}; arr.forEach(v=>{ if(v)c[v]=(c[v]||0)+1; }); let b="",n=0; for(const k in c) if(c[k]>n){n=c[k];b=k;} return b; };
+  /* `mode` sobre valores ya limpios: null no cuenta, y devuelve null —no ""— si
+     no hay ninguno, para que la ausencia siga siendo distinguible aguas abajo. */
+  const mode=arr=>{ const c={}; arr.forEach(v=>{ if(v!=null&&v!=="")c[v]=(c[v]||0)+1; });
+    let b=null,n=0; for(const k in c) if(c[k]>n){n=c[k];b=k;} return b; };
   const seen={}, NC=[];
   ncusRaw.forEach(n=>{ if(n.factiun!=null&&!seen[n.factiun]){ seen[n.factiun]=1; const ts=tcus.filter(t=>t.ncu===n.factiun); n.ps=mode(ts.map(t=>t.ps)); n.cli=mode(ts.map(t=>t.cli)); NC.push(n); } });
   NC.sort((a,b)=>a.factiun-b.factiun);
@@ -1058,7 +1073,7 @@ function parseProjectXLSX(wb, fname){
   const ys=tcus.map(t=>t.y).concat(NC.map(n=>n.y)).concat(hsus.map(h=>h.y)).concat(reps.map(r=>r.y));
   const ox=Math.min.apply(null,xs), oy=Math.min.apply(null,ys);
   const rx=v=>Math.round((v-ox)*10)/10, ry=v=>Math.round((v-oy)*10)/10;
-  return { ox:Math.round(ox*10)/10, oy:Math.round(oy*10)/10, name:fname.replace(/\.[^.]+$/,""), usePS:hasPS, showGZ:NC.some(n=>n.cli), alt:altName,
+  return { ox:Math.round(ox*10)/10, oy:Math.round(oy*10)/10, name:fname.replace(/\.[^.]+$/,""), usePS:hasPS, showGZ:NC.some(n=>n.cli), alt:altName, excluidas:excluidas,
     ncus:NC.map(n=>[n.factiun, n.cli||String(n.factiun), n.tipo, rx(n.x), ry(n.y), n.ps||""]),
     tcus:tcus.map(t=>[rx(t.x), ry(t.y), t.ncu, t.gw, t.tr||("T"+t.ncu), t.ps||""]),
     hsus:hsus.map(h=>[h.label,"",rx(h.x),ry(h.y),""]),
@@ -1205,26 +1220,112 @@ function scenario(name){
   return m.map((p,i)=>({...p,id:"M"+(i+1)}));
 }
 /* ===================== CSV ===================== */
+/* ── VIS-01: ausencia declarada, no adivinada ────────────────────────────────
+   Los dos importadores convertían la falta de dato en un valor que parece dato.
+   Medido sobre el código anterior:
+
+     celda VACÍA en largo/ancho/azimut   ->  0      (un ancho de 0 m, un azimut
+                                                     norte-sur que nadie escribió)
+     celda con basura o con el texto     ->  NaN    (viaja hasta la exportación)
+       "nan" que deja un export previo
+     celda vacía en un campo de texto    ->  ""     (indistinguible de "sin nombre")
+
+   Y con "NaN" de texto pasaba lo peor: `mode()` descarta "" por ser falsy pero
+   NO descarta "NaN", así que la etiqueta de cliente de una NCU salía siendo la
+   cadena "NaN" — medido — y así se exportaba.
+
+   `num` y `txt` devuelven null cuando no hay dato. null es lo que el resto del
+   fichero ya sabe leer: el idioma `(m.wid!=null?m.wid:S.p.twid)` está en cinco
+   sitios, así que un null cae al valor de proyecto mientras que un 0 se tomaba
+   como un ancho real de cero. */
+const VIS_AUSENTES = ["", "NAN", "NA", "N/A", "#N/A", "NULL", "NONE", "-", "--"];
+function visTxt(v){
+  if(v==null) return null;
+  const t = String(v).trim();
+  return VIS_AUSENTES.indexOf(t.toUpperCase()) >= 0 ? null : t;
+}
+/* Resumen legible de lo descartado. Se agrupa por motivo y se dan las primeras
+   filas de cada uno: una lista de 87 números no se lee, "87 sin NCU, filas 12,
+   13, 14…" sí. */
+function visResumenExclusiones(ex, nEntran){
+  const porMotivo={};
+  ex.forEach(e=>{ (porMotivo[e.motivo]=porMotivo[e.motivo]||[]).push(
+    (e.hoja?e.hoja+"!":"")+e.fila); });
+  const lineas=Object.keys(porMotivo).map(k=>{
+    const f=porMotivo[k];
+    return "  "+f.length+" · "+k+" (fila "+f.slice(0,5).join(", ")+
+           (f.length>5?", …":"")+")";
+  });
+  return "Se han descartado "+ex.length+" filas y entran "+nEntran+":\n"+
+         lineas.join("\n")+"\nCorrígelas en el origen o acepta que no están.";
+}
+function visNum(v){
+  if(visTxt(v) == null) return null;          // vacío o centinela de ausencia
+  const n = Number(v);
+  return isFinite(n) ? n : null;              // basura: ausente, no NaN
+}
 function parseCSV(text){
   const lines=text.replace(/\r/g,"").split("\n").filter(l=>l.trim());
   if(!lines.length)return [];
   const H=lines[0].split(",").map(s=>s.trim().toLowerCase());
-  const idx=(names)=>H.findIndex(h=>names.includes(h));
-  const ix=idx(["x","este","easting","coordenada x"]),iy=idx(["y","norte","northing","coordenada y"]);
+  /* VIS-01: EXIGE COINCIDENCIA ÚNICA. Antes era `H.findIndex(h=>names.includes(h))`,
+     o sea la primera columna de la hoja cuya cabecera estuviera en la lista de
+     candidatos. Con una hoja que trae "coordenada x" Y "x" se cogía una de las dos
+     en silencio, y cuál dependía del orden de las columnas. Ahora, si encajan
+     varias, no se elige: se anota como ambigüedad y se dice. */
+  const ambiguas=[];
+  const idx=(names)=>{
+    const hits=[]; for(let i=0;i<H.length;i++) if(names.indexOf(H[i])>=0) hits.push(i);
+    if(hits.length>1){ ambiguas.push(hits.map(i=>H[i]).join(" / ")); return -1; }
+    return hits.length ? hits[0] : -1;
+  };
+  /* `x_m`/`y_m`/`tracker_id` son las cabeceras que escribe csvAssign(): sin ellas
+     la herramienta no podía reimportar su propia exportación —medido: devolvía
+     null, "no se reconocen columnas"—. No son nombres inventados, son los suyos. */
+  const ix=idx(["x","este","easting","coordenada x","x_m"]),iy=idx(["y","norte","northing","coordenada y","y_m"]);
   const ilat=idx(["lat","latitud","latitude"]),ilng=idx(["lng","lon","long","longitud","longitude"]);
   const ipb=idx(["pb","power_block","powerblock","power block","zona","zone","block"]);
-  const iid=idx(["id","etiqueta","name","nombre"]);
+  const iid=idx(["id","etiqueta","name","nombre","tracker_id"]);
   const ilen=idx(["length","largo","len","longitud","l_m"]); const iwid=idx(["width","ancho","wid","w_m"]); const iaz=idx(["azimuth","azimut","az","orientacion","orientation"]);
   const rows=lines.slice(1).map(l=>l.split(","));
+  const campos=(c,i)=>({pb:ipb>=0?visTxt(c[ipb]):null,
+                        id:iid>=0?(visTxt(c[iid])||("M"+(i+1))):("M"+(i+1)),
+                        len:ilen>=0?visNum(c[ilen]):null,
+                        wid:iwid>=0?visNum(c[iwid]):null,
+                        az:iaz>=0?visNum(c[iaz]):null});
   let pts=[];
-  if(ix>=0&&iy>=0){ pts=rows.map((c,i)=>({x:+c[ix],y:+c[iy],pb:ipb>=0?(c[ipb]||"").trim()||null:null,id:iid>=0?c[iid]:("M"+(i+1)),len:ilen>=0?+c[ilen]:undefined,wid:iwid>=0?+c[iwid]:undefined,az:iaz>=0?+c[iaz]:undefined})); }
+  if(ix>=0&&iy>=0){ pts=rows.map((c,i)=>Object.assign({x:visNum(c[ix]),y:visNum(c[iy])},campos(c,i))); }
   else if(ilat>=0&&ilng>=0){
-    const lat=rows.map(c=>+c[ilat]),lng=rows.map(c=>+c[ilng]);
-    const lat0=lat.reduce((a,b)=>a+b,0)/lat.length,lng0=lng.reduce((a,b)=>a+b,0)/lng.length,k=111320;
-    pts=rows.map((c,i)=>({x:(lng[i]-lng0)*k*Math.cos(lat0*Math.PI/180),y:(lat[i]-lat0)*k,pb:ipb>=0?(c[ipb]||"").trim()||null:null,id:iid>=0?c[iid]:("M"+(i+1)),len:ilen>=0?+c[ilen]:undefined,wid:iwid>=0?+c[iwid]:undefined,az:iaz>=0?+c[iaz]:undefined}));
-  } else return null;
-  pts=pts.filter(p=>isFinite(p.x)&&isFinite(p.y));
-  if(pts.length>6000)pts=pts.slice(0,6000);
+    const lat=rows.map(c=>visNum(c[ilat])),lng=rows.map(c=>visNum(c[ilng]));
+    const ok=lat.map((v,i)=>v!=null&&lng[i]!=null);
+    const nv=ok.filter(Boolean).length||1;
+    const lat0=lat.reduce((a,b,i)=>a+(ok[i]?b:0),0)/nv, lng0=lng.reduce((a,b,i)=>a+(ok[i]?b:0),0)/nv, k=111320;
+    pts=rows.map((c,i)=>Object.assign(
+      ok[i]?{x:(lng[i]-lng0)*k*Math.cos(lat0*Math.PI/180),y:(lat[i]-lat0)*k}:{x:null,y:null},
+      campos(c,i)));
+  } else {
+    /* Si NO hay columnas de coordenadas puede ser por dos razones muy distintas:
+       que no estén, o que haya VARIAS y no se elija por ti. Devolver `null` en
+       los dos casos hacía que el aviso dijera "no se reconocen columnas" cuando
+       el problema era justo el contrario: sobraban. */
+    if(ambiguas.length){ const vacio=[]; vacio.excluidas=[]; vacio.ambiguas=ambiguas; return vacio; }
+    return null;
+  }
+  /* VIS-01: LAS EXCLUSIONES SE MANIFIESTAN. Antes esto era un `.filter()` mudo y
+     un `.slice(0,6000)` igual de mudo: quien cargaba una hoja con filas rotas veía
+     el dibujo y no sabía que faltaba nada. Ahora se cuentan, con el número de fila
+     de la HOJA (+2: la cabecera y el índice base 1), y el que llama lo dice. */
+  const excluidas=[];
+  const buenas=[];
+  pts.forEach((p,i)=>{ if(p.x!=null&&p.y!=null) buenas.push(p);
+    else excluidas.push({fila:i+2,motivo:"coordenada no numérica"}); });
+  pts=buenas;
+  if(pts.length>6000){
+    for(let i=6000;i<pts.length;i++) excluidas.push({fila:i+2,motivo:"por encima del tope de 6.000 filas"});
+    pts=pts.slice(0,6000);
+  }
+  pts.excluidas=excluidas;
+  pts.ambiguas=ambiguas;
   return pts;
 }
 function downloadTpl(){
@@ -1804,7 +1905,15 @@ document.getElementById("csv").onchange=e=>{
   const f=e.target.files[0]; if(!f)return; const r=new FileReader();
   r.onload=()=>{ const pts=parseCSV(r.result);
     if(!pts){ alert("No se reconocen columnas de coordenadas. Usa x,y (metros) o lat,lng. Opcional: power_block."); return; }
+    /* VIS-01: lo que no entra, se dice. Antes se filtraba en silencio y el dibujo
+       salía igual de convincente con 87 filas menos. */
+    if(pts.ambiguas&&pts.ambiguas.length){
+      alert("Hay columnas ambiguas y no se elige por ti:\n  "+pts.ambiguas.join("\n  ")+
+            "\nDeja una sola de cada.");
+      return;
+    }
     if(!pts.length){ alert("CSV vacío o sin filas válidas."); return; }
+    if(pts.excluidas&&pts.excluidas.length) alert(visResumenExclusiones(pts.excluidas, pts.length));
     document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active"));
     S.motors=pts; recomputeNewData();
   }; r.readAsText(f);
@@ -1812,6 +1921,7 @@ document.getElementById("csv").onchange=e=>{
 document.getElementById("xlsx").onchange=e=>{
   const f=e.target.files[0]; if(!f) return; const r=new FileReader();
   r.onload=()=>{ try{ const wb=XLSX.read(new Uint8Array(r.result),{type:"array"}); const P=parseProjectXLSX(wb,f.name);
+      if(P&&P.excluidas&&P.excluidas.length) alert(visResumenExclusiones(P.excluidas, P.tcus.length));
     if(P){ document.querySelectorAll("#scn button").forEach(x=>x.classList.remove("active")); loadProject(P); }
   }catch(err){ alert("Error leyendo el Excel: "+err.message); } };
   r.readAsArrayBuffer(f);
