@@ -1,0 +1,24 @@
+# El repo no tenía ninguna comprobación automática. La capa RF pinta un mapa de
+# cobertura que se mira para decidir dónde va una NCU, y se equivocaba en 27 dB
+# sin que nada lo dijera (RF-01). Un banco que no corre nadie es decoración.
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: banco de pruebas
+        run: |
+          set -o pipefail
+          rc=0
+          for f in tests/test_*.js; do
+            echo "── $f ──"
+            node "$f" || rc=1
+          done
+          exit $rc
