@@ -1257,32 +1257,83 @@ function motorColor(m){
 const RF_PITCH_M=12.0, RF_CHORD_M=2.38, RF_ANT_H=1.5;
 function rfParams(){ return (window.ZigbeePV&&ZigbeePV.defaultParamsElBurgo)?ZigbeePV.defaultParamsElBurgo():null; }
 function rfTilt(){ const el=document.getElementById("rf-tilt"); return el?(+el.value||0):30; }
-/* FILAS REALES DE MÓDULOS, que es lo que corta el enlace. Antes los obstáculos se ponían en una
-   retícula fija de 12 m anclada en x=0, y eso solo vale si la planta cae justo en esa malla. En las
-   bífilas fallaba por los dos lados: contaba UNA fila por seguidor cuando hay DOS, y las colocaba
-   donde no hay nada. Medido: en El Burgo la retícula caía a 3,01 m de la fila más próxima — o sea
-   clavada en el centro del pasillo, entre las dos filas — y contaba 45 obstáculos donde hay 90; en
-   Fayón, 13 donde hay 28, desalineados 1,44 m de media.
-   Ahora las filas se sacan del propio layout: cada seguidor aporta sus dos bandas a ±sep/2 (o una
-   sola si la planta no es bífila), sin suponer paso ni fase. Se devuelven ordenadas para poder
-   entrar por búsqueda binaria: San José tiene 2.289 seguidores y el margen se recalcula por TCU. */
+/* FILAS REALES DE MÓDULOS, que es lo que corta el enlace.
+
+   Primera corrección (ya estaba): los obstáculos salían de una retícula fija de 12 m anclada en
+   x=0, que solo vale si la planta cae justo en esa malla. Medido entonces: en El Burgo la retícula
+   caía a 3,01 m de la fila más próxima —clavada en el centro del pasillo— y contaba 45 obstáculos
+   donde hay 90; en Fayón, 13 donde hay 28. Se pasó a sacar las filas del propio layout.
+
+   RF-01, esta corrección: seguían siendo RECTAS VERTICALES INFINITAS. Cada fila se guardaba como
+   una sola coordenada X y el enlace se cruzaba con la recta x=X, así que la fila no tenía ni
+   longitud, ni azimut, ni final. Tres consecuencias, MEDIDAS antes de tocar nada:
+
+     · Azimut. En una planta girada, un enlace PARALELO a las filas —que no cruza ninguna— barre
+       coordenadas X y se lleva un obstáculo por cada una. Sobre un enlace despejado de 150 m:
+
+           az=0°     0 obstáculos    penaliza  0,00 dB   (el modelo solo acertaba aquí)
+           az=10°    2 obstáculos    penaliza 19,50 dB
+           az=23,7°  5 obstáculos    penaliza 27,37 dB   ← Bagnarelli, +12,88 → −14,49 dB
+           az=45°    6 obstáculos    penaliza 25,64 dB
+
+       O sea que en cualquier planta girada los enlaces MÁS despejados —los que van a lo largo del
+       pasillo— se pintaban como sin cobertura.
+
+     · Longitud finita. Filas de 64 m centradas en y=0, enlace a 500 m al norte: contaba las 7
+       filas y daba −15,53 dB. El enlace no pasa ni cerca.
+
+     · Calles y bloques. Dos bloques desencajados, enlace que solo cruza el primero: contaba 6
+       filas donde cruza 3.
+
+   Ahora cada seguidor aporta su SEGMENTO real —centro, largo y azimut, con el mismo idioma que usa
+   el resto del fichero (`ux=cos a, uy=−sin a` para el eje transversal)— y las bífilas aportan dos a
+   ±sep/2. `rfObstacles` interseca el enlace contra cada segmento y solo cuenta el corte si cae
+   DENTRO de los dos: dentro del enlace (t∈(0,1)) y dentro de la fila (u∈[0,1]).
+
+   Se conserva la entrada por búsqueda binaria, que estaba ahí por una razón medida: San José tiene
+   2.289 seguidores y el margen se recalcula por TCU. Los segmentos van ordenados por su x mínima y
+   se entra en `xmin(enlace) − span`, donde `span` es la mayor extensión en x de un segmento: por
+   debajo de eso ningún segmento alcanza al enlace, así que el recorte es exacto, no heurístico. */
 function rfRows(){
-  const cu=(S.bifilo&&S.bifilo.cuerda)||0, set=new Set();
+  const cu=(S.bifilo&&S.bifilo.cuerda)||0, segs=[];
   for(const m of S.motors){
-    const Wm=(m.wid!=null?m.wid:S.p.twid), sep=(cu>0&&Wm>0)?(Wm-cu):0;
-    if(sep>0.05){ set.add(Math.round((m.x-sep/2)*100)/100); set.add(Math.round((m.x+sep/2)*100)/100); }
-    else set.add(Math.round(m.x*100)/100);
+    const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid);
+    const a=((m.az||0))*Math.PI/180;
+    const ux=Math.cos(a), uy=-Math.sin(a);        // eje TRANSVERSAL (el del ancho)
+    const lx=-uy, ly=ux;                          // eje LONGITUDINAL (el del largo)
+    const sep=(cu>0&&Wm>0)?(Wm-cu):0;
+    const offs=(sep>0.05)?[-sep/2,sep/2]:[0];
+    for(const o of offs){
+      const cx=m.x+o*ux, cy=m.y+o*uy, hl=Lm/2;
+      segs.push([cx-hl*lx,cy-hl*ly,cx+hl*lx,cy+hl*ly]);
+    }
   }
-  return (S._rfRows=[...set].sort((a,b)=>a-b));
+  segs.sort((p,q)=>Math.min(p[0],p[2])-Math.min(q[0],q[2]));
+  let span=0; for(const s of segs) span=Math.max(span,Math.abs(s[2]-s[0]));
+  return (S._rfRows={segs:segs,span:span});
 }
 function rfObstacles(n,m,rows){
-  const dx=m.x-n.x, D=Math.hypot(m.x-n.x,m.y-n.y); if(D<0.5||Math.abs(dx)<1e-6)return [];
-  const R=rows||S._rfRows||rfRows(); if(!R.length)return [];
+  const D=Math.hypot(m.x-n.x,m.y-n.y); if(D<0.5)return [];
+  const R=rows||S._rfRows||rfRows(), segs=R&&R.segs; if(!segs||!segs.length)return [];
   const top=ZigbeePV.rowTopElev(0,RF_ANT_H,(S.bifilo&&S.bifilo.cuerda)||RF_CHORD_M,rfTilt());
-  const x0=Math.min(n.x,m.x), x1=Math.max(n.x,m.x);
-  let lo=0,hi=R.length; while(lo<hi){ const md=(lo+hi)>>1; if(R[md]<x0)lo=md+1; else hi=md; }
+  const ex=m.x-n.x, ey=m.y-n.y;
+  const xlo=Math.min(n.x,m.x)-R.span, xhi=Math.max(n.x,m.x);
+  const ylo=Math.min(n.y,m.y), yhi=Math.max(n.y,m.y);
+  let lo=0,hi=segs.length;
+  while(lo<hi){ const md=(lo+hi)>>1; if(Math.min(segs[md][0],segs[md][2])<xlo)lo=md+1; else hi=md; }
   const obs=[];
-  for(let k=lo;k<R.length&&R[k]<=x1;k++){ const t=(R[k]-n.x)/dx; if(t>0.001&&t<0.999)obs.push([t*D,top]); }
+  for(let k=lo;k<segs.length;k++){
+    const s=segs[k];
+    if(Math.min(s[0],s[2])>xhi)break;                                  // ordenados: ya no vuelven
+    if(Math.max(s[1],s[3])<ylo||Math.min(s[1],s[3])>yhi)continue;      // rechazo por caja
+    const fx=s[2]-s[0], fy=s[3]-s[1];
+    const den=ex*fy-ey*fx; if(Math.abs(den)<1e-12)continue;            // enlace y fila paralelos
+    const wx=s[0]-n.x, wy=s[1]-n.y;
+    const t=(wx*fy-wy*fx)/den;                                         // dónde, sobre el ENLACE
+    const u=(wx*ey-wy*ex)/den;                                         // dónde, sobre la FILA
+    if(t>0.001&&t<0.999&&u>=0&&u<=1)obs.push([t*D,top]);
+  }
+  obs.sort((p,q)=>p[0]-q[0]);   // Deygout recorre por posición; el orden es parte del contrato
   return obs;
 }
 function rfMargin(n,m,rows){
