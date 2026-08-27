@@ -1055,25 +1055,65 @@ function suggestRSU(hull){
   return Math.max(3,Math.min(n,12));
 }
 const HSU_OFFSET=7; // metros: la HSU se monta pegada a una fila, a ~7 m del seguidor
+const HSU_EXT=20;   // metros: una NCU fuera del recinto o a menos de esto de su borde es "exterior"
+                    // y puede llevar la HSU INCORPORADA en el mismo poste, como en Bagnarelli
+/* REPARTO POR SECTORES, no por longitud de perímetro. Las HSU tienen que RODEAR la planta — el
+   viento y las nubes entran por cualquier lado — y el reparto por arco no lo garantizaba: medido
+   en FUV I con 4 HSU, dos salían pegadas (rumbos 34° y 39°) y quedaba un flanco de 157° sin
+   estación. Ahora cada HSU tiene su SECTOR angular alrededor del centro de la planta, con la fase
+   alineada al eje principal de la nube de motores: con 2 cubren los dos extremos del eje largo,
+   con 4 los cuatro lados. Si en un sector hay una NCU exterior, la HSU va INCORPORADA en ella
+   (mismo poste, sin equipo suelto); si no, se ancla al seguidor del borde de ese sector, empujada
+   HACIA AFUERA de la planta (antes el "afuera" era "lejos de la NCU", que podía apuntar adonde
+   fuera) y con la guarda de mesas de siempre. */
 function placeRSUs(motors,hull,ncus,N,radius){
-  if(hull.length<2||N<1||!motors.length)return [];
-  const segs=[];let total=0;
-  for(let i=0;i<hull.length;i++){const a=hull[i],b=hull[(i+1)%hull.length];const L=dist(a,b);segs.push({a,b,L,acc:total});total+=L;}
-  const ptAt=(t)=>{let s=segs[segs.length-1];for(let k=0;k<segs.length;k++){const nx=(k===segs.length-1)?total+1:segs[k+1].acc;if(t>=segs[k].acc&&t<nx){s=segs[k];break;}}const f=(t-s.acc)/(s.L||1);return{x:s.a.x+(s.b.x-s.a.x)*f,y:s.a.y+(s.b.y-s.a.y)*f};};
-  const rsus=[];
+  if(N<1||!motors.length)return [];
+  let cx=0,cy=0;for(const m of motors){cx+=m.x;cy+=m.y;}cx/=motors.length;cy/=motors.length;
+  let sxx=0,syy=0,sxy=0;for(const m of motors){const dx=m.x-cx,dy=m.y-cy;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy;}
+  const fase=0.5*Math.atan2(2*sxy,sxx-syy);   // eje principal: fase de los sectores
+  const borde=(ux,uy)=>{                      // corte del rayo centro→dir con el recinto
+    let best=null,bt=-1;
+    for(let i=0;i<hull.length;i++){
+      const a=hull[i],b=hull[(i+1)%hull.length];
+      const ex=b.x-a.x,ey=b.y-a.y,den=ux*ey-uy*ex;
+      if(Math.abs(den)<1e-9)continue;
+      const t=((a.x-cx)*ey-(a.y-cy)*ex)/den;
+      const s=Math.abs(ex)>Math.abs(ey)?(cx+t*ux-a.x)/ex:(cy+t*uy-a.y)/ey;
+      if(t>bt&&s>=-1e-9&&s<=1+1e-9){bt=t;best={x:cx+t*ux,y:cy+t*uy};}
+    }
+    if(best)return best;
+    let far=null,fd=-Infinity;for(const m of motors){const d=(m.x-cx)*ux+(m.y-cy)*uy;if(d>fd){fd=d;far=m;}}
+    return far?{x:far.x,y:far.y}:{x:cx,y:cy};
+  };
+  const dBorde=(p)=>{ let d=Infinity;
+    for(let i=0;i<hull.length;i++){const a=hull[i],b=hull[(i+1)%hull.length];
+      const ex=b.x-a.x,ey=b.y-a.y,L2=ex*ex+ey*ey||1;
+      let t=((p.x-a.x)*ex+(p.y-a.y)*ey)/L2; t=Math.max(0,Math.min(1,t));
+      const qx=a.x+t*ex-p.x,qy=a.y+t*ey-p.y,dd=Math.hypot(qx,qy); if(dd<d)d=dd; }
+    return d; };
+  const dentro=(p)=>{let c=false;for(let i=0,j=hull.length-1;i<hull.length;j=i++){const yi=hull[i].y,yj=hull[j].y,xi=hull[i].x,xj=hull[j].x;if(((yi>p.y)!==(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi))c=!c;}return c;};
+  const ext=hull.length>=3?ncus.filter(n=>!dentro(n)||dBorde(n)<=HSU_EXT):[];
+  const norm=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
+  const usadas=new Set(), rsus=[];
   for(let k=0;k<N;k++){
-    const ideal=ptAt((k+0.5)/N*total);
-    // seguidor real más cercano al punto de reparto
+    const th=fase+k*2*Math.PI/N, ux=Math.cos(th), uy=Math.sin(th);
+    // ¿NCU exterior en este sector? → HSU incorporada en su poste
+    let host=null,hb=Infinity;
+    for(const n of ext){ if(usadas.has(n.id))continue;
+      const d=Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th));
+      if(d<=Math.PI/N+1e-9&&d<hb){hb=d;host=n;} }
+    if(host){ usadas.add(host.id);
+      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:host.x,y:host.y,adjusted:false,ncu:host.id,integrada:true});
+      continue; }
+    const ideal=borde(ux,uy);
     let tcu=null,td=Infinity; for(const m of motors){const d=dist(ideal,m);if(d<td){td=d;tcu=m;}}
     if(!tcu)continue;
-    // NCU más cercana a ese seguidor (para asociar y dar la dirección "hacia afuera")
     let near=null,nd=Infinity; for(const n of ncus){const d=dist(tcu,n);if(d<nd){nd=d;near=n;}}
-    let dx=1,dy=0; if(near){ dx=tcu.x-near.x; dy=tcu.y-near.y; const dl=Math.hypot(dx,dy)||1; dx/=dl; dy/=dl; }
-    const pos={x:tcu.x+dx*HSU_OFFSET, y:tcu.y+dy*HSU_OFFSET};
-    // los 7 m fijos se miden desde el CENTRO del seguidor: con mesas anchas o la dirección hacia la
-    // fila de al lado, la HSU caía sobre una mesa. Misma guarda que la NCU, corrección mínima —
-    // pero CON prórroga: es colocación automática, y si el campo cercano es un bloque macizo
-    // (Páramo con las cotas del panel) mejor una HSU a 60 m que encima de un tracker.
+    const dl=Math.hypot(tcu.x-cx,tcu.y-cy)||1;
+    const pos={x:tcu.x+(tcu.x-cx)/dl*HSU_OFFSET, y:tcu.y+(tcu.y-cy)/dl*HSU_OFFSET};
+    // los 7 m fijos se miden desde el CENTRO del seguidor: con mesas anchas la HSU caía sobre una
+    // mesa. Misma guarda que la NCU, corrección mínima — pero CON prórroga: es colocación
+    // automática, y si el campo cercano es un bloque macizo mejor a 60 m que encima de un tracker.
     separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearHSU});
     rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:near?near.id:null});
   }
@@ -1923,9 +1963,15 @@ function draw(){
     ctx.fillRect(-sz,-sz,sz*2,sz*2); ctx.strokeRect(-sz,-sz,sz*2,sz*2); ctx.restore();
     if(S.T.scale>0.32||sel){ ctx.fillStyle="#0A1D30"; ctx.font="600 10px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.fillText((n.gz&&n.gz.length<=6)?(n.id.replace("NCU-","")+" · "+n.gz):n.id.replace("NCU-",""), s.x, s.y-sz-4); }
   }
-  // RSUs (triángulo ámbar)
+  // RSUs (triángulo ámbar). La INCORPORADA comparte poste con su NCU: mismo punto en el mundo,
+  // triángulo pequeño pegado al rombo en pantalla para que se lean los dos equipos.
   for(const rsu of S.rsus){
     const s=w2s(rsu);
+    if(rsu.integrada){
+      ctx.beginPath(); ctx.moveTo(s.x+9,s.y-13); ctx.lineTo(s.x+4,s.y-4); ctx.lineTo(s.x+14,s.y-4); ctx.closePath();
+      ctx.fillStyle="#F2A900"; ctx.strokeStyle="#0A1D30"; ctx.lineWidth=1.2; ctx.fill(); ctx.stroke();
+      continue;
+    }
     ctx.beginPath(); ctx.moveTo(s.x,s.y-8); ctx.lineTo(s.x-7,s.y+5); ctx.lineTo(s.x+7,s.y+5); ctx.closePath();
     ctx.fillStyle=rsu.adjusted?"#d98300":"#F2A900"; ctx.strokeStyle="#0A1D30"; ctx.lineWidth=1.4; ctx.fill(); ctx.stroke();
   }
@@ -2048,7 +2094,7 @@ function equipmentData(){
     return { id:n.id, gz:n.gz||"", tipo:n.tipo||"", pb:n.pb||"\u2014", total:n.count, gws, x:n.x, y:n.y };
   });
   const nGW=ncus.reduce((s,n)=>s+n.gws.length,0);
-  const rsus=S.rsus.map(r=>({id:r.id, ncu:r.ncu||"\u2014", x:r.x, y:r.y}));
+  const rsus=S.rsus.map(r=>({id:r.id, ncu:r.ncu||"\u2014", x:r.x, y:r.y, integrada:!!r.integrada}));
   const reps=(S.reps||[]).map(r=>({id:r.id, x:r.x, y:r.y}));
   return { ncus, rsus, reps, totals:{ ncu:ncus.length, gw:nGW, rsu:rsus.length, rep:reps.length, tcu:S.motors.length } };
 }
@@ -2064,7 +2110,7 @@ function openEquip(){
     return `<tr><td class="mono">${n.id}</td><td class="mono">${n.gz||"\u2014"}</td><td>${n.pb}</td><td class="num">${g1}</td><td class="num">${g2}</td><td class="num b">${n.total}</td></tr>`;
   }).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--muted)">Sin datos</td></tr>`;
   document.getElementById("eq-rsu").innerHTML = D.rsus.length
-    ? D.rsus.map(r=>`<span class="chip"><b class="mono">${r.id}</b> \u2192 ${r.ncu}</span>`).join("")
+    ? D.rsus.map(r=>`<span class="chip"><b class="mono">${r.id}</b> \u2192 ${r.ncu}${r.integrada?" \u00b7 incorporada":""}</span>`).join("")
     : `<span style="color:var(--muted)">Sin HSU configuradas</span>`;
   document.getElementById("eq-rep").innerHTML = D.reps.length
     ? D.reps.map(r=>`<span class="chip"><b class="mono">${r.id}</b></span>`).join("")
@@ -2080,7 +2126,7 @@ function csvEquip(){
   const L=["equipo,tipo,nomenclatura_cliente,power_block,asociado_a,n_tcu,x_m,y_m"+(utm?",x_utm,y_utm":"")];
   D.ncus.forEach(n=>{ L.push([n.id,"NCU",n.gz,n.pb==="\u2014"?"":n.pb,"",n.total,co(n)].join(","));
     n.gws.forEach(g=>L.push([g.id,"Gateway","",n.pb==="\u2014"?"":n.pb,n.id,g.n,co(null)].join(","))); });
-  D.rsus.forEach(r=>L.push([r.id,"HSU","","",r.ncu==="\u2014"?"":r.ncu,"",co(r)].join(",")));
+  D.rsus.forEach(r=>L.push([r.id,r.integrada?"HSU incorporada en NCU":"HSU","","",r.ncu==="\u2014"?"":r.ncu,"",co(r)].join(",")));
   D.reps.forEach(r=>L.push([r.id,"Repetidor","","","","",co(r)].join(",")));
   dlCSV("equipos_comunicaciones.csv", L.join("\n"));
 }
