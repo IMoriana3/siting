@@ -278,7 +278,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <div class="stat"><div class="k">Power blocks</div><div class="v" id="s-pb">1</div></div>
         </div>
         <div id="warn"></div>
-        <button class="btn" id="eq-open" style="width:100%;margin-top:10px">Listado de equipos</button>
+        <button class="btn btn-primary" id="eq-pdf2" style="width:100%;margin-top:10px">⬇ Informe (PDF)</button>
+        <button class="btn btn-ghost" id="eq-open" style="width:100%;margin-top:8px">Listado de equipos</button>
       </div>
 
       <div class="sec" style="flex:1">
@@ -336,9 +337,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       <div id="eq-rep"></div>
     </div>
     <div class="eq-foot">
-      <button class="btn" id="eq-pdf">Informe (PDF)</button>
-      <button class="btn" id="eq-csv1">Inventario de equipos (CSV)</button>
-      <button class="btn" id="eq-csv2">Asignación por TCU (CSV)</button>
+      <button class="btn btn-primary" id="eq-pdf">Informe (PDF)</button>
+      <button class="btn btn-ghost" id="eq-csv1">Inventario de equipos (CSV)</button>
+      <button class="btn btn-ghost" id="eq-csv2">Asignación por TCU (CSV)</button>
     </div>
   </div>
 </div>
@@ -2608,6 +2609,7 @@ document.getElementById("eq-open").onclick=openEquip;
 document.getElementById("eq-close").onclick=closeEquip;
 document.getElementById("eq-modal").onclick=e=>{ if(e.target.id==="eq-modal") closeEquip(); };
 document.getElementById("eq-pdf").onclick=informePDF;
+document.getElementById("eq-pdf2").onclick=informePDF;   // el mismo informe, sin tener que abrir el listado
 document.getElementById("eq-csv1").onclick=csvEquip;
 document.getElementById("eq-csv2").onclick=csvAssign;
 window.addEventListener("resize",resize);
