@@ -99,6 +99,31 @@ function sitea(motors, P) {
   }
 }
 
+// ── 1b) SATURACIÓN: el mínimo de NCUs que el radio permite ─────────────────
+// 300 seguidores con cap. 160 son DOS NCUs si el radio llega — y la partición
+// golosa dejaba fragmentos: medido en este mismo rectángulo, 7 NCUs de
+// 58/70/46/68/21/28/9. La pasada de saturación (k-centro con tope de
+// capacidad) re-resuelve cada componente con la k mínima que valida radio con
+// margen, capacidad y malla conexa.
+{
+  const motors = reticula({ nx: 50, ny: 6, px: 12, py: 70, L: 64, W: 4 });   // 300 justos, 588x350
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  const R2 = 250 * 250;
+  const fuera = ncus.reduce((a, n) => a + n.motorIdx.filter(i => {
+    const dx = motors[i].x - n.x, dy = motors[i].y - n.y; return dx * dx + dy * dy > R2;
+  }).length, 0);
+  check('300 seguidores en rectángulo: DOS NCUs, no una nube de fragmentos',
+    ncus.length === 2, ncus.length + ' NCU (' + ncus.map(n => n.count).join('/') + ') — la partición golosa daba 7');
+  check('saturación: ninguna NCU sobre capacidad y nadie fuera de radio',
+    ncus.every(n => n.count <= 160) && fuera === 0, ncus.map(n => n.count).join('/') + ' · fuera: ' + fuera);
+  // y donde el radio NO da para menos, no se fuerza: planta alargada 984x280,
+  // las mitades quedarían a >250 m de su centro -> el mínimo geométrico es 3
+  const larga = reticula({ nx: 83, ny: 5, px: 12, py: 70, L: 64, W: 4 }).slice(0, 300);
+  const ncus2 = sitea(larga, { tlen: 64, twid: 4 });
+  check('planta alargada: 3 NCUs (2 son geométricamente imposibles con radio 250)',
+    ncus2.length === 3, ncus2.length + ' NCU (' + ncus2.map(n => n.count).join('/') + ')');
+}
+
 // ── 2) FUV I / FUV II (los datos reales del siting automático) ─────────────
 for (const K of ['FUV1', 'FUV2']) {
   const P = vm.runInContext(K, ctx);
