@@ -2297,9 +2297,10 @@ function renderVista(w,h,bbox,sel){
   draw();
   const out=document.createElement("canvas"); out.width=w; out.height=h;
   const c=out.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,w,h); c.drawImage(cv,0,0);
+  const tf={sc:S.T.scale,ox:S.T.ox,oy:S.T.oy};
   cv.width=old.w; cv.height=old.h; S.T.scale=old.T.scale; S.T.ox=old.T.ox; S.T.oy=old.T.oy;
   S.sel=old.sel; S.hover=old.hover; draw();
-  return out;
+  return {out,sc:tf.sc,ox:tf.ox,oy:tf.oy};
 }
 function bboxDe(pts,margen){
   const a={x:Infinity,y:Infinity},b={x:-Infinity,y:-Infinity};
@@ -2311,51 +2312,106 @@ function paginasInforme(){
   const D=equipmentData();
   const titulo=S.projName||S.sc||"siting";
   const fm=v=>v==null?"\u2014":Math.round(v);
+  const gwTxt=g=>g?`${g.n} \u00b7 d\u0304 ${fm(g.med)} \u00b7 m\u00e1x ${fm(g.max)}`:"\u2014";
+  /* PLAN de paginación por adelantado, para poder rotular "pág. k de N":
+     portada (mapa + las filas del resumen que quepan) + páginas de resumen (cont.) si hay más
+     NCUs que sitio + una página por cada DOS NCUs. */
+  const ROW_H=27, nN=D.ncus.length;
+  /* mapa ADAPTATIVO: si encogiéndolo (hasta 400 px) caben TODAS las filas del resumen en la
+     portada, se encoge — una página de continuación con dos filas sueltas es papel tirado */
+  let MAP_H=540;
+  let filasPortada=Math.max(0,Math.floor((PH-36-(150+MAP_H+64)-ROW_H)/ROW_H));
+  if(nN>filasPortada){
+    const falta=(nN-filasPortada)*ROW_H, margenMapa=MAP_H-400;
+    if(falta<=margenMapa){ MAP_H-=falta; filasPortada=nN; }
+  }
+  const TABLA_Y0=150+MAP_H+64;
+  const filasCont=Math.floor((PH-36-140-ROW_H)/ROW_H);
+  const nCont=Math.max(0,Math.ceil(Math.max(0,nN-filasPortada)/filasCont));
+  const total=1+nCont+Math.ceil(S.ncus.length/2);
+  const paginas=[];
   const cab=(pg,sub)=>{ const c=pg.getContext("2d");
     c.fillStyle="#0A1D30"; c.fillRect(0,0,PW,86);
     c.fillStyle="#fff"; c.font="700 34px 'IBM Plex Mono',monospace"; c.textAlign="left"; c.textBaseline="middle";
     c.fillText("Informe de comunicaciones \u00b7 "+titulo, 40, 44);
     c.font="500 22px 'IBM Plex Mono',monospace"; c.textAlign="right";
-    c.fillText(sub, PW-40, 44); c.textAlign="left"; };
-  const paginas=[];
-  // PORTADA: el layout entero
+    c.fillText(sub+"  \u00b7  p\u00e1g. "+(paginas.length+1)+" de "+total, PW-40, 44);
+    c.textAlign="left"; c.textBaseline="alphabetic"; };
+  /* tabla-resumen: las mismas columnas que el modal, dibujadas a mano */
+  const COL={ncu:40, pb:210, tcu:520, med:640, max:680, gw1:1080, gw2:1340, hsu:1714};
+  const cabTabla=(c,y)=>{
+    c.font="600 15px 'IBM Plex Mono',monospace"; c.fillStyle="#5a6b7a"; c.textAlign="left";
+    c.fillText("NCU",COL.ncu,y); c.fillText("POWER BLOCK",COL.pb,y);
+    c.textAlign="right"; c.fillText("TCU",COL.tcu,y); c.fillText("D\u0304 M",COL.med,y);
+    c.textAlign="left"; c.fillText("D.M\u00c1X M \u00b7 TCU",COL.max,y);
+    c.fillText("GW1 N \u00b7 D\u0304 \u00b7 M\u00c1X",COL.gw1,y); c.fillText("GW2",COL.gw2,y);
+    c.textAlign="right"; c.fillText("HSU",COL.hsu,y); c.textAlign="left";
+    c.strokeStyle="#c9d4de"; c.beginPath(); c.moveTo(40,y+8); c.lineTo(PW-40,y+8); c.stroke(); };
+  const fila=(c,e,y)=>{
+    c.font="500 18px 'IBM Plex Mono',monospace"; c.fillStyle="#0A1D30"; c.textAlign="left";
+    c.fillText(e.id,COL.ncu,y); c.fillText(e.pb==="\u2014"?"":e.pb,COL.pb,y);
+    c.textAlign="right"; c.font="700 18px 'IBM Plex Mono',monospace"; c.fillText(String(e.total),COL.tcu,y);
+    c.font="500 18px 'IBM Plex Mono',monospace"; c.fillText(String(fm(e.g.med)),COL.med,y);
+    c.textAlign="left"; c.fillText(fm(e.g.max)+" \u00b7 "+(e.g.lejana||"\u2014"),COL.max,y);
+    const gt=g=>g?`${g.n} \u00b7 ${fm(g.med)} \u00b7 ${fm(g.max)}`:"\u2014";
+    c.fillText(gt(e.gws[0]),COL.gw1,y); c.fillText(gt(e.gws[1]),COL.gw2,y);
+    c.textAlign="right"; c.fillText(e.nHsu?String(e.nHsu)+(e.hsuInc?" inc.":""):"\u2014",COL.hsu,y);
+    c.textAlign="left"; };
+  // PORTADA: el layout entero + el resumen (lo que quepa)
   {
     const pg=document.createElement("canvas"); pg.width=PW; pg.height=PH;
     const c=pg.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,PW,PH);
     cab(pg, new Date().toLocaleDateString("es-ES"));
     const linea=`${D.totals.ncu} NCU \u00b7 ${D.totals.gw} GW \u00b7 ${D.totals.rsu} HSU \u00b7 ${D.totals.rep} repetidores \u00b7 ${D.totals.tcu} TCU`+
       `   |   radio ${S.p.radius} m \u00b7 cap. ${S.p.capNCU}/${S.p.capGW} \u00b7 libre NCU ${S.p.clearNCU} m / HSU ${S.p.clearHSU} m`;
-    c.fillStyle="#0A1D30"; c.font="500 24px 'IBM Plex Mono',monospace"; c.fillText(linea, 40, 124);
+    c.fillStyle="#0A1D30"; c.font="500 24px 'IBM Plex Mono',monospace"; c.fillText(linea, 40, 128);
     const todos=S.motors.concat(S.ncus,S.rsus,S.reps||[]);
-    const vista=renderVista(PW-80, PH-220, bboxDe(todos,40), null);
-    c.drawImage(vista, 40, 150);
-    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5,PW-80,PH-220);
+    const vista=renderVista(PW-80, MAP_H, bboxDe(todos,40), null);
+    c.drawImage(vista.out, 40, 150);
+    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5,PW-80,MAP_H);
+    c.fillStyle="#0A1D30"; c.font="700 22px 'IBM Plex Mono',monospace";
+    c.fillText("Resumen por NCU"+(nCont?` (1\u2013${Math.min(filasPortada,nN)} de ${nN})`:""), 40, 150+MAP_H+42);
+    cabTabla(c, TABLA_Y0);
+    D.ncus.slice(0,filasPortada).forEach((e,i)=>fila(c,e,TABLA_Y0+ROW_H*(i+1)));
     paginas.push(pg);
   }
-  // UNA PÁGINA POR CADA DOS NCUs: su zona a lo grande, el resto atenuado
+  // RESUMEN (cont.): las filas que no cupieron en la portada
+  for(let p=0;p<nCont;p++){
+    const pg=document.createElement("canvas"); pg.width=PW; pg.height=PH;
+    const c=pg.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,PW,PH);
+    const desde=filasPortada+p*filasCont, hasta=Math.min(nN,desde+filasCont);
+    cab(pg, `resumen ${desde+1}\u2013${hasta} de ${nN}`);
+    cabTabla(c, 140);
+    D.ncus.slice(desde,hasta).forEach((e,i)=>fila(c,e,140+ROW_H*(i+1)));
+    paginas.push(pg);
+  }
+  // UNA PÁGINA POR CADA DOS NCUs: su zona a lo grande, el resto atenuado, y el RADIO de cobertura
   const porId={}; D.ncus.forEach(n=>porId[n.id]=n);
   const lista=S.ncus.slice();
   for(let i=0;i<lista.length;i+=2){
     const par=lista.slice(i,i+2);
     const pg=document.createElement("canvas"); pg.width=PW; pg.height=PH;
     const c=pg.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,PW,PH);
-    cab(pg, `p\u00e1g. ${paginas.length+1} \u00b7 ${par.map(n=>n.id).join(" y ")}`);
+    cab(pg, par.map(n=>n.id).join(" y "));
     const colW=Math.floor((PW-120)/2), colH=PH-86-64-140;
     par.forEach((n,j)=>{
       const x0=40+j*(colW+40), y0=120;
       const pts=n.motorIdx.map(k=>S.motors[k]).concat([n], S.rsus.filter(r=>r.ncu===n.id));
       const vista=renderVista(colW, colH, bboxDe(pts, Math.max(30,(S.p.tlen||64)/2+15)), n.id);
-      c.drawImage(vista, x0, y0);
+      c.drawImage(vista.out, x0, y0);
+      /* el radio de cobertura de ESTA NCU, recortado al marco: la circunferencia asoma por donde
+         el encuadre lo permita y se ve cuánta holgura de radio queda en la zona */
+      c.save(); c.beginPath(); c.rect(x0,y0,colW,colH); c.clip();
+      c.beginPath(); c.arc(x0+vista.ox+n.x*vista.sc, y0+vista.oy-n.y*vista.sc, S.p.radius*vista.sc, 0, 2*Math.PI);
+      c.setLineDash([8,6]); c.strokeStyle="#0A1D30"; c.globalAlpha=0.45; c.lineWidth=2; c.stroke();
+      c.setLineDash([]); c.globalAlpha=1; c.restore();
       c.strokeStyle="#c9d4de"; c.strokeRect(x0+0.5, y0+0.5, colW, colH);
       const e=porId[n.id], g1=e.gws[0], g2=e.gws[1];
       c.fillStyle="#0A1D30"; c.font="700 26px 'IBM Plex Mono',monospace";
       c.fillText(`${n.id}${e.pb!=="\u2014"?" \u00b7 "+e.pb:""}${e.gz?" \u00b7 "+e.gz:""}`, x0, y0+colH+42);
       c.font="500 22px 'IBM Plex Mono',monospace";
-      c.fillText(`${e.total} TCU \u00b7 d\u0304 ${fm(e.g.med)} m \u00b7 m\u00e1x ${fm(e.g.max)} m (${e.g.lejana||"\u2014"})`, x0, y0+colH+76);
-      const gtxt=`GW1 ${g1?g1.n+" \u00b7 d\u0304 "+fm(g1.med)+" \u00b7 m\u00e1x "+fm(g1.max):"\u2014"}`+
-                 `   GW2 ${g2?g2.n+" \u00b7 d\u0304 "+fm(g2.med)+" \u00b7 m\u00e1x "+fm(g2.max):"\u2014"}`+
-                 `   HSU ${e.nHsu?e.nHsu+(e.hsuInc?" (incorporada)":""):"\u2014"}`;
-      c.fillText(gtxt, x0, y0+colH+110);
+      c.fillText(`${e.total} TCU \u00b7 d\u0304 ${fm(e.g.med)} m \u00b7 m\u00e1x ${fm(e.g.max)} m (${e.g.lejana||"\u2014"}) \u00b7 radio ${S.p.radius} m`, x0, y0+colH+76);
+      c.fillText(`GW1 ${gwTxt(g1)}   GW2 ${gwTxt(g2)}   HSU ${e.nHsu?e.nHsu+(e.hsuInc?" (incorporada)":""):"\u2014"}`, x0, y0+colH+110);
     });
     paginas.push(pg);
   }
