@@ -234,6 +234,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <div style="flex:1"><label>Alcance N-S <span class="hint">m</span></label><input type="number" id="reachY" value="90" min="5" step="5"></div>
         </div>
         <div class="param">
+          <label>Isla a repetidor <span class="hint">si ≤ TCU · 0 = nunca</span></label>
+          <input type="number" id="repMax" value="12" min="0" step="1">
+        </div>
+        <div class="param">
           <label>Corte de gateways <span class="hint">GW1 | GW2</span></label>
           <select id="gwAxis" style="width:100%;padding:9px 11px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface-2);font-family:var(--mono);font-size:13px;color:var(--text);cursor:pointer">
             <option value="EW">Este–Oeste (por X)</option>
@@ -732,6 +736,7 @@ function relaxBoundaries(motors, ncus, adj, radius, capNCU, iters){
     let moved=0;
     for(let i=0;i<motors.length;i++){
       const mine=ncuOf.get(i), mo=motors[i];
+      if(!mine) continue;   // isla diferida a repetidor: aún sin NCU, no se relaja
       let bd=(mo.x-mine.x)*(mo.x-mine.x)+(mo.y-mine.y)*(mo.y-mine.y), best=null;
       for(const n of ncus){ if(n===mine||n.pb!==mine.pb) continue;
         const dx=mo.x-n.x,dy=mo.y-n.y,d=dx*dx+dy*dy;
@@ -1088,13 +1093,15 @@ function applyNumbering(){
   numberTCUs();
 }
 function renumber(){ const sel=S.ncus.find(n=>n.id===S.sel); applyNumbering(); if(sel)S.sel=sel.id; assignColors(); updatePanel(); draw(); }
-function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merge=true,gwAxis="EW"}={}){
+function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merge=true,gwAxis="EW",repMax=0}={}){
   const blocks={}; motors.forEach((m,i)=>{const b=m.pb||"__all__";(blocks[b]=blocks[b]||[]).push(i);});
   let ncus=[]; const adjG=new Map(); motors.forEach((m,i)=>adjG.set(i,[]));
+  const islas=[];   // componentes con <=repMax TCU: candidatas a REPETIDOR en vez de NCU propia
   for(const b of Object.keys(blocks)){
     const adj=buildAdjacency(motors, blocks[b], reachX, reachY);
     for(const [k,v] of adj) adjG.set(k,v);
     for(const comp of components(blocks[b], adj)){
+      if(repMax>0&&comp.length<=repMax){ islas.push({comp,pb:b==="__all__"?null:b}); continue; }
       let part=partitionComponent(motors, comp, adj, radius, capNCU);
       part=compactaComponente(motors, comp, part, adj, radius, capNCU);   // saturación: mínimo k que el radio permite
       part.forEach(n=>{n.pb=b==="__all__"?null:b; n.count=n.motorIdx.length;});
@@ -1105,11 +1112,58 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
   ncus=relaxBoundaries(motors,ncus,adjG,radius,capNCU,4);
   // propuesta: acercar la frontera (la NCU) a la mediana del grupo lo maximo posible SIN sacar ninguna TCU del radio
   ncus.forEach(n=>placeCut(n,gwAxis,radius,capGW,motors));
+  /* ISLAS PEQUEÑAS → REPETIDOR, no NCU. Criterio de campo: una isla con pocas TCU no justifica
+     su NCU (equipo + gateway + alimentación); si una NCU vecina del mismo power block tiene hueco
+     y existe un punto que CUBRA la isla entera Y quede a radio de esa NCU, ahí va un repetidor
+     (con la guarda de mesas de siempre) y las TCU de la isla cuelgan de la NCU vecina. Se añade
+     un enlace virtual a la malla para que el panel no cante "salta un claro": el claro lo puentea
+     el repetidor, que para eso está. Si no hay anfitriona posible (isla demasiado lejos, dispersa
+     o sin hueco de capacidad), la isla lleva su NCU como siempre. */
+  const autoReps=[]; const R2=radius*radius;
+  for(const isla of islas){
+    const comp=isla.comp;
+    // 1-centro de la isla
+    let cx=0,cy=0; for(const i of comp){cx+=motors[i].x;cy+=motors[i].y;} cx/=comp.length; cy/=comp.length;
+    for(let it=0;it<30;it++){ let fd=-1,f=-1; for(const i of comp){const d=(motors[i].x-cx)**2+(motors[i].y-cy)**2; if(d>fd){fd=d;f=i;}} if(fd<=R2)break; const st=1/(it+2); cx+=(motors[f].x-cx)*st; cy+=(motors[f].y-cy)*st; }
+    let rIsla=0; for(const i of comp){const d=Math.hypot(motors[i].x-cx,motors[i].y-cy); if(d>rIsla)rIsla=d;}
+    let servida=false;
+    if(rIsla<=radius){
+      const cubre=(x,y)=>{ for(const i of comp){const dx=motors[i].x-x,dy=motors[i].y-y; if(dx*dx+dy*dy>R2)return false;} return true; };
+      const hosts=ncus.filter(n=>n.pb===isla.pb&&n.motorIdx.length+comp.length<=capNCU)
+                      .sort((a,b)=>((a.x-cx)**2+(a.y-cy)**2)-((b.x-cx)**2+(b.y-cy)**2));
+      for(const host of hosts){
+        let pos=null;
+        for(let t=0;t<=1.0001;t+=0.05){
+          const x=cx+(host.x-cx)*t, y=cy+(host.y-cy)*t;
+          if(cubre(x,y)&&Math.hypot(host.x-x,host.y-y)<=radius){ pos={x,y}; break; }   // el t más pequeño = pegado a la isla
+        }
+        if(!pos) continue;
+        separaDeModulos(pos,motors,comp,S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearNCU});
+        if(!cubre(pos.x,pos.y)||Math.hypot(host.x-pos.x,host.y-pos.y)>radius) continue;   // la guarda lo movió de más: siguiente anfitriona
+        host.motorIdx.push(...comp); host.count=host.motorIdx.length;
+        autoReps.push({id:"REP-"+String(autoReps.length+1).padStart(2,"0"),x:pos.x,y:pos.y,ncu:null});
+        // puente en la malla: el par más cercano isla<->grupo anfitrión
+        let bi=-1,bj=-1,bd=Infinity;
+        for(const i of comp)for(const j of host.motorIdx){ if(comp.indexOf(j)>=0)continue;
+          const d=(motors[i].x-motors[j].x)**2+(motors[i].y-motors[j].y)**2; if(d<bd){bd=d;bi=i;bj=j;} }
+        if(bi>=0){ adjG.get(bi).push(bj); adjG.get(bj).push(bi); }
+        servida=true; break;
+      }
+    }
+    if(!servida){   // sin anfitriona: NCU propia, como siempre
+      const adj=buildAdjacency(motors, comp, reachX, reachY);
+      let part=partitionComponent(motors, comp, adj, radius, capNCU);
+      part=compactaComponente(motors, comp, part, adj, radius, capNCU);
+      part.forEach(n=>{ n.pb=isla.pb; n.count=n.motorIdx.length; placeCut(n,gwAxis,radius,capGW,motors); });
+      ncus.push(...part);
+    }
+  }
   ncus.sort((a,b)=>String(a.pb).localeCompare(String(b.pb))||a.x-b.x||a.y-b.y);
   motors.forEach(m=>{m.ncu=null;m.gw=null;});
   ncus.forEach((n,k)=>{ n.id="NCU-"+String(k+1).padStart(2,"0"); n.count=n.motorIdx.length; splitGW(motors,n,capGW,gwAxis);
     n.motorIdx.forEach(i=>motors[i].ncu=n.id); n.gw.forEach((arr,g)=>arr.forEach(i=>motors[i].gw=g+1)); });
   ncus._adj=adjG;
+  ncus._autoReps=autoReps;
   return ncus;
 }
 function suggestRSU(hull){
@@ -1747,6 +1801,7 @@ function readParams(){
   S.p.reachX=Math.max(5,+document.getElementById("reachX").value||40);
   S.p.reachY=Math.max(5,+document.getElementById("reachY").value||90);
   S.p.gwAxis=document.getElementById("gwAxis").value||"EW";
+  S.p.repMax=Math.max(0,Math.floor(+document.getElementById("repMax").value||0));
   S.p.nrsu=Math.max(0,+document.getElementById("nrsu").value||0);
   S.p.tlen=Math.max(1,+document.getElementById("tlen").value||64);
   S.p.twid=Math.max(0.5,+document.getElementById("twid").value||4);
@@ -1757,7 +1812,8 @@ function readParams(){
 function recompute(refit){
   readParams();
   if(S.fromAyora){ assignColors(); updatePanel(); if(refit) fit(); else draw(); return; }
-  S.ncus=siteAll(S.motors,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis});
+  S.ncus=siteAll(S.motors,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis,repMax:S.p.repMax});
+  S.reps=S.ncus._autoReps||[];   // en el cálculo desde cero, los repetidores son los que el reparto decide
   /* NUMERAR ANTES de colocar las HSU: applyNumbering renombra las NCU por posición, y las HSU
      guardan su asociación por id — colocadas antes, cada "HSU-x → NCU-y" apuntaba al id VIEJO y el
      listado/CSV mentían (cazado en Ayora: la incorporada de la NCU-02 salía como de la NCU-03).
@@ -1797,6 +1853,7 @@ function recomputeNewData(){ // tras cambiar escenario/CSV: recalcular sugerenci
                   // primer arranque salían esquinas NaN y la sugerencia se quedaba en "NaN" para siempre
   S.preset=false; S.fromAyora=false; S.projOX=null; S.projOY=null;
   S.bifilo=null;   // el bífilo es del proyecto cargado: si no se limpia, un escenario o un CSV posterior heredaría las dos filas de El Burgo/Fayón. (En "Autoubicar NCUs" NO se limpia: allí los seguidores siguen siendo los del proyecto real.)
+  S.reps=[];       // y los repetidores del proyecto anterior tampoco se heredan
   reflejaCotasPanel();
   S.hull=convexHull(recinto());
   const sug=suggestRSU(S.hull);
@@ -2562,7 +2619,8 @@ function autoSite(desdeCero){
   if(libres.length){                                              // solo lo que quede suelto genera NCU nueva
     const sub=libres.map(i=>S.motors[i]);
     const extra=siteAll(sub,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,
-                             reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis});
+                             reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis,repMax:S.p.repMax});
+    (extra._autoReps||[]).forEach((r,k)=>S.reps.push({id:"REP-"+String((S.reps||[]).length+1).padStart(2,"0"),x:r.x,y:r.y,ncu:null}));
     extra.forEach(n=>S.ncus.push({id:"",x:n.x,y:n.y,pb:n.pb||null,manual:true,motorIdx:[],gw:[[],[]],count:0,_nueva:true}));
     anadidas=extra.length;
     S.ncus.forEach((n,k)=>{ if(!n.id) n.id="NCU-"+String(k+1).padStart(2,"0"); });
@@ -2581,7 +2639,7 @@ function autoSite(desdeCero){
   const msg=document.getElementById("msg-auto");
   if(msg)msg.textContent="Conservadas "+previas.length+" NCU del plano · "+anadidas+" añadidas"+(sin?" · "+sin+" TCU sin cubrir":"");
 }
-["radius","capNCU","capGW","nrsu","reachX","reachY","clearNCU","clearHSU"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
+["radius","capNCU","capGW","nrsu","reachX","reachY","clearNCU","clearHSU","repMax"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
 document.getElementById("rsu-use").onclick=()=>{ document.getElementById("nrsu").value=document.getElementById("rsu-sug").textContent; recompute(false); };

@@ -580,6 +580,54 @@ for (const K of ['FUV1', 'FUV2']) {
     (cap.csv || '').split('\n').slice(0, 4).join(' | '));
 }
 
+// ── 9) ISLA PEQUEÑA → REPETIDOR, no NCU ────────────────────────────────────
+// Criterio de campo: una isla con pocas TCU no justifica una NCU más (equipo,
+// gateway y alimentación); se sirve desde la NCU vecina a través de un
+// REPETIDOR — que cubra la isla entera y quede a radio de la anfitriona, con
+// la guarda de mesas. Si la isla es grande, o está demasiado lejos, o no hay
+// hueco de capacidad, lleva su NCU como siempre. repMax=0 lo desactiva
+// (compatibilidad: todos los tests anteriores corren así).
+{
+  const OPTSR = Object.assign({}, OPTS, { repMax: 12 });
+  const base = () => {
+    const M = reticula({ nx: 20, ny: 6, px: 12, py: 70, L: 64, W: 4 });          // bloque principal
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++)
+      M.push({ x: 520 + i * 12, y: 70 + j * 70, len: 64, wid: 4, az: 0, pb: null, id: 'I' + (j * 2 + i + 1) });
+    return M;                                                                     // isla de 8 a ~410 m
+  };
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250, capNCU: 160, capGW: 80, gwAxis: 'EW', clearNCU: 2 };
+  const motors = base();
+  const ncus = vm.runInContext('(m,o)=>siteAll(m,o)', ctx)(motors, OPTSR);
+  const reps = ncus._autoReps || [];
+  const isla = motors.map((m, i) => i).filter(i => motors[i].id[0] === 'I');
+  check('isla de 8: NINGUNA NCU nueva — la sirve un repetidor', ncus.length === 1 && reps.length === 1,
+    ncus.length + ' NCU, ' + reps.length + ' rep');
+  const host = ncus[0], rep = reps[0];
+  check('las 8 TCU de la isla cuelgan de la NCU anfitriona', isla.every(i => host.motorIdx.includes(i)),
+    host.count + ' TCU en la anfitriona');
+  const cubreIsla = isla.every(i => Math.hypot(motors[i].x - rep.x, motors[i].y - rep.y) <= 250);
+  const enlaza = Math.hypot(host.x - rep.x, host.y - rep.y) <= 250;
+  check('el repetidor cubre la isla entera Y enlaza por radio con la anfitriona',
+    cubreIsla && enlaza, 'cubre=' + cubreIsla + ' enlaza=' + enlaza);
+  check('y no está sobre una mesa (guarda)', holg(rep.x, rep.y, motors, ctx.S.p) >= 2 - 1e-9,
+    holg(rep.x, rep.y, motors, ctx.S.p).toFixed(2) + ' m');
+  // la malla no "salta un claro": el puente virtual del repetidor la deja conexa
+  check('la malla de la anfitriona queda conexa (el claro lo puentea el repetidor)',
+    ctx.connectedSet(host.motorIdx, ncus._adj));
+  // repMax=0: compatibilidad — la isla lleva su NCU
+  const ncus0 = vm.runInContext('(m,o)=>siteAll(m,o)', ctx)(base(), OPTS);
+  check('con repMax=0 (o sin él), la isla lleva su NCU como siempre',
+    ncus0.length === 2 && (ncus0._autoReps || []).length === 0, ncus0.length + ' NCU');
+  // isla DEMASIADO lejos (ningún punto cubre isla y enlaza): NCU propia
+  const lejos = reticula({ nx: 20, ny: 6, px: 12, py: 70, L: 64, W: 4 });
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++)
+    lejos.push({ x: 1100 + i * 12, y: 70 + j * 70, len: 64, wid: 4, az: 0, pb: null, id: 'I' + (j * 2 + i + 1) });
+  const ncusL = vm.runInContext('(m,o)=>siteAll(m,o)', ctx)(lejos, OPTSR);
+  check('isla fuera del alcance de todo repetidor: NCU propia y 0 repetidores',
+    ncusL.length === 2 && (ncusL._autoReps || []).length === 0,
+    ncusL.length + ' NCU, ' + (ncusL._autoReps || []).length + ' rep');
+}
+
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
 // Comprobaciones de FUENTE, no de comportamiento: placeNCUat/addNCU/arrastre/
 // autoSite viven pegados al DOM y no se pueden ejecutar aquí. Si alguien quita
