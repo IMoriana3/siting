@@ -470,6 +470,44 @@ for (const K of ['FUV1', 'FUV2']) {
     JSON.stringify(rsus.map(r => ({ id: r.id, integrada: !!r.integrada }))));
 }
 
+// ── 7g) CRITERIO DE IMPLANTACIÓN: cota, enlace y sectores vacíos ───────────
+// La HSU se elige PUNTUANDO candidatos como el ingeniero: poste compartido,
+// exposición (arco de cielo), ENLACE por radio a su NCU, COTA del terreno si
+// los datos la traen, y centrado del sector.
+{
+  // cota: con z en el CSV, la HSU del sector va al punto ALTO del flanco
+  const motors = [];
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 40; i++)
+    motors.push({ x: i * 12, y: j * 70, len: 64, wid: 4, az: 0, pb: null, id: 'M' + (motors.length + 1), z: 0 });
+  motors.find(m => m.x === 468 && m.y === 70).z = 9;             // el cerro del flanco este
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250, clearHSU: 2 };
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const rsus = ctx.placeRSUs(motors, hull, [], 2, 250);
+  const este = rsus.reduce((a, b) => a.x > b.x ? a : b);
+  check('topografía: la HSU del este se ancla en el punto alto del flanco',
+    Math.hypot(este.x - 468, este.y - 70) <= 20, Math.hypot(este.x - 468, este.y - 70).toFixed(1) + ' m del cerro');
+}
+{
+  // enlace y sectores vacíos, sobre las plantas reales: ninguna HSU suelta fuera
+  // del radio de su NCU, y las N pedidas salen aunque la forma sea diagonal o
+  // cóncava (los sectores vacíos se ensanchan, sin repetir anclas)
+  for (const K of ['FUV1', 'AYORA']) {
+    const P = vm.runInContext(K, ctx);
+    const filas = P.pts || P.tcus;
+    const motors = filas.map((t, i) => ({ x: t[0], y: t[1], pb: null, id: 'M' + (i + 1) }));
+    const ncus = sitea(motors, { tlen: 64, twid: 4 });
+    ctx.S.p.radius = 250;
+    const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+    const rsus = ctx.placeRSUs(motors, hull, ncus, 12, 250);
+    const porId = {}; ncus.forEach(n => porId[n.id] = n);
+    const lejos = rsus.filter(r => !r.integrada && r.ncu &&
+      Math.hypot(porId[r.ncu].x - r.x, porId[r.ncu].y - r.y) > 250);
+    check(`${P.name}: las 12 HSU pedidas salen (sectores vacíos ensanchados)`, rsus.length === 12, rsus.length + ' HSU');
+    check(`${P.name}: toda HSU suelta enlaza por radio con su NCU`, lejos.length === 0,
+      lejos.map(r => r.id).join(' '));
+  }
+}
+
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
 // Comprobaciones de FUENTE, no de comportamiento: placeNCUat/addNCU/arrastre/
 // autoSite viven pegados al DOM y no se pueden ejecutar aquí. Si alguien quita

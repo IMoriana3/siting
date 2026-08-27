@@ -1140,74 +1140,101 @@ function placeRSUs(motors,hull,ncus,N,radius){
   let cx=0,cy=0;for(const m of motors){cx+=m.x;cy+=m.y;}cx/=motors.length;cy/=motors.length;
   let sxx=0,syy=0,sxy=0;for(const m of motors){const dx=m.x-cx,dy=m.y-cy;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy;}
   const fase=0.5*Math.atan2(2*sxy,sxx-syy);   // eje principal: fase de los sectores
-  const borde=(ux,uy)=>{                      // corte del rayo centro→dir con el recinto
-    let best=null,bt=-1;
-    for(let i=0;i<hull.length;i++){
-      const a=hull[i],b=hull[(i+1)%hull.length];
-      const ex=b.x-a.x,ey=b.y-a.y,den=ux*ey-uy*ex;
-      if(Math.abs(den)<1e-9)continue;
-      const t=((a.x-cx)*ey-(a.y-cy)*ex)/den;
-      const s=Math.abs(ex)>Math.abs(ey)?(cx+t*ux-a.x)/ex:(cy+t*uy-a.y)/ey;
-      if(t>bt&&s>=-1e-9&&s<=1+1e-9){bt=t;best={x:cx+t*ux,y:cy+t*uy};}
-    }
-    if(best)return best;
-    let far=null,fd=-Infinity;for(const m of motors){const d=(m.x-cx)*ux+(m.y-cy)*uy;if(d>fd){fd=d;far=m;}}
-    return far?{x:far.x,y:far.y}:{x:cx,y:cy};
-  };
-  /* EXTERIOR DE PLANTA de verdad, que es lo que pide una estación meteo. Ni el hull convexo (en
-     una planta cóncava como Ayora el borde real del lóbulo queda lejos del hull global) ni el
-     recinto del propio grupo (un pasillo ENTRE lóbulos es exterior del grupo pero interior de la
-     planta, y ahí una HSU no ve cielo ni viento representativo — cazado en Ayora, segunda vuelta).
-     La prueba buena es local: CIELO ABIERTO. Desde el punto, se marca la dirección de cada seguidor
-     a <=CIELO_R y se busca el mayor abanico seguido sin ninguno: un borde real da medio plano libre
-     (~180°); el pasillo entre lóbulos, dos rendijas de ~15°. Hospeda solo quien libra >=CIELO_ARCO. */
-  const BINS=72;
-  const cieloAbierto=(p)=>{
-    const oc=new Uint8Array(BINS), R2c=CIELO_R*CIELO_R;
-    for(const m of motors){ const dx=m.x-p.x,dy=m.y-p.y,d2=dx*dx+dy*dy;
-      if(d2>R2c||d2<1)continue;
-      oc[Math.floor(((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI))*BINS)%BINS]=1; }
+  /* CIELO ABIERTO con rejilla espacial: el arco se evalúa muchas veces (motores de borde y NCUs) y
+     escanear los 6000 seguidores por punto no vuela. Celdas de 64 m, solo entran las de <=CIELO_R. */
+  const CEL=64, grid=new Map();
+  for(const m of motors){ const k=Math.floor(m.x/CEL)+","+Math.floor(m.y/CEL);
+    let a=grid.get(k); if(!a){a=[];grid.set(k,a);} a.push(m); }
+  const arcoCielo=(p)=>{
+    const oc=new Uint8Array(72), R2c=CIELO_R*CIELO_R, c=Math.ceil(CIELO_R/CEL);
+    const ci=Math.floor(p.x/CEL), cj=Math.floor(p.y/CEL);
+    for(let i=ci-c;i<=ci+c;i++)for(let j=cj-c;j<=cj+c;j++){
+      const arr=grid.get(i+","+j); if(!arr)continue;
+      for(const m of arr){ const dx=m.x-p.x,dy=m.y-p.y,d2=dx*dx+dy*dy;
+        if(d2>R2c||d2<1)continue;
+        oc[Math.floor(((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI))*72)%72]=1; } }
     let libre=0,run=0;
-    for(let i=0;i<2*BINS;i++){ if(oc[i%BINS])run=0; else if(++run>libre)libre=run; if(libre>=BINS)break; }
-    return libre*(360/BINS)>=CIELO_ARCO;
+    for(let i=0;i<144;i++){ if(oc[i%72])run=0; else if(++run>libre)libre=run; if(libre>=72)break; }
+    return Math.min(libre,72)*5;
   };
-  const esExterior=(n)=>cieloAbierto(n);
   const norm=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
-  const usadas=new Set(), rsus=[];
+  const conZ=motors.some(m=>m.z!=null);
+  /* CRITERIO DE IMPLANTACIÓN, no umbrales sueltos: cada sector elige su emplazamiento PUNTUANDO
+     candidatos como lo haría el ingeniero.
+       poste     una NCU de borde franco hospeda la HSU: un poste, un tendido y una alimentación
+                 menos. Es el criterio dominante (peso 3).
+       cielo     exposición meteorológica: el arco libre de seguidores (borde de lóbulo 150-205°,
+                 pasillo 90, bahía 35-60 mirando a CIELO_R). Se exige >=CIELO_ARCO para hospedar
+                 en NCU; en un seguidor de borde puntúa de forma continua.
+       enlace    la HSU habla con su NCU por radio: candidato a más del radio queda penalizado
+                 fuerte (y el panel lo canta); a igualdad, más cerca de la NCU mejor.
+       cota      si los datos traen z (columna z/cota/alt del CSV), el punto ALTO del sector ve el
+                 viento y no queda abrigado en una vaguada: puntúa la cota normalizada del sector.
+                 Sin z, el término no aplica (no se inventa topografía).
+       centrado  el rumbo del candidato, centrado en su sector, para que el reparto siga RODEANDO. */
+  const nota=(c,k,th,zmin,zmax)=>{
+    const arco=c.arco/270;
+    const enlace=c.dNcu<=radius ? (1-c.dNcu/radius) : -3;
+    const cota=(conZ&&zmax>zmin&&c.z!=null)?( (c.z-zmin)/(zmax-zmin) ):0;
+    const desvio=1-Math.abs(norm(Math.atan2(c.y-cy,c.x-cx)-th))/(Math.PI/N);
+    return 3*(c.poste?1:0) + 1.5*Math.min(arco,1) + enlace + cota + 0.5*desvio;
+  };
+  const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
+  const usadas=new Set(), anclas=new Set(), rsus=[];
+  // rumbo y alcance radial de cada motor, una vez
+  const pol=motors.map(m=>({m,th:Math.atan2(m.y-cy,m.x-cx),r:Math.hypot(m.x-cx,m.y-cy)}));
   for(let k=0;k<N;k++){
-    const th=fase+k*2*Math.PI/N, ux=Math.cos(th), uy=Math.sin(th);
-    const ideal=borde(ux,uy), rPlanta=Math.hypot(ideal.x-cx,ideal.y-cy)||1;
-    // ¿NCU exterior en este sector, y de verdad hacia el borde (no una del centro que casualmente
-    // apunta ahí)? → HSU incorporada en su poste
-    let host=null,hb=Infinity;
-    for(const n of ncus){ if(usadas.has(n.id))continue;
-      const d=Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th));
-      if(d>Math.PI/N+1e-9||d>=hb)continue;
-      if(Math.hypot(n.x-cx,n.y-cy)<0.55*rPlanta)continue;
-      if(!esExterior(n))continue;
-      hb=d;host=n; }
-    if(host){ usadas.add(host.id);
-      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:host.x,y:host.y,adjusted:false,ncu:host.id,integrada:true});
-      continue; }
-    let tcu=null,td=Infinity; for(const m of motors){const d=dist(ideal,m);if(d<td){td=d;tcu=m;}}
-    if(!tcu)continue;
-    let near=null,nd=Infinity; for(const n of ncus){const d=dist(tcu,n);if(d<nd){nd=d;near=n;}}
-    const dl=Math.hypot(tcu.x-cx,tcu.y-cy)||1;
-    const pos={x:tcu.x+(tcu.x-cx)/dl*HSU_OFFSET, y:tcu.y+(tcu.y-cy)/dl*HSU_OFFSET};
-    // los 7 m fijos se miden desde el CENTRO del seguidor: con mesas anchas la HSU caía sobre una
-    // mesa. Misma guarda que la NCU, corrección mínima — pero CON prórroga: es colocación
-    // automática, y si el campo cercano es un bloque macizo mejor a 60 m que encima de una mesa.
-    separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearHSU});
-    rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:near?near.id:null});
+    const th=fase+k*2*Math.PI/N;
+    /* candidatos del sector: NCUs de borde franco + los seguidores más exteriores. En una planta
+       DIAGONAL o CÓNCAVA hay sectores angulares vacíos (ningún rumbo cae ahí): el flanco no se
+       queda sin estación — el sector se ENSANCHA hasta encontrar candidatos, sin repetir anclas. */
+    const cands=[];
+    const recoge=(ancho)=>{
+      for(const n of ncus){ if(usadas.has(n.id))continue;
+        if(Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th))>ancho)continue;
+        const a=arcoCielo(n); if(a<CIELO_ARCO)continue;
+        cands.push({x:n.x,y:n.y,poste:n,arco:a,dNcu:0,z:null});
+      }
+      const delSector=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho).sort((a,b)=>b.r-a.r).slice(0,14);
+      let repliegue=null,rArco=-1;
+      for(const p of delSector){
+        const a=arcoCielo(p.m);
+        const dl=p.r||1, pos={x:p.m.x+(p.m.x-cx)/dl*HSU_OFFSET, y:p.m.y+(p.m.y-cy)/dl*HSU_OFFSET};
+        const e=dNcuDe(pos);
+        const c={x:pos.x,y:pos.y,poste:null,arco:a,dNcu:e.d,z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id};
+        if(a>rArco){rArco=a;repliegue=c;}                        // el menos malo, por si nadie luce
+        if(a<60)continue;                                        // ni de lejos es borde
+        cands.push(c);
+      }
+      if(!cands.length&&repliegue)cands.push(repliegue);         // un flanco con mala exposición sigue necesitando su dato meteo
+    };
+    let ancho=Math.PI/N;
+    recoge(ancho);
+    while(!cands.length&&ancho<Math.PI){ ancho*=2; recoge(ancho); }
+    if(!cands.length)continue;
+    let zmin=Infinity,zmax=-Infinity;
+    for(const c of cands)if(c.z!=null){if(c.z<zmin)zmin=c.z;if(c.z>zmax)zmax=c.z;}
+    let mejor=null,mb=-Infinity;
+    for(const c of cands){ const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
+    if(mejor.poste){
+      usadas.add(mejor.poste.id);
+      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:mejor.x,y:mejor.y,adjusted:false,ncu:mejor.poste.id,integrada:true});
+    } else {
+      if(mejor.ancla!=null)anclas.add(mejor.ancla);
+      const pos={x:mejor.x,y:mejor.y};
+      // guarda de mesas de siempre: corrección mínima con prórroga (colocación automática)
+      separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearHSU});
+      const e=dNcuDe(pos);
+      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:e.ncu?e.ncu.id:null});
+    }
   }
-  /* POST-PASE: una HSU suelta que ha aterrizado al lado de una NCU es un poste desperdiciado —
-     dos equipos a 30 m donde cabe uno. Si la NCU más cercana (sin HSU ya) queda a <=HSU_FUSION,
-     la HSU se INCORPORA a su poste. Cazado en Ayora: HSU-05 suelta a 32 m de la NCU del lóbulo. */
+  /* POST-PASE de FUSIÓN: una HSU suelta que ha quedado al lado de una NCU de borde franco es un
+     poste desperdiciado — se incorpora. Cazado en Ayora (32 m entre ambas). */
   for(const r of rsus){
     if(r.integrada)continue;
     let best=null,bd=Infinity;
     for(const n of ncus){ if(usadas.has(n.id))continue; const d=Math.hypot(n.x-r.x,n.y-r.y); if(d<bd){bd=d;best=n;} }
-    if(best&&bd<=HSU_FUSION&&esExterior(best)){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
+    if(best&&bd<=HSU_FUSION&&arcoCielo(best)>=CIELO_ARCO){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
   }
   return rsus;
 }
@@ -1532,12 +1559,14 @@ function parseCSV(text){
   const ipb=idx(["pb","power_block","powerblock","power block","zona","zone","block"]);
   const iid=idx(["id","etiqueta","name","nombre","tracker_id"]);
   const ilen=idx(["length","largo","len","longitud","l_m"]); const iwid=idx(["width","ancho","wid","w_m"]); const iaz=idx(["azimuth","azimut","az","orientacion","orientation"]);
+  const izc=idx(["z","cota","alt","altitud","elev","elevacion","z_m"]);   // topografía: cota de terreno por seguidor, si el proyecto la trae
   const rows=lines.slice(1).map(l=>l.split(","));
   const campos=(c,i)=>({pb:ipb>=0?visTxt(c[ipb]):null,
                         id:iid>=0?(visTxt(c[iid])||("M"+(i+1))):("M"+(i+1)),
                         len:ilen>=0?visNum(c[ilen]):null,
                         wid:iwid>=0?visNum(c[iwid]):null,
-                        az:iaz>=0?visNum(c[iaz]):null});
+                        az:iaz>=0?visNum(c[iaz]):null,
+                        z:izc>=0?visNum(c[izc]):null});
   let pts=[];
   if(ix>=0&&iy>=0){ pts=rows.map((c,i)=>Object.assign({x:visNum(c[ix]),y:visNum(c[iy])},campos(c,i))); }
   else if(ilat>=0&&ilng>=0){
@@ -1778,6 +1807,13 @@ function updatePanel(){
     else if(h<(S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD)) _justas++;
   });
   (S.rsus||[]).forEach(r=>{ if(_holg(r)<0) errs.push(`${r.id} encima de una mesa`); });   // la HSU tampoco: es igual de inmontable
+  /* ENLACE de la HSU: habla con su NCU por radio, igual que una TCU. Fuera del radio y sin
+     repetidor que la cubra, no hay dato meteo — ámbar, que se arregla acercándola o con repetidor. */
+  const _byIdN={}; S.ncus.forEach(n=>_byIdN[n.id]=n);
+  let _hsuLejos=0;
+  (S.rsus||[]).forEach(r=>{ if(r.integrada)return; const n=r.ncu?_byIdN[r.ncu]:null; if(!n)return;
+    const d=Math.hypot(n.x-r.x,n.y-r.y);
+    if(d>S.p.radius && !(S.reps||[]).some(rp=>Math.hypot(r.x-rp.x,r.y-rp.y)<=S.p.radius)) _hsuLejos++; });
   /* MESAS SOLAPADAS: cuando los TCU no traen cotas propias, la mesa sale de Parámetros — y si esas
      cotas no caben en el paso real de la planta, el modelo deja de tener sentido: en Páramo (filas a
      ~60 m, paso 7 m) el largo por defecto de 64 funde las filas en un bloque macizo con pasillos de
@@ -1812,6 +1848,7 @@ function updatePanel(){
     if(adj){ msg+=` ${adj} HSU reubicada(s) al borde con cobertura.`; }
     if(atCap){ msg+=` ${atCap} NCU al límite de capacidad.`; cls="warn";ic="◐"; }
     if(_justas && !S.preset && !S.fromAyora){ msg+=` ${_justas} NCU a menos de ${S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD} m de una mesa (el pasillo no da más).`; cls="warn";ic="◐"; }
+    if(_hsuLejos){ msg+=` ${_hsuLejos} HSU fuera del radio de su NCU (acércala o cúbrela con un repetidor).`; cls="warn";ic="◐"; }
     if(_solape){ msg+=` Las cotas de mesa de Parámetros (${S.p.tlen}×${S.p.twid} m) no caben en el paso real: mesas solapadas — ajusta Largo/Ancho mesa.`; cls="warn";ic="◐"; }
     w.innerHTML=warnHtml(cls,ic,msg);
   }
@@ -2292,7 +2329,7 @@ document.getElementById("tpl").onclick=downloadTpl;
 function autoSite(desdeCero){
   const previas = desdeCero ? [] : (S.ncus||[]).map(n=>({id:n.id,x:n.x,y:n.y,pb:n.pb||null,gz:n.gz,tipo:n.tipo,
                                                         manual:true,motorIdx:[],gw:[[],[]],count:0}));
-  S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az}));
+  S.motors=S.motors.map(m=>({x:m.x,y:m.y,pb:m.pb||null,id:m.id,len:m.len,wid:m.wid,az:m.az,z:m.z}));
   S.preset=false; S.fromAyora=false; S.sel=null;
   S.hull=convexHull(recinto());
   const sug=suggestRSU(S.hull); const nr=document.getElementById("nrsu"); if(nr)nr.value=sug;
