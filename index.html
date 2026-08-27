@@ -1778,9 +1778,18 @@ function reflejaCotasPanel(){
   const L=moda(S.motors.map(m=>m.len)), W=moda(S.motors.map(m=>m.wid));
   const el=id=>document.getElementById(id);
   el("tlen").value=(L!=null?L:64); S.p.tlen=(L!=null?L:64);
-  el("twid").value=(W!=null?W:4);  S.p.twid=(W!=null?W:4);
-  const h=el("twid-hint");
-  if(h) h.textContent = S.bifilo ? ("envolvente \u00b7 2 filas de "+S.bifilo.cuerda+" m") : "m (E-O)";
+  /* En las bífilas el campo enseña el ancho de CADA FILA (la cuerda), que es lo que uno ve en
+     campo; la envolvente —que es lo que usa la guarda, guardado por seguidor— queda en la pista.
+     Pedido en campo: "Ancho mesa 8,384" chocaba porque nadie ve una mesa de 8 m, ve dos de 2,4. */
+  if(S.bifilo&&W!=null){
+    el("twid").value=S.bifilo.cuerda; S.p.twid=S.bifilo.cuerda;
+    const h=el("twid-hint");
+    if(h) h.textContent="cada fila \u00b7 envolvente "+W+" m";
+  } else {
+    el("twid").value=(W!=null?W:4); S.p.twid=(W!=null?W:4);
+    const h=el("twid-hint");
+    if(h) h.textContent="m (E-O)";
+  }
 }
 function recomputeNewData(){ // tras cambiar escenario/CSV: recalcular sugerencia y prefijarla
   readParams();   // el hull mide las mesas, y sus cotas están en el panel: sin leerlo antes, en el
