@@ -508,6 +508,50 @@ for (const K of ['FUV1', 'FUV2']) {
   }
 }
 
+// ── 7h) EL INFORME: por NCU y por GW, cuántas TCU, d media, d máxima y HSU ─
+// El listado de equipos y su CSV son el INFORME del reparto: cada NCU y cada
+// gateway con sus TCU, la distancia MEDIA de trabajo, la MÁS LEJANA con su
+// identificador (la que marca el margen del enlace) y las HSU que cuelgan.
+{
+  const src2 = [
+    (html.match(/function tcuPt[\s\S]*?\n\}\n/) || [''])[0],
+    (html.match(/function equipmentData[\s\S]*?\n(?=function openEquip)/) || [''])[0],
+    (html.match(/function csvEquip[\s\S]*?\n\}\n/) || [''])[0],
+  ].join('\n');
+  check('se localizan tcuPt/equipmentData/csvEquip', src2.includes('equipmentData') && src2.includes('csvEquip'));
+  const cap = { csv: null };
+  const c2 = { console, S: null, dlCSV: (n, t) => { cap.csv = t; }, Math };
+  vm.createContext(c2);
+  vm.runInContext(src2, c2);
+  c2.S = {
+    bifilo: null, projOX: null, p: { twid: 4, tlen: 64 },
+    motors: [
+      { x: 30, y: 0, id: 'M1', tcu: 'NCU-01·GW1·T001' },
+      { x: 0, y: -40, id: 'M2', tcu: 'NCU-01·GW1·T002' },
+      { x: 100, y: 0, id: 'M3', tcu: 'NCU-01·GW2·T003' },
+    ],
+    ncus: [{ id: 'NCU-01', gz: '', pb: 'PS 1', count: 3, x: 0, y: 0, motorIdx: [0, 1, 2], gw: [[0, 1], [2]] }],
+    rsus: [{ id: 'HSU-01', ncu: 'NCU-01', integrada: true, x: 0, y: 0 }],
+    reps: [],
+  };
+  const D = vm.runInContext('equipmentData()', c2);
+  const n = D.ncus[0];
+  check('informe: TCU, media y máxima de la NCU (con la TCU más lejana nombrada)',
+    n.total === 3 && Math.abs(n.g.med - (30 + 40 + 100) / 3) < 0.01 && n.g.max === 100 && /T003/.test(n.g.lejana),
+    JSON.stringify(n.g));
+  check('informe: cada GW con su cuenta, media y máxima',
+    n.gws.length === 2 && n.gws[0].n === 2 && Math.abs(n.gws[0].med - 35) < 0.01 && n.gws[0].max === 40 &&
+    n.gws[1].n === 1 && n.gws[1].max === 100, JSON.stringify(n.gws));
+  check('informe: las HSU de la NCU, con las incorporadas contadas',
+    n.nHsu === 1 && n.hsuInc === 1);
+  vm.runInContext('csvEquip()', c2);
+  check('CSV del informe: columnas d_media_m, d_max_m, tcu_mas_lejana y n_hsu',
+    /n_tcu,d_media_m,d_max_m,tcu_mas_lejana,n_hsu/.test(cap.csv) &&
+    /NCU-01,NCU,,PS 1,,3,56\.7,100\.0,NCU-01·GW2·T003,1/.test(cap.csv) &&
+    /GW1,Gateway,,PS 1,NCU-01,2,35\.0,40\.0/.test(cap.csv),
+    (cap.csv || '').split('\n').slice(0, 4).join(' | '));
+}
+
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
 // Comprobaciones de FUENTE, no de comportamiento: placeNCUat/addNCU/arrastre/
 // autoSite viven pegados al DOM y no se pueden ejecutar aquí. Si alguien quita
