@@ -282,6 +282,32 @@ for (const K of ['FUV1', 'FUV2']) {
     hs.every(h => h >= 2 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
 }
 
+// ── 6a2) AYORA TAMBIÉN TRAE SUS COTAS MEDIDAS ──────────────────────────────
+// Cazado en campo: con Ayora cargada, el panel enseñaba "Ancho mesa 4" (el de
+// fábrica). El DWG está medido en la cartera: seguidores de 2 alas de
+// 28/21/14 módulos (64,18/48,13/32,09 m) con cuerda 4,77 (gcr 0,3973 x paso
+// 12). Los 107 sin tipo del DWG se infieren por el hueco de su columna, y
+// ninguna mesa puede solapar a su vecina.
+{
+  const P = vm.runInContext('AYORA', ctx);
+  const conCotas = P.tcus.filter(t => t[6] != null && t[7] === 4.77).length;
+  check('el preset de Ayora trae cotas medidas en los 754 TCU', conCotas === P.tcus.length,
+    conCotas + ' de ' + P.tcus.length);
+  const largos = [...new Set(P.tcus.map(t => t[6]))].sort((a, b) => a - b);
+  check('con los tres largos del DWG (32,09 · 48,13 · 64,18)',
+    largos.length === 3 && Math.abs(largos[0] - 32.09) < 0.01 && Math.abs(largos[2] - 64.18) < 0.01,
+    largos.join(' '));
+  // ninguna mesa solapa a la siguiente de su columna
+  const cols = {};
+  P.tcus.forEach(t => { (cols[Math.round(t[0] / 3) * 3] = cols[Math.round(t[0] / 3) * 3] || []).push(t); });
+  let hueco = 1e9;
+  for (const k in cols) { const ts = cols[k].sort((x, y) => x[1] - y[1]);
+    for (let i = 1; i < ts.length; i++) { const a = ts[i - 1], b = ts[i];
+      if (b[1] - a[1] < 90) hueco = Math.min(hueco, (b[1] - b[6] / 2) - (a[1] + a[6] / 2)); } }
+  check('y ninguna mesa solapa a su vecina de columna (hueco mínimo > 2 m)', hueco > 2,
+    hueco.toFixed(2) + ' m');
+}
+
 // ── 6b) EL MISMO PÁRAMO SIN COTAS: el caso que destapó el barrido corto ────
 // El caso genérico sigue existiendo (un CSV pelado de otra planta): sin cotas
 // por TCU la mesa sale de Parámetros (64x4). Con
