@@ -127,7 +127,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 }
 .eq-modal{position:fixed;inset:0;background:rgba(10,29,48,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:18px}
 .eq-modal.open{display:flex}
-.eq-box{background:var(--surface);border:1px solid var(--line);border-radius:14px;width:min(720px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(10,29,48,.3);overflow:hidden}
+.eq-box{background:var(--surface);border:1px solid var(--line);border-radius:14px;width:min(980px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(10,29,48,.3);overflow:hidden}
 .eq-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)}
 .eq-head h3{margin:0;font-size:15px;font-weight:700}
 .eq-head .x{margin-left:auto;border:1px solid var(--line-2);background:var(--surface-2);width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:17px;line-height:1;color:var(--muted)}
@@ -327,7 +327,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <div class="stat"><div class="k">TCU</div><div class="v" id="eq-t-tcu">0</div></div>
       </div>
       <table class="eq-table">
-        <thead><tr><th>NCU</th><th>Cliente</th><th>Power block</th><th class="num">GW1</th><th class="num">GW2</th><th class="num">Total TCU</th></tr></thead>
+        <thead><tr><th>NCU</th><th>Cliente</th><th>Power block</th><th class="num">TCU</th><th class="num">d̄ m</th><th class="num">d.máx m · TCU</th><th class="num">GW1 n · d̄ · máx</th><th class="num">GW2 n · d̄ · máx</th><th class="num">HSU</th></tr></thead>
         <tbody id="eq-tbody"></tbody>
       </table>
       <div class="eq-sub">Estaciones meteo (HSU)</div>
@@ -2222,10 +2222,22 @@ cv.addEventListener("dblclick",fit);
 /* ===================== Listado de equipos ===================== */
 function utmTip(x,y){ return (S.projOX!=null) ? `<br><span style="opacity:.6;font-size:.82em">UTM ${(x+S.projOX).toFixed(1)} E \u00b7 ${(y+S.projOY).toFixed(1)} N</span>` : ""; }
 function equipmentData(){
+  /* INFORME, no inventario: por cada NCU y cada gateway, cuántas TCU cuelgan, a qué distancia
+     MEDIA trabajan y dónde está la MÁS LEJANA (con su identificador, que es la que marca el
+     margen del enlace). La distancia se mide como la mide el panel: de la NCU al punto de TCU
+     (la viga, con el desplazamiento del bífilo si lo hay). */
+  const distTo=(n,i)=>{ const q=tcuPt(S.motors[i]); return Math.hypot(q.x-n.x,q.y-n.y); };
+  const stats=(n,idxs)=>{
+    if(!idxs.length)return {n:0,med:null,max:null,lejana:null};
+    let s=0,mx=-1,who=null;
+    for(const i of idxs){ const d=distTo(n,i); s+=d; if(d>mx){mx=d;who=S.motors[i];} }
+    return {n:idxs.length, med:s/idxs.length, max:mx, lejana:who?(who.tcu||who.id):null};
+  };
   const ncus=S.ncus.map(n=>{
-    const g1=n.gw[0].length, g2=n.gw[1].length;
-    const gws=[{id:n.id+"\u00b7GW1", n:g1}]; if(g2>0) gws.push({id:n.id+"\u00b7GW2", n:g2});
-    return { id:n.id, gz:n.gz||"", tipo:n.tipo||"", pb:n.pb||"\u2014", total:n.count, gws, x:n.x, y:n.y };
+    const gws=[]; [0,1].forEach(g=>{ if(n.gw[g].length) gws.push(Object.assign({id:n.id+"\u00b7GW"+(g+1)},stats(n,n.gw[g]))); });
+    const hsus=S.rsus.filter(r=>r.ncu===n.id);
+    return Object.assign({ id:n.id, gz:n.gz||"", tipo:n.tipo||"", pb:n.pb||"\u2014", total:n.count, gws, x:n.x, y:n.y,
+                           nHsu:hsus.length, hsuInc:hsus.filter(r=>r.integrada).length }, {g:stats(n,n.motorIdx)});
   });
   const nGW=ncus.reduce((s,n)=>s+n.gws.length,0);
   const rsus=S.rsus.map(r=>({id:r.id, ncu:r.ncu||"\u2014", x:r.x, y:r.y, integrada:!!r.integrada}));
@@ -2239,10 +2251,15 @@ function openEquip(){
   document.getElementById("eq-t-rsu").textContent=D.totals.rsu;
   document.getElementById("eq-t-tcu").textContent=D.totals.tcu;
   document.getElementById("eq-t-rep").textContent=D.totals.rep;
+  const fm=v=>v==null?"\u2014":Math.round(v);
+  const gwCell=g=>g?`${g.n} \u00b7 ${fm(g.med)} \u00b7 ${fm(g.max)}`:"\u2014";
   document.getElementById("eq-tbody").innerHTML = D.ncus.length ? D.ncus.map(n=>{
-    const g1=n.gws[0]?n.gws[0].n:0, g2=n.gws[1]?n.gws[1].n:"\u2014";
-    return `<tr><td class="mono">${n.id}</td><td class="mono">${n.gz||"\u2014"}</td><td>${n.pb}</td><td class="num">${g1}</td><td class="num">${g2}</td><td class="num b">${n.total}</td></tr>`;
-  }).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--muted)">Sin datos</td></tr>`;
+    const hsu=n.nHsu?(n.nHsu+(n.hsuInc?" (incorporada)":"")):"\u2014";
+    return `<tr><td class="mono">${n.id}</td><td class="mono">${n.gz||"\u2014"}</td><td>${n.pb}</td>`+
+      `<td class="num b">${n.total}</td><td class="num">${fm(n.g.med)}</td>`+
+      `<td class="num" title="TCU m\u00e1s lejana: ${n.g.lejana||""}">${fm(n.g.max)}${n.g.lejana?" \u00b7 "+n.g.lejana:""}</td>`+
+      `<td class="num">${gwCell(n.gws[0])}</td><td class="num">${gwCell(n.gws[1])}</td><td class="num">${hsu}</td></tr>`;
+  }).join("") : `<tr><td colspan="9" style="text-align:center;color:var(--muted)">Sin datos</td></tr>`;
   document.getElementById("eq-rsu").innerHTML = D.rsus.length
     ? D.rsus.map(r=>`<span class="chip"><b class="mono">${r.id}</b> \u2192 ${r.ncu}${r.integrada?" \u00b7 incorporada":""}</span>`).join("")
     : `<span style="color:var(--muted)">Sin HSU configuradas</span>`;
@@ -2257,11 +2274,12 @@ function dlCSV(name, text){ const b=new Blob(["\ufeff"+text],{type:"text/csv;cha
 function csvEquip(){
   const D=equipmentData(); const utm=S.projOX!=null;
   const co=o=>{ const h=o&&o.x!=null; if(utm) return h?`${o.x.toFixed(2)},${o.y.toFixed(2)},${(o.x+S.projOX).toFixed(2)},${(o.y+S.projOY).toFixed(2)}`:`,,,`; return h?`${o.x.toFixed(2)},${o.y.toFixed(2)}`:`,`; };
-  const L=["equipo,tipo,nomenclatura_cliente,power_block,asociado_a,n_tcu,x_m,y_m"+(utm?",x_utm,y_utm":"")];
-  D.ncus.forEach(n=>{ L.push([n.id,"NCU",n.gz,n.pb==="\u2014"?"":n.pb,"",n.total,co(n)].join(","));
-    n.gws.forEach(g=>L.push([g.id,"Gateway","",n.pb==="\u2014"?"":n.pb,n.id,g.n,co(null)].join(","))); });
-  D.rsus.forEach(r=>L.push([r.id,r.integrada?"HSU incorporada en NCU":"HSU","","",r.ncu==="\u2014"?"":r.ncu,"",co(r)].join(",")));
-  D.reps.forEach(r=>L.push([r.id,"Repetidor","","","","",co(r)].join(",")));
+  const st=g=>g&&g.n?`${g.n},${g.med.toFixed(1)},${g.max.toFixed(1)},${g.lejana||""}`:`,,,`;
+  const L=["equipo,tipo,nomenclatura_cliente,power_block,asociado_a,n_tcu,d_media_m,d_max_m,tcu_mas_lejana,n_hsu,x_m,y_m"+(utm?",x_utm,y_utm":"")];
+  D.ncus.forEach(n=>{ L.push([n.id,"NCU",n.gz,n.pb==="\u2014"?"":n.pb,"",st(n.g),n.nHsu,co(n)].join(","));
+    n.gws.forEach(g=>L.push([g.id,"Gateway","",n.pb==="\u2014"?"":n.pb,n.id,st(g),"",co(null)].join(","))); });
+  D.rsus.forEach(r=>L.push([r.id,r.integrada?"HSU incorporada en NCU":"HSU","","",r.ncu==="\u2014"?"":r.ncu,",,,","",co(r)].join(",")));
+  D.reps.forEach(r=>L.push([r.id,"Repetidor","","","",",,,","",co(r)].join(",")));
   dlCSV("equipos_comunicaciones.csv", L.join("\n"));
 }
 function csvAssign(){
