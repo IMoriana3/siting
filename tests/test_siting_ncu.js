@@ -41,6 +41,7 @@ const src = [
   grab(/const FUV1=.*\n/, 'FUV1'),
   grab(/const FUV2=.*\n/, 'FUV2'),
   grab(/const PARAMO=.*\n/, 'PARAMO'),
+  grab(/const AYORA=.*\n/, 'AYORA'),
   grab(/function convexHull[\s\S]*?function polyPerimeter.*\n/, 'convexHull'),
   grab(/function buildAdjacency[\s\S]*?\n(?=function nextNcuId)/, 'núcleo (adyacencia→relax)'),
   grab(/function siteAll[\s\S]*?\n(?=function suggestRSU)/, 'siteAll'),
@@ -416,6 +417,30 @@ for (const K of ['FUV1', 'FUV2']) {
   const dentroNcu = { id: 'NCU-01', x: 54, y: 105 };       // en mitad del campo
   const rsus2 = ctx.placeRSUs(motors, hull, [dentroNcu], 2, 250);
   check('NCU interior: ninguna HSU incorporada', rsus2.filter(r => r.integrada).length === 0);
+}
+
+// ── 7e) NADA DE POSTES DESPERDICIADOS (el caso Ayora) ──────────────────────
+// Cazado en el desde-cero de Ayora: una HSU suelta a 32 m de la NCU de su
+// lóbulo — dos equipos donde cabe uno. Dos raíces: "exterior" se medía contra
+// el hull convexo de la PLANTA (y Ayora es cóncava: el borde real del lóbulo
+// queda lejos del hull global), y no había red para la HSU que aterriza al
+// lado de una NCU. Ahora el exterior es el recinto del PROPIO grupo y hay un
+// post-pase de fusión a <=HSU_FUSION. El invariante: ninguna HSU suelta puede
+// quedar a <=40 m de una NCU sin HSU.
+{
+  const P = vm.runInContext('AYORA', ctx);
+  const motors = P.tcus.map((t, i) => ({ x: t[0], y: t[1], pb: null, id: 'M' + (i + 1) }));
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  ctx.S.p.radius = 250;
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const rsus = ctx.placeRSUs(motors, hull, ncus, 12, 250);
+  const conHsu = new Set(rsus.filter(r => r.integrada).map(r => r.ncu));
+  const malas = rsus.filter(r => !r.integrada && ncus.some(n => !conHsu.has(n.id) &&
+    Math.hypot(n.x - r.x, n.y - r.y) <= 40));
+  check('Ayora: ninguna HSU suelta pegada a una NCU libre (poste compartido)',
+    malas.length === 0, malas.map(r => r.id).join(' '));
+  check('Ayora: las NCUs de borde de lóbulo hospedan HSU incorporada',
+    rsus.some(r => r.integrada), rsus.filter(r => r.integrada).length + ' incorporadas');
 }
 
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
