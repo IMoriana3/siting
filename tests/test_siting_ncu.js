@@ -570,6 +570,10 @@ for (const K of ['FUV1', 'FUV2']) {
     /separaDeModulos/.test(bloque(/\["tlen","twid"\]\.forEach[\s\S]*?draw\(\); \}\)\); \}\);/)));
   check('el panel avisa de NCU encima de una mesa',
     /encima de una mesa/.test(html));
+  check('el informe PDF existe y está cableado: portada + una página por cada dos NCUs',
+    /function paginasInforme/.test(html) && /function pdfDesdePaginas/.test(html) &&
+    /i\+=2/.test((html.match(/function paginasInforme[\s\S]*?\n\}/)||[''])[0]) &&
+    /eq-pdf/.test(html) && /informePDF/.test(html));
 }
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'

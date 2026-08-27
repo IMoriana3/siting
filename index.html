@@ -336,6 +336,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       <div id="eq-rep"></div>
     </div>
     <div class="eq-foot">
+      <button class="btn" id="eq-pdf">Informe (PDF)</button>
       <button class="btn" id="eq-csv1">Inventario de equipos (CSV)</button>
       <button class="btn" id="eq-csv2">Asignación por TCU (CSV)</button>
     </div>
@@ -2282,6 +2283,123 @@ function csvEquip(){
   D.reps.forEach(r=>L.push([r.id,"Repetidor","","","",",,,","",co(r)].join(",")));
   dlCSV("equipos_comunicaciones.csv", L.join("\n"));
 }
+/* ===================== Informe PDF ===================== */
+/* El informe que se lleva a obra: PORTADA con el layout entero y los totales, y una página por
+   cada DOS NCUs con solo su zona (el resto atenuado) y su línea de estadísticas. PDF escrito a
+   mano —una imagen JPEG por página, A4 apaisado— para seguir siendo un único HTML sin librerías. */
+function renderVista(w,h,bbox,sel){
+  const old={w:cv.width,h:cv.height,T:{scale:S.T.scale,ox:S.T.ox,oy:S.T.oy},sel:S.sel,hover:S.hover};
+  cv.width=w; cv.height=h; S.hover=null;
+  const mg=0.05, bw=Math.max(1,bbox.b.x-bbox.a.x), bh=Math.max(1,bbox.b.y-bbox.a.y);
+  const sc=Math.min(w*(1-2*mg)/bw, h*(1-2*mg)/bh);
+  S.T.scale=sc; S.T.ox=w/2-(bbox.a.x+bbox.b.x)/2*sc; S.T.oy=h/2+(bbox.a.y+bbox.b.y)/2*sc;
+  S.sel=sel||null;
+  draw();
+  const out=document.createElement("canvas"); out.width=w; out.height=h;
+  const c=out.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,w,h); c.drawImage(cv,0,0);
+  cv.width=old.w; cv.height=old.h; S.T.scale=old.T.scale; S.T.ox=old.T.ox; S.T.oy=old.T.oy;
+  S.sel=old.sel; S.hover=old.hover; draw();
+  return out;
+}
+function bboxDe(pts,margen){
+  const a={x:Infinity,y:Infinity},b={x:-Infinity,y:-Infinity};
+  for(const p of pts){ if(p.x<a.x)a.x=p.x; if(p.y<a.y)a.y=p.y; if(p.x>b.x)b.x=p.x; if(p.y>b.y)b.y=p.y; }
+  return {a:{x:a.x-margen,y:a.y-margen}, b:{x:b.x+margen,y:b.y+margen}};
+}
+function paginasInforme(){
+  const PW=1754, PH=1240;                               // A4 apaisado a 150 dpi
+  const D=equipmentData();
+  const titulo=S.projName||S.sc||"siting";
+  const fm=v=>v==null?"\u2014":Math.round(v);
+  const cab=(pg,sub)=>{ const c=pg.getContext("2d");
+    c.fillStyle="#0A1D30"; c.fillRect(0,0,PW,86);
+    c.fillStyle="#fff"; c.font="700 34px 'IBM Plex Mono',monospace"; c.textAlign="left"; c.textBaseline="middle";
+    c.fillText("Informe de comunicaciones \u00b7 "+titulo, 40, 44);
+    c.font="500 22px 'IBM Plex Mono',monospace"; c.textAlign="right";
+    c.fillText(sub, PW-40, 44); c.textAlign="left"; };
+  const paginas=[];
+  // PORTADA: el layout entero
+  {
+    const pg=document.createElement("canvas"); pg.width=PW; pg.height=PH;
+    const c=pg.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,PW,PH);
+    cab(pg, new Date().toLocaleDateString("es-ES"));
+    const linea=`${D.totals.ncu} NCU \u00b7 ${D.totals.gw} GW \u00b7 ${D.totals.rsu} HSU \u00b7 ${D.totals.rep} repetidores \u00b7 ${D.totals.tcu} TCU`+
+      `   |   radio ${S.p.radius} m \u00b7 cap. ${S.p.capNCU}/${S.p.capGW} \u00b7 libre NCU ${S.p.clearNCU} m / HSU ${S.p.clearHSU} m`;
+    c.fillStyle="#0A1D30"; c.font="500 24px 'IBM Plex Mono',monospace"; c.fillText(linea, 40, 124);
+    const todos=S.motors.concat(S.ncus,S.rsus,S.reps||[]);
+    const vista=renderVista(PW-80, PH-220, bboxDe(todos,40), null);
+    c.drawImage(vista, 40, 150);
+    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5,PW-80,PH-220);
+    paginas.push(pg);
+  }
+  // UNA PÁGINA POR CADA DOS NCUs: su zona a lo grande, el resto atenuado
+  const porId={}; D.ncus.forEach(n=>porId[n.id]=n);
+  const lista=S.ncus.slice();
+  for(let i=0;i<lista.length;i+=2){
+    const par=lista.slice(i,i+2);
+    const pg=document.createElement("canvas"); pg.width=PW; pg.height=PH;
+    const c=pg.getContext("2d"); c.fillStyle="#fff"; c.fillRect(0,0,PW,PH);
+    cab(pg, `p\u00e1g. ${paginas.length+1} \u00b7 ${par.map(n=>n.id).join(" y ")}`);
+    const colW=Math.floor((PW-120)/2), colH=PH-86-64-140;
+    par.forEach((n,j)=>{
+      const x0=40+j*(colW+40), y0=120;
+      const pts=n.motorIdx.map(k=>S.motors[k]).concat([n], S.rsus.filter(r=>r.ncu===n.id));
+      const vista=renderVista(colW, colH, bboxDe(pts, Math.max(30,(S.p.tlen||64)/2+15)), n.id);
+      c.drawImage(vista, x0, y0);
+      c.strokeStyle="#c9d4de"; c.strokeRect(x0+0.5, y0+0.5, colW, colH);
+      const e=porId[n.id], g1=e.gws[0], g2=e.gws[1];
+      c.fillStyle="#0A1D30"; c.font="700 26px 'IBM Plex Mono',monospace";
+      c.fillText(`${n.id}${e.pb!=="\u2014"?" \u00b7 "+e.pb:""}${e.gz?" \u00b7 "+e.gz:""}`, x0, y0+colH+42);
+      c.font="500 22px 'IBM Plex Mono',monospace";
+      c.fillText(`${e.total} TCU \u00b7 d\u0304 ${fm(e.g.med)} m \u00b7 m\u00e1x ${fm(e.g.max)} m (${e.g.lejana||"\u2014"})`, x0, y0+colH+76);
+      const gtxt=`GW1 ${g1?g1.n+" \u00b7 d\u0304 "+fm(g1.med)+" \u00b7 m\u00e1x "+fm(g1.max):"\u2014"}`+
+                 `   GW2 ${g2?g2.n+" \u00b7 d\u0304 "+fm(g2.med)+" \u00b7 m\u00e1x "+fm(g2.max):"\u2014"}`+
+                 `   HSU ${e.nHsu?e.nHsu+(e.hsuInc?" (incorporada)":""):"\u2014"}`;
+      c.fillText(gtxt, x0, y0+colH+110);
+    });
+    paginas.push(pg);
+  }
+  return paginas;
+}
+/* PDF mínimo: catálogo + páginas, cada página un JPEG /DCTDecode a sangre en A4 apaisado.
+   Sin librerías: los offsets del xref se calculan al emitir. */
+function pdfDesdePaginas(paginas){
+  const W=842,H=595, enc=new TextEncoder();
+  const chunks=[]; let pos=0; const off={};
+  const push=b=>{ chunks.push(b); pos+=b.length; };
+  const pushS=t=>push(enc.encode(t));
+  const jpegs=paginas.map(pg=>{
+    const b64=pg.toDataURL("image/jpeg",0.88).split(",")[1], bin=atob(b64);
+    const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    return {u,w:pg.width,h:pg.height};
+  });
+  const n=jpegs.length, total=2+3*n;
+  pushS("%PDF-1.4\n");
+  off[1]=pos; pushS("1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj\n");
+  const kids=jpegs.map((_,k)=>(3+k*3)+" 0 R").join(" ");
+  off[2]=pos; pushS(`2 0 obj<</Type /Pages /Kids [${kids}] /Count ${n}>>endobj\n`);
+  jpegs.forEach((j,k)=>{
+    const p=3+k*3, im=4+k*3, ct=5+k*3;
+    off[p]=pos; pushS(`${p} 0 obj<</Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources <</XObject <</Im${k} ${im} 0 R>>>> /Contents ${ct} 0 R>>endobj\n`);
+    off[im]=pos; pushS(`${im} 0 obj<</Type /XObject /Subtype /Image /Width ${j.w} /Height ${j.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${j.u.length}>>stream\n`);
+    push(j.u); pushS("\nendstream endobj\n");
+    const cs=`q ${W} 0 0 ${H} 0 0 cm /Im${k} Do Q`;
+    off[ct]=pos; pushS(`${ct} 0 obj<</Length ${cs.length}>>stream\n${cs}\nendstream endobj\n`);
+  });
+  const xref=pos;
+  let t=`xref\n0 ${total+1}\n0000000000 65535 f \n`;
+  for(let i=1;i<=total;i++) t+=String(off[i]).padStart(10,"0")+" 00000 n \n";
+  t+=`trailer<</Size ${total+1} /Root 1 0 R>>\nstartxref\n${xref}\n%%EOF`;
+  pushS(t);
+  return new Blob(chunks,{type:"application/pdf"});
+}
+function informePDF(){
+  if(!S.motors.length||!S.ncus.length){ alert("No hay reparto que informar: carga una planta o calcula el siting."); return; }
+  const blob=pdfDesdePaginas(paginasInforme());
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=("informe_"+(S.projName||S.sc||"siting")+".pdf").replace(/\s+/g,"_");
+  a.click(); URL.revokeObjectURL(a.href);
+}
 function csvAssign(){
   const gzOf={}; S.ncus.forEach(n=>gzOf[n.id]=n.gz||""); const utm=S.projOX!=null;
   const L=["tcu,tracker_id,ncu,ncu_cliente,power_block,gw,n_en_gw,x_m,y_m"+(utm?",x_utm,y_utm":"")];
@@ -2408,6 +2526,7 @@ document.getElementById("assign-mode").onclick=function(){ if(S.measureMode){ S.
 document.getElementById("eq-open").onclick=openEquip;
 document.getElementById("eq-close").onclick=closeEquip;
 document.getElementById("eq-modal").onclick=e=>{ if(e.target.id==="eq-modal") closeEquip(); };
+document.getElementById("eq-pdf").onclick=informePDF;
 document.getElementById("eq-csv1").onclick=csvEquip;
 document.getElementById("eq-csv2").onclick=csvAssign;
 window.addEventListener("resize",resize);
