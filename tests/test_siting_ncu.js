@@ -174,6 +174,27 @@ for (const K of ['FUV1', 'FUV2']) {
     legal.x === 18 && legal.y === 35, `se movió a (${legal.x.toFixed(1)},${legal.y.toFixed(1)})`);
 }
 
+// ── 5b) LA GUARDA ES CONFIGURABLE (Parámetros: "Libre NCU" / "Libre HSU") ──
+// El 2 y el 6 son los valores de fábrica, no un dogma: cada proyecto pide su
+// distancia libre alrededor del equipo. opts.guarda la fija por colocación y
+// S.p.clearNCU/clearHSU la llevan desde el panel; la calle objetivo nunca
+// baja de la guarda pedida.
+{
+  const motors = [];
+  for (const cx of [0, 12, 24, 36]) for (const cy of [0, 70])
+    motors.push({ x: cx, y: cy, len: 64, wid: 8.4, az: 0, pb: null, id: 'M' + (motors.length + 1) });
+  const P = { tlen: 64, twid: 8.4 }; ctx.S.p = P;
+  const n = { x: 12, y: 15 };                      // encima de una mesa
+  ctx.separaDeModulos(n, motors, [], P, 250, { soloGuarda: true, guarda: 5 });
+  const h = holg(n.x, n.y, motors, P);
+  check('guarda configurable: con 5 m pedidos, el punto legal libra 5', h >= 5 - 1e-9, h.toFixed(2) + ' m');
+  // y por el panel: siteAll con S.p.clearNCU=4 en una retícula donde el default 2 daba menos
+  const ret = reticula({ nx: 30, ny: 8, px: 12, py: 70, L: 64, W: 4 });
+  const ncus = sitea(ret, { tlen: 64, twid: 4, clearNCU: 4 });
+  const malas = ncus.filter(x => holg(x.x, x.y, ret, ctx.S.p) < 4 - 1e-9).length;
+  check('guarda configurable: siteAll respeta el "Libre NCU" del panel (4 m)', malas === 0, malas + ' por debajo');
+}
+
 // ── 6) SIN SITIO NO SE MIENTE: pasillo < 2·guarda, holgura anotada ─────────
 // Paso 10,5 con mesa de 8,4: pasillo de 2,1 m -> 1,05 de holgura máxima. No hay
 // punto legal que cubra al grupo; lo honesto es quedarse en el mejor punto,
