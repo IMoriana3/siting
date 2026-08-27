@@ -464,6 +464,54 @@ function partitionComponent(motors, comp, adj, radius, capNCU){
   }
   return ncus;
 }
+/* SATURACIÓN: el mínimo de NCUs que el radio permite. La partición golosa crece desde los extremos
+   y descarta candidatos que rompen el radio, así que puede dejar FRAGMENTOS (medido en un
+   rectángulo de 300 seguidores: 7 NCUs de 58/70/46/68/21/28/9 donde caben DOS de ~150), y
+   mergeSmall no siempre los recompone porque valida la unión contra su centroide, no contra el
+   1-centro. Aquí se re-resuelve cada componente con k crecientes desde ceil(n/capNCU): k-centro
+   con tope de capacidad — semillas por punto-más-lejano, asignación golosa global por distancia
+   respetando el tope, recentrado con 1-centro — y se acepta la PRIMERA k cuya solución valida
+   TODO: cada motor a <=radio de su 1-centro, ningún grupo sobre capacidad y cada grupo CONEXO en
+   la malla. Si ninguna k menor valida, se queda la partición que había. Determinista (sin azar). */
+function compactaComponente(motors, comp, part, adj, radius, capNCU){
+  const kMin=Math.max(1,Math.ceil(comp.length/capNCU));
+  if(part.length<=kMin) return part;
+  /* La validación NO apura el radio: un grupo factible pero CLAVADO (su 1-centro sin holgura de
+     movimiento) deja después a separaDeModulos sin ningún punto que cubra Y libre la guarda —
+     medido en FUV I: un grupo de 83 quedaba a 0,94 m de una mesa. Se exige radio - margen, y ese
+     margen es el desplazamiento que la guarda podrá necesitar (la calle objetivo y un par de
+     metros). Si con margen no cabe, k+1: mejor una NCU más que una NCU pegada a una mesa. */
+  const margen=Math.min(CLEAR_OBJ+2, radius*0.05);
+  const R2=(radius-margen)*(radius-margen);
+  for(let k=kMin;k<part.length;k++){
+    // semillas: el más lejano del centroide y luego punto-más-lejano de las semillas ya puestas
+    const cen=centroid(comp.map(i=>motors[i]));
+    let s0=comp[0],sd=-1; for(const i of comp){const d=dist2(motors[i],cen); if(d>sd){sd=d;s0=i;}}
+    const seeds=[s0];
+    while(seeds.length<k){ let best=comp[0],bd=-1;
+      for(const i of comp){ let d=Infinity; for(const s of seeds){const dd=dist2(motors[i],motors[s]); if(dd<d)d=dd;} if(d>bd){bd=d;best=i;} }
+      seeds.push(best); }
+    let C=seeds.map(i=>({x:motors[i].x,y:motors[i].y}));
+    let sol=null;
+    for(let it=0;it<25&&!sol;it++){
+      const grp=C.map(()=>[]);
+      const cand=[]; for(const i of comp) C.forEach((c,j)=>cand.push([dist2(motors[i],c),i,j]));
+      cand.sort((a,b)=>a[0]-b[0]);
+      const asg=new Map();
+      for(const[d,i,j]of cand){ if(asg.has(i)||grp[j].length>=capNCU)continue; asg.set(i,j); grp[j].push(i); }
+      if(asg.size<comp.length) break;                       // con tope no cupo todo el mundo: k no da
+      C=grp.map(g=>{ let cx=0,cy=0; for(const i of g){cx+=motors[i].x;cy+=motors[i].y;} cx/=g.length; cy/=g.length;
+        for(let t=0;t<40;t++){ let fd=-1,f=-1; for(const i of g){const d=(motors[i].x-cx)**2+(motors[i].y-cy)**2; if(d>fd){fd=d;f=i;}} if(fd<=R2)break; const st=1/(t+2); cx+=(motors[f].x-cx)*st; cy+=(motors[f].y-cy)*st; }
+        return {x:cx,y:cy,g}; });
+      const ok=C.every(c=>c.g.length>0 && c.g.length<=capNCU
+        && c.g.every(i=>(motors[i].x-c.x)**2+(motors[i].y-c.y)**2<=R2)
+        && connectedSet(c.g,adj));
+      if(ok) sol=C.map(c=>({x:c.x,y:c.y,motorIdx:c.g}));
+    }
+    if(sol) return sol;                                      // primera k válida = mínimo alcanzado
+  }
+  return part;
+}
 // Reparto GW: un gateway a cada lado de la NCU. La frontera pasa por la NCU.
 // Corte E-O (por X): separa oeste|este (frontera vertical). Corte N-S (por Y): separa sur|norte (frontera horizontal).
 // La posicion de la NCU desliza la frontera; moverla en el otro eje no cambia el reparto, solo la cobertura.
@@ -1030,7 +1078,8 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
     const adj=buildAdjacency(motors, blocks[b], reachX, reachY);
     for(const [k,v] of adj) adjG.set(k,v);
     for(const comp of components(blocks[b], adj)){
-      const part=partitionComponent(motors, comp, adj, radius, capNCU);
+      let part=partitionComponent(motors, comp, adj, radius, capNCU);
+      part=compactaComponente(motors, comp, part, adj, radius, capNCU);   // saturación: mínimo k que el radio permite
       part.forEach(n=>{n.pb=b==="__all__"?null:b; n.count=n.motorIdx.length;});
       ncus.push(...part);
     }
