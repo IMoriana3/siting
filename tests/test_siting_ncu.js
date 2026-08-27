@@ -399,9 +399,8 @@ for (const K of ['FUV1', 'FUV2']) {
 }
 
 // ── 7d) NCU EXTERIOR → HSU INCORPORADA (el caso Bagnarelli) ────────────────
-// Cuando una NCU queda fuera del recinto de trackers (o a <=20 m de su borde),
-// la HSU de ese sector va INCORPORADA en su poste: un equipo menos que plantar.
-// Una NCU interior NO puede hospedar.
+// Una NCU hospeda HSU solo con CIELO ABIERTO: un abanico >=90° sin seguidores
+// a <=150 m — el borde real de la planta. Una NCU interior NO puede hospedar.
 {
   const motors = reticula({ nx: 10, ny: 4, px: 12, py: 70, L: 64, W: 4 });
   ctx.S.p = { tlen: 64, twid: 4, radius: 250 };
@@ -421,12 +420,10 @@ for (const K of ['FUV1', 'FUV2']) {
 
 // ── 7e) NADA DE POSTES DESPERDICIADOS (el caso Ayora) ──────────────────────
 // Cazado en el desde-cero de Ayora: una HSU suelta a 32 m de la NCU de su
-// lóbulo — dos equipos donde cabe uno. Dos raíces: "exterior" se medía contra
-// el hull convexo de la PLANTA (y Ayora es cóncava: el borde real del lóbulo
-// queda lejos del hull global), y no había red para la HSU que aterriza al
-// lado de una NCU. Ahora el exterior es el recinto del PROPIO grupo y hay un
+// lóbulo — dos equipos donde cabe uno. El hospedaje va por CIELO ABIERTO (el
+// hull convexo dejaba fuera el borde real de una planta cóncava) y hay un
 // post-pase de fusión a <=HSU_FUSION. El invariante: ninguna HSU suelta puede
-// quedar a <=40 m de una NCU sin HSU.
+// quedar a <=40 m de una NCU sin HSU que tenga cielo abierto.
 {
   const P = vm.runInContext('AYORA', ctx);
   const motors = P.tcus.map((t, i) => ({ x: t[0], y: t[1], pb: null, id: 'M' + (i + 1) }));
@@ -435,12 +432,42 @@ for (const K of ['FUV1', 'FUV2']) {
   const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
   const rsus = ctx.placeRSUs(motors, hull, ncus, 12, 250);
   const conHsu = new Set(rsus.filter(r => r.integrada).map(r => r.ncu));
-  const malas = rsus.filter(r => !r.integrada && ncus.some(n => !conHsu.has(n.id) &&
+  // el mismo test de cielo abierto que usa la app: abanico >=120° sin seguidores a <=250 m
+  const cielo = (p) => {
+    const oc = new Uint8Array(72);
+    for (const m of motors) { const dx = m.x - p.x, dy = m.y - p.y, d2 = dx * dx + dy * dy;
+      if (d2 > 250 * 250 || d2 < 1) continue;
+      oc[Math.floor(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * 72) % 72] = 1; }
+    let libre = 0, run = 0;
+    for (let i = 0; i < 144; i++) { if (oc[i % 72]) run = 0; else if (++run > libre) libre = run; }
+    return Math.min(libre, 72) * 5 >= 120;
+  };
+  const malas = rsus.filter(r => !r.integrada && ncus.some(n => !conHsu.has(n.id) && cielo(n) &&
     Math.hypot(n.x - r.x, n.y - r.y) <= 40));
   check('Ayora: ninguna HSU suelta pegada a una NCU libre (poste compartido)',
     malas.length === 0, malas.map(r => r.id).join(' '));
   check('Ayora: las NCUs de borde de lóbulo hospedan HSU incorporada',
     rsus.some(r => r.integrada), rsus.filter(r => r.integrada).length + ' incorporadas');
+}
+
+// ── 7f) EXTERIOR DE GRUPO PERO INTERIOR DE PLANTA: AHÍ NO VA UNA HSU ───────
+// Cazado en Ayora, segunda vuelta: la NCU del pasillo ENTRE dos lóbulos es
+// exterior de su grupo pero interior de la planta — rodeada de seguidores por
+// ambos lados, sin cielo ni viento representativos. No hospeda ni fusiona: su
+// abanico libre son dos rendijas de ~15°, no los >=90° del borde real.
+{
+  const motors = [];
+  for (let j = 0; j < 6; j++) for (let i = 0; i < 10; i++) {
+    motors.push({ x: i * 12, y: j * 70, len: 64, wid: 4, az: 0, pb: null, id: 'A' + (motors.length + 1) });
+    motors.push({ x: 148 + i * 12, y: j * 70, len: 64, wid: 4, az: 0, pb: null, id: 'B' + (motors.length + 1) });
+  }
+  ctx.S.p = { tlen: 64, twid: 4, radius: 400 };
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const pasillo = { id: 'NCU-01', x: 128.5, y: 175 };   // en mitad del pasillo entre bloques
+  const rsus = ctx.placeRSUs(motors, hull, [pasillo], 4, 400);
+  check('NCU en pasillo entre lóbulos: NO hospeda HSU (interior de planta)',
+    rsus.filter(r => r.integrada).length === 0,
+    JSON.stringify(rsus.map(r => ({ id: r.id, integrada: !!r.integrada }))));
 }
 
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
