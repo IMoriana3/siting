@@ -218,7 +218,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <input type="number" id="tlen" value="64" min="1" step="1">
         </div>
         <div class="param">
-          <label>Ancho mesa <span class="hint">m (E-O)</span></label>
+          <label>Ancho mesa <span class="hint" id="twid-hint">m (E-O)</span></label>
           <input type="number" id="twid" value="4" min="0.5" step="0.5">
         </div>
         <div class="param" style="display:flex;gap:10px">
@@ -1430,18 +1430,8 @@ function loadProject(P){
      con la del arranque y el panel enseña la de otra planta. */
   (function(){ const s=suggestRSU(S.hull), a=document.getElementById("rsu-sug"); if(a)a.textContent=s; })();
   applyTablesPref(P.tcus.some(t=>t[6]!=null)||!!P.mesa, P.tables);   // arranca en mesas si la planta las trae; luego manda el usuario si ya la hizo
-  /* El panel NO miente: si la planta trae cotas de mesa, "Largo/Ancho mesa" enseñan las de la
-     planta (la MODA de las cotas por seguidor, o las de P.mesa), no el 64x4 de fábrica — cazado
-     en Ayora: sus mesas son 64,2/48,1/32,1 x 4,77 y el panel enseñaba "Ancho 4". Esos campos
-     siguen siendo el repuesto para seguidores sin cota propia, así que además quedan coherentes. */
-  (function(){
-    const moda=(vals)=>{ const c={}; let mejor=null; for(const v of vals){ if(v==null)continue; c[v]=(c[v]||0)+1; if(mejor==null||c[v]>c[mejor])mejor=v; } return mejor; };
-    const L=_me&&_me.len!=null?_me.len:moda(S.motors.map(m=>m.len));
-    const W=_me&&_me.wid!=null?_me.wid:moda(S.motors.map(m=>m.wid));
-    const el=id=>document.getElementById(id);
-    if(L!=null){ el("tlen").value=L; S.p.tlen=L; }
-    if(W!=null){ el("twid").value=W; S.p.twid=W; }
-  })();
+  /* El panel NO miente: las cotas que enseña son las de la planta cargada (ver reflejaCotasPanel). */
+  reflejaCotasPanel();
   assignColors(); updatePanel(); fit();
 }
 function loadAyora(){ loadProject(AYORA); }
@@ -1779,11 +1769,25 @@ function recompute(refit){
   updatePanel();
   if(refit) fit(); else draw();
 }
+/* Las cotas del panel REFLEJAN los datos cargados: la moda de las cotas por seguidor si las
+   traen, o las de fábrica (64x4) si no — y la pista del ancho dice "envolvente" solo cuando hay
+   bífilo. Sin esto, las cotas de una planta se quedaban pegadas al pasar a otra: cazado al saltar
+   de Ayora a FUV I, que salía con envolvente 8,384 y dos bandas que no tiene. */
+function reflejaCotasPanel(){
+  const moda=(vals)=>{ const c={}; let mejor=null; for(const v of vals){ if(v==null)continue; c[v]=(c[v]||0)+1; if(mejor==null||c[v]>c[mejor])mejor=v; } return mejor; };
+  const L=moda(S.motors.map(m=>m.len)), W=moda(S.motors.map(m=>m.wid));
+  const el=id=>document.getElementById(id);
+  el("tlen").value=(L!=null?L:64); S.p.tlen=(L!=null?L:64);
+  el("twid").value=(W!=null?W:4);  S.p.twid=(W!=null?W:4);
+  const h=el("twid-hint");
+  if(h) h.textContent = S.bifilo ? ("envolvente \u00b7 2 filas de "+S.bifilo.cuerda+" m") : "m (E-O)";
+}
 function recomputeNewData(){ // tras cambiar escenario/CSV: recalcular sugerencia y prefijarla
   readParams();   // el hull mide las mesas, y sus cotas están en el panel: sin leerlo antes, en el
                   // primer arranque salían esquinas NaN y la sugerencia se quedaba en "NaN" para siempre
   S.preset=false; S.fromAyora=false; S.projOX=null; S.projOY=null;
   S.bifilo=null;   // el bífilo es del proyecto cargado: si no se limpia, un escenario o un CSV posterior heredaría las dos filas de El Burgo/Fayón. (En "Autoubicar NCUs" NO se limpia: allí los seguidores siguen siendo los del proyecto real.)
+  reflejaCotasPanel();
   S.hull=convexHull(recinto());
   const sug=suggestRSU(S.hull);
   document.getElementById("rsu-sug").textContent=sug;
@@ -2487,7 +2491,7 @@ document.getElementById("scn").querySelectorAll("button").forEach(b=>b.onclick=(
   if(b.dataset.sc==="benante"){ loadProject(BENANTE); return; }
   if(b.dataset.sc==="panbianco"){ loadProject(PANBIANCO); return; }
   if(b.dataset.sc==="polvorin"){ loadProject(POLVORIN); return; }
-  if(b.dataset.sc==="fuv1"||b.dataset.sc==="fuv2"){ const P=(b.dataset.sc==="fuv1")?FUV1:FUV2; S.sc=b.dataset.sc; S.motors=P.pts.map((p,i)=>({x:p[0],y:p[1],pb:null,id:"M"+(i+1)})); S.preset=false; S.fromAyora=false; S.projOX=P.ox; S.projOY=P.oy; applyTablesPref(false); S.hull=convexHull(recinto()); var _sg=suggestRSU(S.hull); var _rs=document.getElementById("rsu-sug"); if(_rs)_rs.textContent=_sg; var _nr=document.getElementById("nrsu"); if(_nr)_nr.value=_sg; recompute(true); return; }
+  if(b.dataset.sc==="fuv1"||b.dataset.sc==="fuv2"){ const P=(b.dataset.sc==="fuv1")?FUV1:FUV2; S.sc=b.dataset.sc; S.motors=P.pts.map((p,i)=>({x:p[0],y:p[1],pb:null,id:"M"+(i+1)})); S.preset=false; S.fromAyora=false; S.bifilo=null; S.projOX=P.ox; S.projOY=P.oy; applyTablesPref(false); reflejaCotasPanel(); S.hull=convexHull(recinto()); var _sg=suggestRSU(S.hull); var _rs=document.getElementById("rsu-sug"); if(_rs)_rs.textContent=_sg; var _nr=document.getElementById("nrsu"); if(_nr)_nr.value=_sg; recompute(true); return; }
   S.sc=b.dataset.sc; S.motors=scenario(S.sc); recomputeNewData();
 });
 document.getElementById("csv").onchange=e=>{
