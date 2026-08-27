@@ -209,8 +209,34 @@ for (const K of ['FUV1', 'FUV2']) {
     anotadas === ncus.length, anotadas + ' de ' + ncus.length + ' anotadas');
 }
 
-// ── 6b) PÁRAMO DESDE CERO: el caso que destapó el barrido corto ────────────
-// Páramo no trae cotas por TCU, así que la mesa sale de Parámetros (64x4). Con
+// ── 6a) PÁRAMO TRAE SUS COTAS MEDIDAS ──────────────────────────────────────
+// "No trae cotas" dejó de ser verdad: el DWG de la planta está medido en la
+// cartera (paramo_layout.json: 240 seguidores 1V46 + 156 1V48) y el preset
+// lleva ahora el largo por seguidor (46/48 módulos x 1,146 m = 52,72/55,01) y
+// la cuerda 1V (2,38 = alto de módulo; el gcr 0,397 del geojson la corrobora:
+// 0,397 x paso 6). Emparejado por coordenadas (peor caso 5 cm) porque los IDs
+// del preset se repiten por NCU. Con estas cotas los huecos reales entre mesas
+// apiladas son ~7 m: el campo es navegable y el reparto se queda cerca del
+// centro de carga, legal.
+{
+  const P = vm.runInContext('PARAMO', ctx);
+  const conCotas = P.tcus.filter(t => t[6] != null && t[7] != null).length;
+  check('el preset de Páramo trae cotas medidas en los 396 TCU', conCotas === P.tcus.length,
+    conCotas + ' de ' + P.tcus.length);
+  const largos = [...new Set(P.tcus.map(t => t[6]))].sort();
+  check('con los dos largos del DWG (1V46 52,72 · 1V48 55,01)',
+    largos.length === 2 && Math.abs(largos[0] - 52.72) < 0.01 && Math.abs(largos[1] - 55.01) < 0.01,
+    largos.join(' '));
+  const motors = P.tcus.map((t, i) => ({ x: t[0], y: t[1], pb: null, id: 'M' + (i + 1), len: t[6], wid: t[7], az: 0 }));
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  const hs = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
+  check('Páramo con cotas reales: todas las NCU libran la guarda cerca del centro de carga',
+    hs.every(h => h >= 2 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
+}
+
+// ── 6b) EL MISMO PÁRAMO SIN COTAS: el caso que destapó el barrido corto ────
+// El caso genérico sigue existiendo (un CSV pelado de otra planta): sin cotas
+// por TCU la mesa sale de Parámetros (64x4). Con
 // filas a ~60 m y paso 7, ese modelo funde las filas en un bloque macizo con
 // pasillos de 3 m — y el barrido de 30 m moría antes de llegar a los caminos
 // (a 57-85 m del centro de carga), dejando las NCU SOBRE las filas, a 1,5 m
