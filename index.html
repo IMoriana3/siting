@@ -1119,10 +1119,13 @@ function suggestRSU(hull){
   return Math.max(3,Math.min(n,12));
 }
 const HSU_OFFSET=7; // metros: la HSU se monta pegada a una fila, a ~7 m del seguidor
-const HSU_EXT=20;   // metros: una NCU fuera del recinto (de SU grupo) o a menos de esto de su borde
-                    // es "exterior" y puede llevar la HSU INCORPORADA en el mismo poste (Bagnarelli)
 const HSU_FUSION=40;// metros: una HSU suelta a menos de esto de una NCU libre se incorpora a su
                     // poste — dos equipos a 30 m son un poste desperdiciado (cazado en Ayora)
+const CIELO_R=250;  // metros y arco del test de CIELO ABIERTO: una NCU solo hospeda HSU si desde su
+const CIELO_ARCO=120;// posición hay un abanico >=120° sin ningún seguidor a <=250 m. Borde FRANCO de
+                    // la planta: medido en Ayora, el pasillo entre lóbulos da 90° justos y las
+                    // bahías dan 110° a 150 m pero se desinflan a 35-60° mirando a 250 — ni pasillos
+                    // ni bahías son sitio para una estación meteo, por hueco que parezca de cerca
 /* REPARTO POR SECTORES, no por longitud de perímetro. Las HSU tienen que RODEAR la planta — el
    viento y las nubes entran por cualquier lado — y el reparto por arco no lo garantizaba: medido
    en FUV I con 4 HSU, dos salían pegadas (rumbos 34° y 39°) y quedaba un flanco de 157° sin
@@ -1151,29 +1154,24 @@ function placeRSUs(motors,hull,ncus,N,radius){
     let far=null,fd=-Infinity;for(const m of motors){const d=(m.x-cx)*ux+(m.y-cy)*uy;if(d>fd){fd=d;far=m;}}
     return far?{x:far.x,y:far.y}:{x:cx,y:cy};
   };
-  const dBorde=(p)=>{ let d=Infinity;
-    for(let i=0;i<hull.length;i++){const a=hull[i],b=hull[(i+1)%hull.length];
-      const ex=b.x-a.x,ey=b.y-a.y,L2=ex*ex+ey*ey||1;
-      let t=((p.x-a.x)*ex+(p.y-a.y)*ey)/L2; t=Math.max(0,Math.min(1,t));
-      const qx=a.x+t*ex-p.x,qy=a.y+t*ey-p.y,dd=Math.hypot(qx,qy); if(dd<d)d=dd; }
-    return d; };
-  const dentroDe=(p,H)=>{let c=false;for(let i=0,j=H.length-1;i<H.length;j=i++){const yi=H[i].y,yj=H[j].y,xi=H[i].x,xj=H[j].x;if(((yi>p.y)!==(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi))c=!c;}return c;};
-  const dContorno=(p,H)=>{ let d=Infinity;
-    for(let i=0;i<H.length;i++){const a=H[i],b=H[(i+1)%H.length];
-      const ex=b.x-a.x,ey=b.y-a.y,L2=ex*ex+ey*ey||1;
-      let t=((p.x-a.x)*ex+(p.y-a.y)*ey)/L2; t=Math.max(0,Math.min(1,t));
-      const qx=a.x+t*ex-p.x,qy=a.y+t*ey-p.y,dd=Math.hypot(qx,qy); if(dd<d)d=dd; }
-    return d; };
-  /* EXTERIOR de verdad, no exterior del hull convexo de la planta: en una planta cóncava (Ayora,
-     puros lóbulos) una NCU al borde real de su lóbulo queda LEJOS del hull global y nunca contaba
-     como exterior — medido: la NCU del lóbulo oeste con su HSU suelta al lado, a 32 m, dos postes
-     donde cabe uno. El recinto que importa es el de SU PROPIO GRUPO: fuera de su hull, o a
-     <=HSU_EXT de su contorno. Sin grupo asignado (una NCU recién pintada), vale el de la planta. */
-  const esExterior=(n)=>{
-    const g=(n.motorIdx&&n.motorIdx.length>=3)?convexHull(n.motorIdx.map(i=>({x:motors[i].x,y:motors[i].y}))):hull;
-    if(g.length<3) return true;
-    return !dentroDe(n,g) || dContorno(n,g)<=HSU_EXT;
+  /* EXTERIOR DE PLANTA de verdad, que es lo que pide una estación meteo. Ni el hull convexo (en
+     una planta cóncava como Ayora el borde real del lóbulo queda lejos del hull global) ni el
+     recinto del propio grupo (un pasillo ENTRE lóbulos es exterior del grupo pero interior de la
+     planta, y ahí una HSU no ve cielo ni viento representativo — cazado en Ayora, segunda vuelta).
+     La prueba buena es local: CIELO ABIERTO. Desde el punto, se marca la dirección de cada seguidor
+     a <=CIELO_R y se busca el mayor abanico seguido sin ninguno: un borde real da medio plano libre
+     (~180°); el pasillo entre lóbulos, dos rendijas de ~15°. Hospeda solo quien libra >=CIELO_ARCO. */
+  const BINS=72;
+  const cieloAbierto=(p)=>{
+    const oc=new Uint8Array(BINS), R2c=CIELO_R*CIELO_R;
+    for(const m of motors){ const dx=m.x-p.x,dy=m.y-p.y,d2=dx*dx+dy*dy;
+      if(d2>R2c||d2<1)continue;
+      oc[Math.floor(((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI))*BINS)%BINS]=1; }
+    let libre=0,run=0;
+    for(let i=0;i<2*BINS;i++){ if(oc[i%BINS])run=0; else if(++run>libre)libre=run; if(libre>=BINS)break; }
+    return libre*(360/BINS)>=CIELO_ARCO;
   };
+  const esExterior=(n)=>cieloAbierto(n);
   const norm=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
   const usadas=new Set(), rsus=[];
   for(let k=0;k<N;k++){
@@ -1209,7 +1207,7 @@ function placeRSUs(motors,hull,ncus,N,radius){
     if(r.integrada)continue;
     let best=null,bd=Infinity;
     for(const n of ncus){ if(usadas.has(n.id))continue; const d=Math.hypot(n.x-r.x,n.y-r.y); if(d<bd){bd=d;best=n;} }
-    if(best&&bd<=HSU_FUSION){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
+    if(best&&bd<=HSU_FUSION&&esExterior(best)){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
   }
   return rsus;
 }
@@ -1727,9 +1725,14 @@ function recompute(refit){
   readParams();
   if(S.fromAyora){ assignColors(); updatePanel(); if(refit) fit(); else draw(); return; }
   S.ncus=siteAll(S.motors,{radius:S.p.radius,capNCU:S.p.capNCU,capGW:S.p.capGW,reachX:S.p.reachX,reachY:S.p.reachY,gwAxis:S.p.gwAxis});
+  /* NUMERAR ANTES de colocar las HSU: applyNumbering renombra las NCU por posición, y las HSU
+     guardan su asociación por id — colocadas antes, cada "HSU-x → NCU-y" apuntaba al id VIEJO y el
+     listado/CSV mentían (cazado en Ayora: la incorporada de la NCU-02 salía como de la NCU-03).
+     El hull se mide sin las HSU de la pasada anterior, que ya no existen. */
+  applyNumbering();
+  S.rsus=[];
   S.hull=convexHull(recinto());
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
-  applyNumbering();
   assignColors(); S.sel=null;
   updatePanel();
   if(refit) fit(); else draw();
@@ -2316,8 +2319,9 @@ function autoSite(desdeCero){
       separaDeModulos(n,S.motors,n.motorIdx,S.p,S.p.radius,{guarda:S.p.clearNCU});
       if(n.count>0){ splitGW(S.motors,n,S.p.capGW,S.p.gwAxis); n.gw.forEach((arr,g)=>arr.forEach(i=>S.motors[i].gw=g+1)); } });
   }
+  applyNumbering();   // ANTES de colocar las HSU: guardan su asociación por id de NCU (ver recompute)
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
-  applyNumbering(); assignColors(); updatePanel(); fit();
+  assignColors(); updatePanel(); fit();
   const sin=S.motors.filter(m=>m.ncu==null).length;
   const msg=document.getElementById("msg-auto");
   if(msg)msg.textContent="Conservadas "+previas.length+" NCU del plano · "+anadidas+" añadidas"+(sin?" · "+sin+" TCU sin cubrir":"");
