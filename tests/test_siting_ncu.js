@@ -10,7 +10,11 @@
 //      pintadas encima;
 //   3. las colocaciones que no pasaban por placeCut no tenían guarda ninguna:
 //      el clic manual, el arrastre, la HSU a 7 m fijos y las NCU nuevas del
-//      autositing conservador (ciegas a las mesas ya cubiertas).
+//      autositing conservador (ciegas a las mesas ya cubiertas);
+//   4. el barrido moría a 30 m: en Páramo (sin cotas por TCU, el modelo del
+//      panel funde las filas en un bloque macizo) los caminos de verdad están
+//      a 57-85 m y las NCU se quedaban plantadas SOBRE las filas — y encima
+//      de una mesa no se monta nada, sin excepciones.
 //
 // Cómo: extrae el núcleo de siting del index.html REAL —no una copia— y lo corre
 // en un contexto con lo justo (`S`).
@@ -36,6 +40,7 @@ const src = [
   grab(/const dist2=[\s\S]*?const centroid=.*\n/, 'utilidades'),
   grab(/const FUV1=.*\n/, 'FUV1'),
   grab(/const FUV2=.*\n/, 'FUV2'),
+  grab(/const PARAMO=.*\n/, 'PARAMO'),
   grab(/function convexHull[\s\S]*?function polyPerimeter.*\n/, 'convexHull'),
   grab(/function buildAdjacency[\s\S]*?\n(?=function nextNcuId)/, 'núcleo (adyacencia→relax)'),
   grab(/function siteAll[\s\S]*?\n(?=function suggestRSU)/, 'siteAll'),
@@ -183,6 +188,50 @@ for (const K of ['FUV1', 'FUV2']) {
     anotadas === ncus.length, anotadas + ' de ' + ncus.length + ' anotadas');
 }
 
+// ── 6b) PÁRAMO DESDE CERO: el caso que destapó el barrido corto ────────────
+// Páramo no trae cotas por TCU, así que la mesa sale de Parámetros (64x4). Con
+// filas a ~60 m y paso 7, ese modelo funde las filas en un bloque macizo con
+// pasillos de 3 m — y el barrido de 30 m moría antes de llegar a los caminos
+// (a 57-85 m del centro de carga), dejando las NCU SOBRE las filas, a 1,5 m
+// (medido). La planta entregada monta sus NCU en esos caminos, a ~12 m. Con la
+// prórroga, el reparto desde cero cae prácticamente donde el proyecto real:
+// la NCU del PS 1 a <15 m de la real (494,279) y la del PS 3 a <10 m de la
+// real (178,154).
+{
+  const P = vm.runInContext('PARAMO', ctx);
+  const psOf = {}; P.ncus.forEach(n => { psOf[n[0]] = 'PS ' + n[1]; });
+  const motors = P.tcus.map((t, i) => ({ x: t[0], y: t[1], pb: psOf[t[2]] || null, id: 'M' + (i + 1) }));
+  const t0 = Date.now();
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  const ms = Date.now() - t0;
+  const hs = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
+  check('Páramo: ninguna NCU dentro de una mesa', hs.every(h => h >= 0), hs.map(h => h.toFixed(1)).join(' '));
+  check('Páramo: todas libran los 2 m (los caminos existen y ahora se alcanzan)',
+    hs.every(h => h >= 2 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
+  check('Páramo: la mayoría llega al camino (>=6 m), como la planta entregada',
+    hs.filter(h => h >= 6 - 1e-9).length >= 3, hs.map(h => h.toFixed(1)).join(' '));
+  const gwMal = ncus.filter(n => n.gw[0].length > 80 || n.gw[1].length > 80).length;
+  check('Páramo: alcanzar el camino no desborda ningún gateway (margen GW exacto)', gwMal === 0, gwMal + ' GW>80');
+  check('Páramo: y no se tarda una vida (<6 s el reparto entero)', ms < 6000, ms + ' ms');
+}
+
+// ── 6c) ENCIMA DE UNA MESA ES INADMISIBLE, la cobertura se sacrifica antes ─
+// Un bloque macizo de verdad (mesas solapadas en x: paso 3 con ancho 4) y un
+// grupo de radio 30: TODOS los puntos que cubren caen dentro de una mesa. El
+// código anterior dejaba la NCU ahí dentro; ahora sale al primer punto legal
+// aunque pierda cobertura — la cobertura se arregla (repetidor, otra NCU) y el
+// panel la canta; una NCU dentro de una mesa no se puede montar.
+{
+  const motors = [];
+  for (let i = -14; i <= 14; i++) motors.push({ x: i * 3, y: 0, len: 64, wid: 4, az: 0, pb: null, id: 'M' + (motors.length + 1) });
+  const P = { tlen: 64, twid: 4 }; ctx.S.p = P;
+  const idx0 = motors.findIndex(m => m.x === 0);
+  const n = { x: 0, y: 0 };
+  ctx.separaDeModulos(n, motors, [idx0], P, 30);
+  const h = holg(n.x, n.y, motors, P);
+  check('bloque macizo: la NCU NUNCA queda dentro de una mesa', h >= 2 - 1e-9, h.toFixed(2) + ' m');
+}
+
 // ── 7) LA HSU TAMPOCO SE PLANTA SOBRE UNA MESA ─────────────────────────────
 // El desplazamiento fijo de 7 m se mide desde el CENTRO del seguidor: cuando la
 // dirección "hacia afuera" apunta a lo largo de la mesa (64 m), los 7 m caen
@@ -198,6 +247,23 @@ for (const K of ['FUV1', 'FUV2']) {
   check('las HSU libran los 2 m a toda mesa', rsus.length === 4 && malas.length === 0,
     rsus.length + ' HSU, ' + malas.length + ' sin guarda: ' +
     malas.map(r => r.id + ' h=' + holg(r.x, r.y, motors, P).toFixed(2)).join(' '));
+}
+
+// ── 7b) HSU EN EL BLOQUE MACIZO (el caso Páramo de la captura de campo) ────
+// Con las filas fundidas por las cotas del panel, los 7 m fijos dejaban la HSU
+// dentro de la banda de mesas. La guarda con prórroga la saca al primer punto
+// legal hacia afuera.
+{
+  const motors = [];
+  for (const cy of [0, 60, 120]) for (let i = 0; i < 30; i++)
+    motors.push({ x: i * 7, y: cy, len: 64, wid: 4, az: 0, pb: null, id: 'M' + (motors.length + 1) });
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  const ncus = [{ id: 'NCU-01', x: 101.5, y: 60 }];
+  const rsus = ctx.placeRSUs(motors, hull, ncus, 3, 250);
+  const malas = rsus.filter(r => holg(r.x, r.y, motors, P) < 2 - 1e-9);
+  check('bloque macizo: ninguna HSU queda sobre las mesas', rsus.length === 3 && malas.length === 0,
+    rsus.length + ' HSU, malas: ' + malas.map(r => r.id + ' h=' + holg(r.x, r.y, motors, P).toFixed(2)).join(' '));
 }
 
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
