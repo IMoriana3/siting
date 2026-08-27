@@ -313,6 +313,64 @@ for (const K of ['FUV1', 'FUV2']) {
     rsus.length + ' HSU, malas: ' + malas.map(r => r.id + ' h=' + holg(r.x, r.y, motors, P).toFixed(2)).join(' '));
 }
 
+// ── 7c) LAS HSU RODEAN LA PLANTA (sectores, no longitud de perímetro) ──────
+// El requisito es meteorológico: viento y nubes entran por cualquier lado, así
+// que las estaciones tienen que repartirse alrededor — no dos al norte y
+// ninguna al sur. Medido con el reparto anterior (por arco de perímetro) en
+// FUV I con 4 HSU: dos salían pegadas (rumbos 34° y 39°) y quedaba un flanco
+// de 157° sin estación. Con sectores: ninguna pareja pegada y ningún flanco
+// gigante.
+{
+  const F = vm.runInContext('FUV1', ctx);
+  const motors = F.pts.map((p, i) => ({ x: p[0], y: p[1], pb: null, id: 'M' + (i + 1) }));
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const rsus = ctx.placeRSUs(motors, hull, ncus, 4, 250);
+  let cx = 0, cy = 0; for (const m of motors) { cx += m.x; cy += m.y; } cx /= motors.length; cy /= motors.length;
+  const angs = rsus.map(r => Math.atan2(r.y - cy, r.x - cx) * 180 / Math.PI).sort((a, b) => a - b);
+  let gap = 0, minSep = 360;
+  for (let i = 0; i < angs.length; i++) {
+    const d = (i + 1 < angs.length ? angs[i + 1] : angs[0] + 360) - angs[i];
+    if (d > gap) gap = d; if (d < minSep) minSep = d;
+  }
+  check('FUV I: 4 HSU y ningún flanco sin estación (hueco angular <= 140°)', rsus.length === 4 && gap <= 140,
+    'rumbos ' + angs.map(a => a.toFixed(0)).join(' ') + ' · hueco ' + gap.toFixed(0) + '°');
+  check('FUV I: y ninguna pareja pegada (separación mínima >= 30°)', minSep >= 30,
+    minSep.toFixed(0) + '° (el reparto por arco daba 5°)');
+}
+// Planta alargada con 2 HSU: una en cada EXTREMO del eje largo (la fase de los
+// sectores va alineada al eje principal), no las dos en el mismo lado.
+{
+  const motors = reticula({ nx: 40, ny: 2, px: 12, py: 70, L: 64, W: 4 });
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250 };
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const rsus = ctx.placeRSUs(motors, hull, [], 2, 250);
+  const sep = Math.hypot(rsus[0].x - rsus[1].x, rsus[0].y - rsus[1].y);
+  check('planta alargada: las 2 HSU van a los dos extremos del eje largo',
+    rsus.length === 2 && sep >= 0.6 * 39 * 12, sep.toFixed(0) + ' m entre ellas');
+}
+
+// ── 7d) NCU EXTERIOR → HSU INCORPORADA (el caso Bagnarelli) ────────────────
+// Cuando una NCU queda fuera del recinto de trackers (o a <=20 m de su borde),
+// la HSU de ese sector va INCORPORADA en su poste: un equipo menos que plantar.
+// Una NCU interior NO puede hospedar.
+{
+  const motors = reticula({ nx: 10, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250 };
+  const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
+  const fuera = { id: 'NCU-01', x: -45, y: 105 };          // fuera del recinto, al oeste
+  const rsus = ctx.placeRSUs(motors, hull, [fuera], 2, 250);
+  const inc = rsus.filter(r => r.integrada);
+  check('NCU exterior: una HSU va incorporada en su poste', inc.length === 1 &&
+    inc[0].ncu === 'NCU-01' && inc[0].x === fuera.x && inc[0].y === fuera.y,
+    JSON.stringify(rsus.map(r => ({ id: r.id, ncu: r.ncu, integrada: !!r.integrada }))));
+  check('y la otra HSU sigue siendo un equipo suelto con su guarda',
+    rsus.length === 2 && rsus.some(r => !r.integrada && holg(r.x, r.y, motors, ctx.S.p) >= 2 - 1e-9));
+  const dentroNcu = { id: 'NCU-01', x: 54, y: 105 };       // en mitad del campo
+  const rsus2 = ctx.placeRSUs(motors, hull, [dentroNcu], 2, 250);
+  check('NCU interior: ninguna HSU incorporada', rsus2.filter(r => r.integrada).length === 0);
+}
+
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
 // Comprobaciones de FUENTE, no de comportamiento: placeNCUat/addNCU/arrastre/
 // autoSite viven pegados al DOM y no se pueden ejecutar aquí. Si alguien quita
