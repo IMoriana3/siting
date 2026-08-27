@@ -220,6 +220,28 @@ for (const K of ['FUV1', 'FUV2']) {
   check('guarda configurable: siteAll respeta el "Libre NCU" del panel (4 m)', malas === 0, malas + ' por debajo');
 }
 
+// ── 5c) GUARDA ALTA: preferencia que avisa, no orden que rompe ─────────────
+// Con "Libre NCU" mayor que lo que el campo da (6 m en pasillos de 4-5), la
+// prioridad es: dentro de mesa NUNCA > tope GW (hardware) > guarda pedida
+// (preferencia, ámbar). Medido antes del arreglo: una NCU partida se iba
+// fuera del margen del corte a por sus 6 m y desbordaba un gateway. Y el
+// fallback es LO MEJOR alcanzable sin tocar el corte, no el primer 2,0.
+{
+  const motors = reticula({ nx: 50, ny: 6, px: 12, py: 70, L: 64, W: 4 });
+  const ncus = sitea(motors, { tlen: 64, twid: 4, clearNCU: 6 });
+  const gwMal = ncus.filter(n => n.gw[0].length > 80 || n.gw[1].length > 80).length;
+  const hs = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
+  check('guarda 6 en campo de 4-5: ningún gateway desborda por perseguirla', gwMal === 0, gwMal + ' GW>80');
+  check('y el fallback es lo mejor del campo (>=4), no el primer 2,0',
+    hs.every(h => h >= 4 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
+  // la HSU sí persigue su guarda con la prórroga: naive dentro de la mesa, "Libre HSU" 10
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250 };
+  const pos = { x: 114, y: 20 };                     // dentro de una mesa
+  ctx.separaDeModulos(pos, motors, [], ctx.S.p, 250, { soloGuarda: true, prorroga: true, guarda: 10 });
+  const h = holg(pos.x, pos.y, motors, ctx.S.p);
+  check('HSU con guarda 10 desde dentro de una mesa: sale hasta los 10 m', h >= 10 - 1e-9, h.toFixed(2) + ' m');
+}
+
 // ── 6) SIN SITIO NO SE MIENTE: pasillo < 2·guarda, holgura anotada ─────────
 // Paso 10,5 con mesa de 8,4: pasillo de 2,1 m -> 1,05 de holgura máxima. No hay
 // punto legal que cubra al grupo; lo honesto es quedarse en el mejor punto,

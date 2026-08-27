@@ -576,7 +576,7 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
   // recorrerlos todos por cada punto de la espiral son decenas de millones de dModulo. El radio de
   // captura es el barrido máximo + la semidiagonal de la mesa mayor + la holgura objetivo.
   let maxSemi=0; for(const m of motors){ const L=(m.len!=null?m.len:P.tlen),W=(m.wid!=null?m.wid:P.twid),s=(L*L+W*W)/4; if(s>maxSemi)maxSemi=s; }
-  const LIM=(o.soloGuarda?BARRIDO_FINO:BARRIDO_CALLE)+calle+Math.sqrt(maxSemi), LIM2=LIM*LIM;
+  const LIM=((o.soloGuarda&&!o.prorroga)?BARRIDO_FINO:BARRIDO_CALLE)+calle+Math.sqrt(maxSemi), LIM2=LIM*LIM;   // con prórroga, la captura de mesas llega tan lejos como el barrido
   // Geometría de mesa CACHEADA (dModulo hace 4 trigonométricas por mesa y por punto: con la prórroga
   // son ~1,5 M evaluaciones y Páramo tardaba 9 s; con la caché y la cota por semidiagonal, décimas).
   const cerca=[]; let rrMax=0;
@@ -601,10 +601,16 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
   const h0=holgura(n.x,n.y,0);
   if(h0>=calle || (o.soloGuarda&&h0>=guarda)){ n.holgura=+h0.toFixed(2); return; }   // ya está bien puesto
   const x0=n.x,y0=n.y;
-  let objetivo=null;                     // primer punto con >=CLEAR_OBJ (respetando el corte)
-  let minC=null,minL=null,rMin=Infinity; // primer punto con >=CLEAR_MOD: dentro del corte / libre
-  let mejor=null,mejorH=-Infinity;       // por si ni la guarda dura es alcanzable
-  let sinCob=null;                       // primer punto con >=CLEAR_MOD IGNORANDO cobertura: último recurso
+  /* PRIORIDADES cuando la guarda pedida es mayor que el suelo duro de CLEAR_MOD (p.ej. Libre NCU
+     6 m en un campo cuyos pasillos dan 4,5 como mucho): dentro de una mesa NUNCA; el tope de un
+     gateway es hardware y va después; la guarda configurable es una preferencia y avisa en ámbar.
+     Por eso el corte GW solo se rompe si NI el suelo duro se logra dentro de su margen — medido:
+     con Libre NCU 6, una NCU partida se iba fuera del margen a por sus 6 m y desbordaba un GW. */
+  let objetivo=null;                     // primer punto con >=calle (respetando el corte)
+  let minC=null,minL=null,rMin=Infinity; // primer punto con >=guarda: dentro del corte / fuera
+  let mejorC=null,mejorCH=-Infinity;     // MÁXIMA holgura alcanzable sin tocar el corte
+  let mejor=null,mejorH=-Infinity;       // por si ni el suelo duro es alcanzable
+  let sinCob=null;                       // primer punto con suelo duro IGNORANDO cobertura: último recurso
   const barre=(r0,r1,paso,arco,prorroga)=>{
     for(let r=r0;r<=r1;r+=paso){
       const pasos=Math.max(24,Math.round(2*Math.PI*r/arco));
@@ -612,11 +618,12 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
         const a=2*Math.PI*k/pasos, x=x0+r*Math.cos(a), y=y0+r*Math.sin(a);
         const h=holgura(x,y,r);
         if(h<guarda&&h<=mejorH) continue;                       // la cobertura solo se mira si el punto interesa
-        if(h>=guarda&&!sinCob) sinCob=[x,y,h];
+        if(h>=CLEAR_MOD&&!sinCob) sinCob=[x,y,h];
         if(!cubre(x,y)) continue;
         const ok=enCorte(x,y);
         if(h>=calle && !o.soloGuarda && ok){ objetivo=[x,y,h]; return; }
         if(h>=guarda){ if(ok){ if(!minC){minC=[x,y,h]; rMin=Math.min(rMin,r);} } else if(!minL){minL=[x,y,h]; rMin=Math.min(rMin,r);} }
+        if(ok&&h>mejorCH){ mejorCH=h; mejorC=[x,y,h]; }
         if(h>mejorH){ mejorH=h; mejor=[x,y,h]; }
       }
       if(o.soloGuarda&&(minC||minL)) return;                       // manual: mínimo desplazamiento y ya
@@ -624,19 +631,27 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
     }
   };
   barre(0.5,BARRIDO_FINO,0.5,0.6,false);
-  // Prórroga en gruesa (paso 2, malla 1,8): solo si el fino no dio NI los 2 m — el caso Páramo. La
-  // malla de 2 m no pierde el objetivo: la banda con >=CLEAR_MOD de un camino de 12 m mide 8 m.
+  // Prórroga en gruesa (paso 2, malla 1,8): si el fino no dio la GUARDA pedida — el caso Páramo
+  // con la de fábrica, y la caza de la calle o del "Libre" configurado en general. La malla de
+  // 2 m no pierde el objetivo: la banda legal de un camino de 12 m mide 8 m.
   // En soloGuarda la prórroga hay que pedirla (opts.prorroga): la lleva la HSU —colocación
   // automática, mejor a 60 m que encima de una mesa— pero no el clic ni el arrastre del usuario,
   // que a esa distancia dejarían de parecerse a lo que la mano pidió (ahí avisa el panel).
   if(!objetivo&&!minC&&!minL&&(!o.soloGuarda||o.prorroga)) barre(BARRIDO_FINO+2,BARRIDO_CALLE,2,1.8,true);
   delete n._cx0; delete n._cy0;
-  if(objetivo){ n.x=objetivo[0]; n.y=objetivo[1]; n.holgura=+objetivo[2].toFixed(2); return; }
-  // Sin calle a alcance: si el punto original ya cumplía la guarda dura, quedarse quieto vale más
-  // que un desplazamiento lateral que no gana holgura.
+  const pon=(p)=>{ n.x=p[0]; n.y=p[1]; n.holgura=+p[2].toFixed(2); };
+  if(objetivo){ pon(objetivo); return; }
+  // Sin calle a alcance: si el punto original ya cumplía la guarda pedida, quedarse quieto vale
+  // más que un desplazamiento lateral que no gana holgura.
   if(h0>=guarda){ n.holgura=+h0.toFixed(2); return; }
-  const minimo=minC||minL;               // dentro del margen GW si lo hay; librar manda si no
-  if(minimo){ n.x=minimo[0]; n.y=minimo[1]; n.holgura=+minimo[2].toFixed(2); return; }
+  if(minC){ pon(minC); return; }                               // la guarda pedida, sin tocar el corte
+  // La guarda pedida no existe a alcance: LO MEJOR ALCANZABLE sin tocar el corte (o quedarse, si
+  // el punto de partida ya es lo mejor). Legal mientras dé el suelo duro; el panel avisa en ámbar.
+  if(Math.max(h0,mejorCH)>=CLEAR_MOD){
+    if(mejorCH>h0){ pon(mejorC); } else { n.holgura=+h0.toFixed(2); }
+    return;
+  }
+  if(minL){ pon(minL); return; }                               // romper el corte, solo por debajo del suelo duro
   // Puede NO haber solución dentro del campo: si el pasillo entre mesas mide menos de 2*CLEAR_MOD
   // (El Burgo: 12 m de paso - 8,4 de mesa = 3,6 m de pasillo -> 1,8 m como mucho), los 2 m solo se
   // logran sacando la NCU fuera de la fila. Aquí se deja el mejor punto posible y se ANOTA la holgura
