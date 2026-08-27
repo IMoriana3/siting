@@ -226,6 +226,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <div style="flex:1"><label>Cap. GW</label><input type="number" id="capGW" value="80" min="1"></div>
         </div>
         <div class="param" style="display:flex;gap:10px">
+          <div style="flex:1"><label>Libre NCU <span class="hint">m a mesas</span></label><input type="number" id="clearNCU" value="2" min="0" step="0.5"></div>
+          <div style="flex:1"><label>Libre HSU <span class="hint">m a mesas</span></label><input type="number" id="clearHSU" value="2" min="0" step="0.5"></div>
+        </div>
+        <div class="param" style="display:flex;gap:10px">
           <div style="flex:1"><label>Alcance E-W <span class="hint">m</span></label><input type="number" id="reachX" value="40" min="5" step="5"></div>
           <div style="flex:1"><label>Alcance N-S <span class="hint">m</span></label><input type="number" id="reachY" value="90" min="5" step="5"></div>
         </div>
@@ -492,62 +496,109 @@ function dModulo(px,py,m,P){                       // distancia del punto al rec
   const ou=Math.max(u,0), ov=Math.max(v,0);
   return (ou||ov)?Math.hypot(ou,ov):Math.max(u,v);                  // negativo si el punto cae dentro
 }
+const BARRIDO_FINO=30;    // metros: la espiral fina (paso 0,5) alrededor del punto ideal
+const BARRIDO_CALLE=90;   // metros: prórroga en malla gruesa, SOLO automático y SOLO si el fino no
+                          // dio ni los 2 m. Existe por Páramo: sin cotas por TCU, el modelo del
+                          // panel funde las filas en un bloque macizo (pasillos de 3 m) y los
+                          // caminos de verdad —donde la planta entregada monta sus NCU, a 12 m—
+                          // quedan a 57-85 m del centro de carga: con 30 m no se llegaba nunca.
 function separaDeModulos(n,motors,arr,P,radius,opts){
   // Busca el punto MÁS CERCANO al ideal que (a) libre de toda mesa y (b) siga cubriendo el grupo.
   // Empujar por la normal del módulo más cercano no basta: al salir de una mesa se entra en la de
-  // al lado. Se barre en ESPIRAL (anillos de 0,5 m x 24 ángulos), así el primer punto de cada nivel
-  // es, por construcción, el de menor desplazamiento. Dos niveles:
+  // al lado. Se barre en ESPIRAL, así el primer punto de cada nivel es, por construcción, el de
+  // menor desplazamiento. Dos niveles:
   //   1º el primer punto con >=CLEAR_OBJ (el pasillo ancho o la calle, donde iría un diseñador);
   //   2º si no lo hay a alcance, el primer punto con >=CLEAR_MOD (la guarda dura de instalación).
   // opts.soloGuarda: colocaciones MANUALES (clic, arrastre, HSU). Ahí el punto es del usuario y solo
   //   se corrige lo imprescindible: si ya libra los 2 m no se toca, y si no, se saca al punto legal
-  //   más cercano sin perseguir la calle.
+  //   más cercano sin perseguir la calle (y sin prórroga: nada de teletransportar un clic 80 m).
   // opts.ejeCorte ('EW'|'NS'): la NCU es también la FRONTERA del reparto en 2 gateways (splitGW corta
-  //   por su x o su y). Cuando el grupo va a partirse, el nivel 1 solo acepta puntos que no muevan la
-  //   coordenada de corte más de tolCorte, para no desequilibrar el reparto que placeCut ya ajustó a
-  //   la mediana; la guarda dura del nivel 2 no se restringe (librar la mesa manda sobre el reparto).
+  //   por su x o su y). Cuando el grupo va a partirse, los niveles 1 y 2 prefieren puntos cuya
+  //   coordenada de corte quede dentro de [corteLo,corteHi] — el margen EXACTO que deja la capacidad
+  //   GW, que placeCut calcula del reparto real (sin cotas dadas: ±tolCorte de la posición actual).
+  //   Si ni así hay punto legal, la guarda dura manda sobre el reparto y se acepta fuera del margen.
   const o=opts||{}, R2=radius*radius, tolCorte=o.tolCorte!=null?o.tolCorte:6;
+  // guarda configurable (Parámetros: "Libre NCU"/"Libre HSU"); la calle objetivo nunca baja de ella
+  const guarda=(o.guarda!=null&&o.guarda>=0)?o.guarda:CLEAR_MOD, calle=Math.max(CLEAR_OBJ,guarda);
   const cubre=(x,y)=>{for(const i of arr){const dx=motors[i].x-x,dy=motors[i].y-y;if(dx*dx+dy*dy>R2)return false;}return true;};
+  const enCorte=(x,y)=>{ if(!o.ejeCorte)return true; const c=o.ejeCorte==="EW"?x:y, c0=o.ejeCorte==="EW"?n._cx0:n._cy0;
+    return (o.corteLo!=null) ? (c>=o.corteLo&&c<=o.corteHi) : Math.abs(c-c0)<=tolCorte; };
+  n._cx0=n.x; n._cy0=n.y;
   // Solo las mesas que el barrido puede llegar a tocar entran en la holgura: con 6000 seguidores,
-  // recorrerlos todos por cada uno de los ~9000 puntos de la espiral son decenas de millones de
-  // dModulo. El radio de captura es el barrido (30) + la semidiagonal de la mesa mayor + la holgura.
+  // recorrerlos todos por cada punto de la espiral son decenas de millones de dModulo. El radio de
+  // captura es el barrido máximo + la semidiagonal de la mesa mayor + la holgura objetivo.
   let maxSemi=0; for(const m of motors){ const L=(m.len!=null?m.len:P.tlen),W=(m.wid!=null?m.wid:P.twid),s=(L*L+W*W)/4; if(s>maxSemi)maxSemi=s; }
-  const LIM=30+CLEAR_OBJ+Math.sqrt(maxSemi), LIM2=LIM*LIM;
-  const cerca=[]; for(const m of motors){ const dx=m.x-n.x,dy=m.y-n.y; if(dx*dx+dy*dy<=LIM2)cerca.push(m); }
-  const holgura=(x,y)=>{let d=Infinity;for(const m of cerca){const e=dModulo(x,y,m,P);if(e<d)d=e;}return d;};
-  const h0=holgura(n.x,n.y);
-  if(h0>=CLEAR_OBJ || (o.soloGuarda&&h0>=CLEAR_MOD)){ n.holgura=+h0.toFixed(2); return; }   // ya está bien puesto
+  const LIM=(o.soloGuarda?BARRIDO_FINO:BARRIDO_CALLE)+calle+Math.sqrt(maxSemi), LIM2=LIM*LIM;
+  // Geometría de mesa CACHEADA (dModulo hace 4 trigonométricas por mesa y por punto: con la prórroga
+  // son ~1,5 M evaluaciones y Páramo tardaba 9 s; con la caché y la cota por semidiagonal, décimas).
+  const cerca=[]; let rrMax=0;
+  for(const m of motors){ const dx=m.x-n.x,dy=m.y-n.y, d2=dx*dx+dy*dy; if(d2<=LIM2){
+    const L=(m.len!=null?m.len:P.tlen), W=(m.wid!=null?m.wid:P.twid), a=((m.az||0))*Math.PI/180, rr=Math.hypot(L,W)/2;
+    if(rr>rrMax)rrMax=rr;
+    cerca.push({x:m.x,y:m.y,d0:Math.sqrt(d2),hl:L/2,hw:W/2,lx:Math.sin(a),ly:Math.cos(a),wx:Math.cos(a),wy:-Math.sin(a),rr}); } }
+  cerca.sort((a,b)=>a.d0-b.d0);   // orden por distancia al origen del barrido: permite CORTAR el
+                                  // bucle — una mesa a d0 no puede acercarse a un punto del anillo r
+                                  // a menos de d0-r-rr, así que en cuanto d0 > r+d+rrMax, ni esa ni
+                                  // las siguientes mejoran d. Sin esto, Páramo tardaba ~2 s.
+  const holgura=(x,y,r)=>{let d=Infinity;
+    for(const g of cerca){
+      if(g.d0>r+d+rrMax) break;
+      const dx=x-g.x,dy=y-g.y;
+      if(Math.sqrt(dx*dx+dy*dy)-g.rr>=d) continue;               // ni la esquina más cercana mejora d
+      const u=Math.abs(dx*g.wx+dy*g.wy)-g.hw, v=Math.abs(dx*g.lx+dy*g.ly)-g.hl;
+      const ou=u>0?u:0, ov=v>0?v:0;
+      const e=(ou||ov)?Math.sqrt(ou*ou+ov*ov):(u>v?u:v);
+      if(e<d)d=e;
+    } return d;};
+  const h0=holgura(n.x,n.y,0);
+  if(h0>=calle || (o.soloGuarda&&h0>=guarda)){ n.holgura=+h0.toFixed(2); return; }   // ya está bien puesto
   const x0=n.x,y0=n.y;
-  let minimo=null;                       // primer punto con la guarda dura (mínimo desplazamiento)
+  let objetivo=null;                     // primer punto con >=CLEAR_OBJ (respetando el corte)
+  let minC=null,minL=null,rMin=Infinity; // primer punto con >=CLEAR_MOD: dentro del corte / libre
   let mejor=null,mejorH=-Infinity;       // por si ni la guarda dura es alcanzable
-  for(let r=0.5;r<=30;r+=0.5){
-    const pasos=Math.max(24,Math.round(2*Math.PI*r/0.6));
-    for(let k=0;k<pasos;k++){
-      const a=2*Math.PI*k/pasos, x=x0+r*Math.cos(a), y=y0+r*Math.sin(a);
-      const h=holgura(x,y);
-      if(h>=CLEAR_MOD||h>mejorH){                                 // la cobertura solo se mira si el punto interesa
+  let sinCob=null;                       // primer punto con >=CLEAR_MOD IGNORANDO cobertura: último recurso
+  const barre=(r0,r1,paso,arco,prorroga)=>{
+    for(let r=r0;r<=r1;r+=paso){
+      const pasos=Math.max(24,Math.round(2*Math.PI*r/arco));
+      for(let k=0;k<pasos;k++){
+        const a=2*Math.PI*k/pasos, x=x0+r*Math.cos(a), y=y0+r*Math.sin(a);
+        const h=holgura(x,y,r);
+        if(h<guarda&&h<=mejorH) continue;                       // la cobertura solo se mira si el punto interesa
+        if(h>=guarda&&!sinCob) sinCob=[x,y,h];
         if(!cubre(x,y)) continue;
-        if(h>=CLEAR_OBJ && !o.soloGuarda){
-          const desvia = o.ejeCorte==="EW" ? Math.abs(x-x0)>tolCorte
-                       : o.ejeCorte==="NS" ? Math.abs(y-y0)>tolCorte : false;
-          if(!desvia){ n.x=x; n.y=y; n.holgura=+h.toFixed(2); return; }
-        }
-        if(!minimo&&h>=CLEAR_MOD){ minimo=[x,y,h]; if(o.soloGuarda)break; }
+        const ok=enCorte(x,y);
+        if(h>=calle && !o.soloGuarda && ok){ objetivo=[x,y,h]; return; }
+        if(h>=guarda){ if(ok){ if(!minC){minC=[x,y,h]; rMin=Math.min(rMin,r);} } else if(!minL){minL=[x,y,h]; rMin=Math.min(rMin,r);} }
         if(h>mejorH){ mejorH=h; mejor=[x,y,h]; }
       }
+      if(o.soloGuarda&&(minC||minL)) return;                       // manual: mínimo desplazamiento y ya
+      if(prorroga&&r>rMin+calle+guarda) return;             // prórroga: tras el primer legal, un vistazo más por si el centro de la calle está justo detrás
     }
-    if(minimo&&o.soloGuarda)break;
-  }
+  };
+  barre(0.5,BARRIDO_FINO,0.5,0.6,false);
+  // Prórroga en gruesa (paso 2, malla 1,8): solo si el fino no dio NI los 2 m — el caso Páramo. La
+  // malla de 2 m no pierde el objetivo: la banda con >=CLEAR_MOD de un camino de 12 m mide 8 m.
+  // En soloGuarda la prórroga hay que pedirla (opts.prorroga): la lleva la HSU —colocación
+  // automática, mejor a 60 m que encima de una mesa— pero no el clic ni el arrastre del usuario,
+  // que a esa distancia dejarían de parecerse a lo que la mano pidió (ahí avisa el panel).
+  if(!objetivo&&!minC&&!minL&&(!o.soloGuarda||o.prorroga)) barre(BARRIDO_FINO+2,BARRIDO_CALLE,2,1.8,true);
+  delete n._cx0; delete n._cy0;
+  if(objetivo){ n.x=objetivo[0]; n.y=objetivo[1]; n.holgura=+objetivo[2].toFixed(2); return; }
   // Sin calle a alcance: si el punto original ya cumplía la guarda dura, quedarse quieto vale más
   // que un desplazamiento lateral que no gana holgura.
-  if(h0>=CLEAR_MOD){ n.holgura=+h0.toFixed(2); return; }
+  if(h0>=guarda){ n.holgura=+h0.toFixed(2); return; }
+  const minimo=minC||minL;               // dentro del margen GW si lo hay; librar manda si no
   if(minimo){ n.x=minimo[0]; n.y=minimo[1]; n.holgura=+minimo[2].toFixed(2); return; }
   // Puede NO haber solución dentro del campo: si el pasillo entre mesas mide menos de 2*CLEAR_MOD
   // (El Burgo: 12 m de paso - 8,4 de mesa = 3,6 m de pasillo -> 1,8 m como mucho), los 2 m solo se
   // logran sacando la NCU fuera de la fila. Aquí se deja el mejor punto posible y se ANOTA la holgura
-  // real en n.holgura, y el panel avisa (ámbar si <2 m, rojo si queda encima de una mesa) en vez de
-  // fingir que se cumple.
-  if(mejor){ n.x=mejor[0]; n.y=mejor[1]; n.holgura=+mejorH.toFixed(2); }
+  // real en n.holgura, y el panel avisa (ámbar si <2 m) en vez de fingir que se cumple.
+  if(mejor&&mejorH>=0){ n.x=mejor[0]; n.y=mejor[1]; n.holgura=+mejorH.toFixed(2); return; }
+  // ENCIMA de una mesa es INADMISIBLE, sin excepciones: ahí no se puede montar nada. Antes de
+  // aceptar un punto dentro de una mesa se sacrifica la cobertura, que al menos tiene arreglo
+  // (repetidor, otra NCU) y el panel la canta; lo imposible físico no lo tiene.
+  const salida=sinCob||mejor;   // aquí mejor, si existe, está DENTRO de una mesa (mejorH<0)
+  if(salida){ n.x=salida[0]; n.y=salida[1]; n.holgura=+salida[2].toFixed(2); }
   else n.holgura=+h0.toFixed(2);
 }
 function placeCut(n,gwAxis,radius,capGW,motors){
@@ -556,7 +607,7 @@ function placeCut(n,gwAxis,radius,capGW,motors){
   let cx=0,cy=0; for(const i of arr){cx+=motors[i].x;cy+=motors[i].y;} cx/=arr.length; cy/=arr.length;
   for(let it=0;it<30;it++){ let far=-1,fd=-1; for(const i of arr){const dx=motors[i].x-cx,dy=motors[i].y-cy,d=dx*dx+dy*dy; if(d>fd){fd=d;far=i;}} if(fd<=R2) break; const st=1/(it+2); cx+=(motors[far].x-cx)*st; cy+=(motors[far].y-cy)*st; }
   n.x=cx; n.y=cy;
-  if(arr.length<=capGW){ separaDeModulos(n,motors,arr,S.p,radius); return; }   // sin reparto GW: libre de buscar la calle
+  if(arr.length<=capGW){ separaDeModulos(n,motors,arr,S.p,radius,{guarda:S.p.clearNCU}); return; }   // sin reparto GW: libre de buscar la calle
   // 2) deslizar la frontera hacia la mediana del eje de corte sin romper cobertura
   const vals=arr.map(i=> gwAxis==="NS"?motors[i].y:motors[i].x).sort((a,b)=>a-b);
   const med=vals[Math.floor(vals.length/2)];
@@ -564,7 +615,12 @@ function placeCut(n,gwAxis,radius,capGW,motors){
   const fits=(coord)=>{ const X=gwAxis==="NS"?cx:coord, Y=gwAxis==="NS"?coord:cy; for(const i of arr){const dx=motors[i].x-X,dy=motors[i].y-Y; if(dx*dx+dy*dy>R2) return false;} return true; };
   let chosen=base; for(let k=12;k>=0;k--){ const coord=base+(k/12)*(med-base); if(fits(coord)){ chosen=coord; break; } }
   if(gwAxis==="NS"){ n.y=chosen; } else { n.x=chosen; }
-  separaDeModulos(n,motors,arr,S.p,radius,{ejeCorte:gwAxis});   // último paso: librar las mesas sin descolocar la frontera GW
+  /* Último paso: librar las mesas sin desbordar ningún gateway. El margen del corte no es un número
+     fijo: la frontera puede deslizar mientras deje <=capGW a cada lado, o sea entre el motor
+     (count-capGW)-ésimo y el capGW-ésimo del eje ordenado. Con 120 TCU y capGW 80 eso son décadas de
+     metros de holgura real — lo que permite alcanzar el camino en Páramo sin romper el reparto. */
+  const lo=vals[arr.length-capGW-1]+0.01, hi=vals[capGW]-0.01;
+  separaDeModulos(n,motors,arr,S.p,radius,{ejeCorte:gwAxis, corteLo:Math.min(lo,hi), corteHi:Math.max(lo,hi), guarda:S.p.clearNCU});
 }
 /* Fusiona NCUs pequeñas SOLO en una vecina del mismo PB con la que haya enlace real. */
 // Consolidación aglomerativa: fusiona NCUs vecinas (mismo PB, conectadas por la malla)
@@ -854,7 +910,7 @@ function placeNCUat(wx,wy){
   if(S.preset||!S.motors.length) return;
   let pb=null,bd=Infinity; for(const m of S.motors){const dx=m.x-wx,dy=m.y-wy,d=dx*dx+dy*dy; if(d<bd){bd=d;pb=m.pb||null;}}
   const n={id:nextNcuId(S.ncus), x:wx, y:wy, pb, manual:true, motorIdx:[], gw:[[],[]], count:0};
-  separaDeModulos(n,S.motors,[],S.p,S.p.radius,{soloGuarda:true});   // el clic puede caer sobre una mesa: se saca al punto legal más cercano
+  separaDeModulos(n,S.motors,[],S.p,S.p.radius,{soloGuarda:true,guarda:S.p.clearNCU});   // el clic puede caer sobre una mesa: se saca al punto legal más cercano
   S.ncus.push(n);
   reassignToNearest(S.motors,S.ncus,S.ncus._adj,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis);
   applyNumbering(); S.sel=n.id; S.placeMode=false; cv.style.cursor="";
@@ -875,7 +931,7 @@ function addNCU(){
   const cxw=(W/2-S.T.ox)/S.T.scale, cyw=(S.T.oy-H/2)/S.T.scale;
   let pb=null,bd=Infinity; for(const m of S.motors){const dx=m.x-cxw,dy=m.y-cyw,d=dx*dx+dy*dy; if(d<bd){bd=d;pb=m.pb||null;}}
   const n={id:nextNcuId(S.ncus), x:cxw, y:cyw, pb, manual:true, motorIdx:[], gw:[[],[]], count:0};
-  separaDeModulos(n,S.motors,[],S.p,S.p.radius,{soloGuarda:true});   // el centro de pantalla puede caer sobre una mesa
+  separaDeModulos(n,S.motors,[],S.p,S.p.radius,{soloGuarda:true,guarda:S.p.clearNCU});   // el centro de pantalla puede caer sobre una mesa
   S.ncus.push(n);
   reassignToNearest(S.motors,S.ncus,S.ncus._adj,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis);
   S.sel=n.id; assignColors(); updatePanel(); draw();
@@ -1015,8 +1071,10 @@ function placeRSUs(motors,hull,ncus,N,radius){
     let dx=1,dy=0; if(near){ dx=tcu.x-near.x; dy=tcu.y-near.y; const dl=Math.hypot(dx,dy)||1; dx/=dl; dy/=dl; }
     const pos={x:tcu.x+dx*HSU_OFFSET, y:tcu.y+dy*HSU_OFFSET};
     // los 7 m fijos se miden desde el CENTRO del seguidor: con mesas anchas o la dirección hacia la
-    // fila de al lado, la HSU caía sobre una mesa. Misma guarda que la NCU, corrección mínima.
-    separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true});
+    // fila de al lado, la HSU caía sobre una mesa. Misma guarda que la NCU, corrección mínima —
+    // pero CON prórroga: es colocación automática, y si el campo cercano es un bloque macizo
+    // (Páramo con las cotas del panel) mejor una HSU a 60 m que encima de un tracker.
+    separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearHSU});
     rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:near?near.id:null});
   }
   return rsus;
@@ -1527,6 +1585,9 @@ function readParams(){
   S.p.nrsu=Math.max(0,+document.getElementById("nrsu").value||0);
   S.p.tlen=Math.max(1,+document.getElementById("tlen").value||64);
   S.p.twid=Math.max(0.5,+document.getElementById("twid").value||4);
+  // guarda configurable por equipo; el 0 es un valor VÁLIDO (guarda desactivada), así que nada de `||`
+  const _guarda=(id)=>{ const el=document.getElementById(id), v=el?parseFloat(el.value):NaN; return (isFinite(v)&&v>=0)?v:CLEAR_MOD; };
+  S.p.clearNCU=_guarda("clearNCU"); S.p.clearHSU=_guarda("clearHSU");
 }
 function recompute(refit){
   readParams();
@@ -1577,8 +1638,31 @@ function updatePanel(){
   let _justas=0;
   S.ncus.forEach(n=>{ const h=_holg(n);
     if(h<0) errs.push(`${n.id} encima de una mesa`);
-    else if(h<CLEAR_MOD) _justas++;
+    else if(h<(S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD)) _justas++;
   });
+  (S.rsus||[]).forEach(r=>{ if(_holg(r)<0) errs.push(`${r.id} encima de una mesa`); });   // la HSU tampoco: es igual de inmontable
+  /* MESAS SOLAPADAS: cuando los TCU no traen cotas propias, la mesa sale de Parámetros — y si esas
+     cotas no caben en el paso real de la planta, el modelo deja de tener sentido: en Páramo (filas a
+     ~60 m, paso 7 m) el largo por defecto de 64 funde las filas en un bloque macizo con pasillos de
+     3 m, y la guarda "no encuentra sitio" en una planta llena de calles. Eso no es un error del
+     reparto sino de las COTAS, y hay que decirlo. Se detecta por esquinas: una esquina de la mesa de
+     un seguidor dentro de la mesa de su vecino más próximo (muestreo, no hace falta el censo). */
+  let _solape=false;
+  if(S.motors.length>1 && !S.motors.some(m=>m.len!=null||m.wid!=null)){
+    const L=S.p.tlen,W=S.p.twid,diag2=L*L+W*W;   // dos mesas solo pueden tocarse a menos de una diagonal
+    const paso=Math.max(1,Math.ceil(S.motors.length/60));
+    for(let i=0;i<S.motors.length&&!_solape;i+=paso){
+      const a=S.motors[i];
+      for(let j=0;j<S.motors.length&&!_solape;j++){
+        if(j===i)continue; const b=S.motors[j];
+        if(dist2(a,b)>diag2)continue;   // OJO: el solapado NO es el vecino más próximo (misma fila, a 7 m en Páramo) sino la fila de al lado (a 60)
+        const az=((b.az||0))*Math.PI/180;
+        const lx=Math.sin(az),ly=Math.cos(az),wx=Math.cos(az),wy=-Math.sin(az);
+        for(const q of [[-W/2,-L/2],[W/2,-L/2],[W/2,L/2],[-W/2,L/2]])
+          if(dModulo(b.x+q[0]*wx+q[1]*lx, b.y+q[0]*wy+q[1]*ly, a, S.p)<-0.05){ _solape=true; break; }
+      }
+    }
+  }
   S.ncus.forEach(n=>{ if(n.count>S.p.capNCU)errs.push(`${n.id} sobre capacidad`); if(n.gw[0].length>S.p.capGW||n.gw[1].length>S.p.capGW)errs.push(`${n.id} GW sobre límite`); if(!ncuConnected(n,_adj))errs.push(`${n.id} salta un claro (malla rota)`); const _out=n.motorIdx.filter(i=>{const q=tcuPt(S.motors[i]);return Math.hypot(q.x-n.x,q.y-n.y)>S.p.radius && !(S.reps||[]).some(rp=>Math.hypot(q.x-rp.x,q.y-rp.y)<=S.p.radius);}).length; if(_out)errs.push(`${n.id}: ${_out} TCU sin cobertura`); });
   const _orphan=S.motors.filter(m=>m.ncu==null).length; if(_orphan)errs.push(`${_orphan} TCU sin NCU (fuera de cobertura)`);
   const _empty=S.ncus.filter(n=>n.count===0).length; if(_empty)errs.push(`${_empty} NCU vacía(s)`);
@@ -1590,7 +1674,8 @@ function updatePanel(){
     let cls="ok",ic="✓";
     if(adj){ msg+=` ${adj} HSU reubicada(s) al borde con cobertura.`; }
     if(atCap){ msg+=` ${atCap} NCU al límite de capacidad.`; cls="warn";ic="◐"; }
-    if(_justas && !S.preset && !S.fromAyora){ msg+=` ${_justas} NCU a menos de ${CLEAR_MOD} m de una mesa (el pasillo no da más).`; cls="warn";ic="◐"; }
+    if(_justas && !S.preset && !S.fromAyora){ msg+=` ${_justas} NCU a menos de ${S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD} m de una mesa (el pasillo no da más).`; cls="warn";ic="◐"; }
+    if(_solape){ msg+=` Las cotas de mesa de Parámetros (${S.p.tlen}×${S.p.twid} m) no caben en el paso real: mesas solapadas — ajusta Largo/Ancho mesa.`; cls="warn";ic="◐"; }
     w.innerHTML=warnHtml(cls,ic,msg);
   }
   // lista NCU
@@ -1942,7 +2027,7 @@ cv.addEventListener("pointerup",e=>{
   if(pinch){ if(ptrs.size<2)pinch=null; drag=null; return; }
   if(drag&&drag.mode==="rect"){ handleRect(drag); drag=null; draw(); return; }
   if(drag&&drag.mode==="ncu"&&drag.moved){ const _mv=drag.ncu;
-    separaDeModulos(_mv,S.motors,[],S.p,S.p.radius,{soloGuarda:true});   // si se suelta sobre una mesa, se libra al punto legal más cercano; donde ya libra, se respeta la mano
+    separaDeModulos(_mv,S.motors,[],S.p,S.p.radius,{soloGuarda:true,guarda:S.p.clearNCU});   // si se suelta sobre una mesa, se libra al punto legal más cercano; donde ya libra, se respeta la mano
     reassignToNearest(S.motors,S.ncus,S.ncus._adj,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis); applyNumbering(); S.sel=_mv.id; assignColors(); updatePanel(); }
   else if(drag&&drag.mode==="pan"&&!drag.moved){ S.sel=null; updatePanel(); }
   drag=null; draw();
@@ -2088,7 +2173,7 @@ function autoSite(desdeCero){
        ciego a las mesas del resto de la planta, y una NCU nueva puede haber caído justo encima de
        una mesa YA CUBIERTA. Se re-libran contra la planta entera, sin sacar del radio a su grupo. */
     S.ncus.forEach(n=>{ if(!n._nueva)return; delete n._nueva;
-      separaDeModulos(n,S.motors,n.motorIdx,S.p,S.p.radius);
+      separaDeModulos(n,S.motors,n.motorIdx,S.p,S.p.radius,{guarda:S.p.clearNCU});
       if(n.count>0){ splitGW(S.motors,n,S.p.capGW,S.p.gwAxis); n.gw.forEach((arr,g)=>arr.forEach(i=>S.motors[i].gw=g+1)); } });
   }
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
@@ -2097,7 +2182,7 @@ function autoSite(desdeCero){
   const msg=document.getElementById("msg-auto");
   if(msg)msg.textContent="Conservadas "+previas.length+" NCU del plano · "+anadidas+" añadidas"+(sin?" · "+sin+" TCU sin cubrir":"");
 }
-["radius","capNCU","capGW","nrsu","reachX","reachY"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
+["radius","capNCU","capGW","nrsu","reachX","reachY","clearNCU","clearHSU"].forEach(id=>{ const el=document.getElementById(id); if(!el)return; ["input","change"].forEach(ev=>el.addEventListener(ev,()=>recompute(false))); });
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
 document.getElementById("rsu-use").onclick=()=>{ document.getElementById("nrsu").value=document.getElementById("rsu-sug").textContent; recompute(false); };
@@ -2110,7 +2195,7 @@ document.getElementById("rsu-use").onclick=()=>{ document.getElementById("nrsu")
  ["tlen","twid"].forEach(id=>{ const el=document.getElementById(id); if(el)["input","change"].forEach(ev=>el.addEventListener(ev,()=>{ readParams();
    if(!S.preset && !S.fromAyora){
      S.ncus.forEach(n=>{ const px=n.x,py=n.y;
-       separaDeModulos(n,S.motors,n.motorIdx,S.p,S.p.radius, n.manual?{soloGuarda:true}:(n.gw&&n.gw[1]&&n.gw[1].length?{ejeCorte:S.p.gwAxis}:undefined));
+       separaDeModulos(n,S.motors,n.motorIdx,S.p,S.p.radius, n.manual?{soloGuarda:true,guarda:S.p.clearNCU}:(n.gw&&n.gw[1]&&n.gw[1].length?{ejeCorte:S.p.gwAxis,guarda:S.p.clearNCU}:{guarda:S.p.clearNCU}));
        if(n.x!==px||n.y!==py) recomputeGW(n); });
    }
    updatePanel(); draw(); })); });
