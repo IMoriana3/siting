@@ -10,6 +10,7 @@ Sirve para tres cosas: (1) **siting automático** de un layout nuevo desde CSV/E
 ## Funcionalidades
 - Lienzo Canvas 2D con pan/zoom: reparto de NCU coloreado, radios de cobertura, power blocks, rejilla y **mesas a tamaño real**.
 - Modelo: NCU ≤ **160 TCU** (2 GW de 80), **radio 250 m** directo NCU↔TCU, HSU en el borde, repetidores y **sin mezclar power blocks**.
+- Las NCU y HSU **no se plantan sobre las mesas**: guarda dura de 2 m a todo seguidor y, en el siting automático, preferencia por el pasillo ancho o la calle (≥6 m, como en los proyectos reales). Vale para el cálculo, el clic manual, el arrastre y el autositing conservador; si el pasillo no da los 2 m, el panel lo avisa (ámbar <2 m, rojo encima de una mesa).
 - Presets reales (solo lectura): Ayora 24025, Páramo 25019, San José 24019, El Burgo I 23003. Siting automático: 26127 FUV I / FUV II.
 - Regla de medición, detalle de NCU (árbol de líneas a cada TCU) y panel de avisos (verde / ámbar / rojo).
 - Exporta **PNG**, **CSV de asignación** y **CSV de equipos** en coordenadas UTM para replanteo.
