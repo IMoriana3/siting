@@ -1338,21 +1338,20 @@ function placeRSUs(motors,hull,ncus,N,radius){
     }
     return d;
   };
-  const nota=(c,k,th,zmin,zmax)=>{
+  let zminG=Infinity,zmaxG=-Infinity;   // cotas de la bolsa global (las rellena la selección)
+  const nota=(c)=>{
     const arco=c.arco/270;
     const local=(c.arcoL!=null?c.arcoL:c.arco)/270;
     const enlace=c.dNcu<=radius ? 0.25*(1-c.dNcu/radius) : -3;
-    const cota=(conZ&&zmax>zmin&&c.z!=null)?( (c.z-zmin)/(zmax-zmin) ):0;
-    const desvio=1-Math.abs(norm(Math.atan2(c.y-cy,c.x-cx)-th))/(Math.PI/N);
+    const cota=(conZ&&zmaxG>zminG&&c.z!=null)?( (c.z-zminG)/(zmaxG-zminG) ):0;
     const borde=1-Math.min(dHull(c.x,c.y),200)/200;
-    /* DIVERSIDAD DE ORIENTACIÓN: dos estaciones en el mismo flanco recto miran al mismo viento
-       (bisectrices de cielo a <45°) — cazado en San José: tres HSU apiladas en el borde oeste
-       mientras la punta NO quedaba sin dato. Repetir orientación a menos del DOBLE de la
-       separación mínima penaliza fuerte (pero no veta: un flanco larguísimo puede necesitar dos). */
-    const repite=rsus.some(r=>r._rumbo!=null&&c.rumbo!=null
-      &&Math.abs(norm(r._rumbo-c.rumbo))<Math.PI/4&&Math.hypot(r.x-c.x,r.y-c.y)<2*minSep)?1:0;
-    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + 1.5*borde + enlace + cota + 0.25*desvio - 1.2*repite;
+    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + 1.5*borde + enlace + cota;
   };
+  /* DIVERSIDAD DE ORIENTACIÓN: dos estaciones en el mismo flanco miran al mismo viento
+     (bisectrices de cielo a <45°) — cazado en San José: cuatro HSU apiladas en la diagonal NE.
+     Repetir orientación a menos del DOBLE de la separación mínima resta 1,2 ENTRE ELEGIDAS. */
+  const repite=(c)=>rsus.some(r=>r._rumbo!=null&&c.rumbo!=null
+    &&Math.abs(norm(r._rumbo-c.rumbo))<Math.PI/4&&Math.hypot(r.x-c.x,r.y-c.y)<2*minSep)?1:0;
   const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
   /* SEPARACIÓN MÍNIMA entre estaciones: en una planta diagonal o cóncava dos sectores angulares
      contiguos pueden colapsar en el mismo tramo de borde (medido: dos HSU a ~130 m en el flanco
@@ -1364,109 +1363,142 @@ function placeRSUs(motors,hull,ncus,N,radius){
   const lejos=(c)=>rsus.every(r=>Math.hypot(r.x-c.x,r.y-c.y)>=minSep);
   // rumbo y alcance radial de cada motor, una vez
   const pol=motors.map(m=>({m,th:Math.atan2(m.y-cy,m.x-cx),r:Math.hypot(m.x-cx,m.y-cy)}));
+  const nVec=(m)=>{ let c=0; const ci=Math.floor(m.x/CEL), cj=Math.floor(m.y/CEL), k=Math.ceil(90/CEL);
+    for(let i=ci-k;i<=ci+k;i++)for(let j=cj-k;j<=cj+k;j++){ const arr=grid.get(i+","+j); if(!arr)continue;
+      for(const q of arr){ const dx=q.x-m.x,dy=q.y-m.y; if(dx*dx+dy*dy<=8100)c++; } } return c; };
+  /* SELECCIÓN GLOBAL, no un-sector-una-estación. El reparto por sectores tenía un límite
+     estructural cazado en San José: en un flanco diagonal largo, varios sectores angulares solo
+     tienen candidatos de ESA orientación — la penalización por repetir restaba a todos por igual
+     y el resultado no cambiaba (cuatro HSU apiladas mirando al mismo viento). Ahora:
+       1. BOLSA GLOBAL del contorno: por cada rumbo de 5° (72 husos), el seguidor más radial y el
+          de mayor esquinidad entre los radiales del huso (~<=144 anclas) + las NCUs de borde
+          franco (ambos arcos >=120°).
+       2. Cada ancla se evalúa UNA vez: arcos, empuje a la bisectriz, contorno, enlace, cota.
+       3. ELECCIÓN GOLOSA de las N mejores: la cobertura sectorial es un BONO (+0,9 si el sector
+          angular aún no tiene estación: rodear la planta sigue garantizado mientras haya flancos
+          sin dato), la orientación repetida y cercana RESTA (−1,2), el patio interior (arco
+          lejano <120°) queda de repliegue (−2,5: solo si no hay nada sano a distancia), y la
+          separación mínima se exige — con relajación explícita si un flanco no da más de sí. */
+  const bolsaG=[];
+  {
+    const BINS=96, porBin=new Map();
+    for(const p of pol){
+      const b=((Math.floor(((p.th-fase)/(2*Math.PI))*BINS)%BINS)+BINS)%BINS;
+      let a=porBin.get(b); if(!a){a=[];porBin.set(b,a);} a.push(p);
+    }
+    const vistosG=new Set();
+    for(const arr of porBin.values()){
+      arr.sort((a,b)=>b.r-a.r);
+      const sub=arr.slice(0,6);
+      let esq=null,en=Infinity;
+      for(const p of sub){ const v=nVec(p.m); if(v<en){en=v;esq=p;} }
+      for(const p of [arr[0],arr[1],esq]) if(p&&!vistosG.has(p.m.id)){ vistosG.add(p.m.id); bolsaG.push(p); }
+    }
+  }
+  const cands=[];
+  for(const n of ncus){ if(usadas.has(n.id))continue;
+    const cl=cieloDe(n); if(cl.arco<CIELO_ARCO)continue;
+    const lo=cieloDe(n,CIELO_LOCAL); if(lo.arco<CIELO_ARCO)continue;   // despejada también DE CERCA
+    cands.push({x:n.x,y:n.y,poste:n,arco:cl.arco,arcoL:lo.arco,rumbo:lo.rumbo,dNcu:0,z:null,th:Math.atan2(n.y-cy,n.x-cx)});
+  }
+  for(const p of bolsaG){
+    // Los arcos se miden EN LA POSICIÓN DE LA ESTACIÓN, no en el motor: sobre el motor la propia
+    // mesa parte el cielo en dos mitades (~170° como mucho para todo el mundo — esquina y fila
+    // puntuaban igual, cazado con el banco). Rumbo preliminar en el motor para saber hacia dónde
+    // empujar, y arcos definitivos en el punto desplazado — como están las 41 reales (13-58 m de
+    // la viga).
+    const loc0=cieloDe(p.m,CIELO_LOCAL);
+    const pos={x:p.m.x+Math.cos(loc0.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(loc0.rumbo)*HSU_OFFSET};
+    const cl=cieloDe(pos), loc=cieloDe(pos,CIELO_LOCAL);
+    const e=dNcuDe(pos);
+    // repliegue = no vale como primera opción: arco lejano corto (patio, pasillo), punto interior
+    // de planta (a >150 m del hull — el estrecho entre lóbulos da arco pero no es exterior), o
+    // SIN ENLACE (a más del radio de su NCU: el dato meteo tiene que llegar; el -3 del enlace no
+    // bastaba contra el bono angular y una punta remota se quedaba muda, cazado en FUV I)
+    const c={x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,rumbo:loc.rumbo,dNcu:e.d,
+             z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id,th:p.th,
+             repliegue:cl.arco<CIELO_ARCO||dHull(pos.x,pos.y)>150||e.d>radius};
+    cands.push(c);
+    if(c.z!=null){ if(c.z<zminG)zminG=c.z; if(c.z>zmaxG)zmaxG=c.z; }
+  }
   for(let k=0;k<N;k++){
-    const th=fase+k*2*Math.PI/N;
-    /* candidatos del sector: NCUs de borde franco + los seguidores más exteriores. En una planta
-       DIAGONAL o CÓNCAVA hay sectores angulares vacíos (ningún rumbo cae ahí): el flanco no se
-       queda sin estación — el sector se ENSANCHA hasta encontrar candidatos, sin repetir anclas. */
-    const cands=[];
-    const lejosM=(m)=>rsus.every(r=>Math.hypot(r.x-m.x,r.y-m.y)>=minSep);
-    const nVec=(m)=>{ let c=0; const ci=Math.floor(m.x/CEL), cj=Math.floor(m.y/CEL), k=Math.ceil(90/CEL);
-      for(let i=ci-k;i<=ci+k;i++)for(let j=cj-k;j<=cj+k;j++){ const arr=grid.get(i+","+j); if(!arr)continue;
-        for(const q of arr){ const dx=q.x-m.x,dy=q.y-m.y; if(dx*dx+dy*dy<=8100)c++; } } return c; };
-    const recoge=(ancho,sinSep)=>{
-      for(const n of ncus){ if(usadas.has(n.id))continue;
-        if(Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th))>ancho)continue;
-        const cl=cieloDe(n); if(cl.arco<CIELO_ARCO)continue;
-        // el poste también tiene que estar despejado DE CERCA: una NCU con un pasillo abierto a lo
-        // lejos pero filas pegadas alrededor no es sitio para el anemómetro
-        const lo=cieloDe(n,CIELO_LOCAL); if(lo.arco<CIELO_ARCO)continue;
-        cands.push({x:n.x,y:n.y,poste:n,arco:cl.arco,arcoL:lo.arco,rumbo:lo.rumbo,dNcu:0,z:null});
+    /* UNA ESTACIÓN POR SECTOR ANGULAR (rodear es requisito meteorológico: viento y nubes entran
+       por cualquier lado), elegida de la BOLSA GLOBAL con la nota completa. La causa raíz del
+       apilamiento de San José no era el sector: era la nota PLANA (arcos medidos sobre el motor,
+       donde la propia mesa parte el cielo: esquina = fila = 0,78 para todo). Con los arcos en la
+       posición real de la estación, cada sector elige su mejor punto de verdad — y la penalización
+       por repetir orientación desempata hacia esquinas y cambios de rumbo entre sectores vecinos.
+       El sector se ensancha si está vacío o todo lo suyo cae pegado a otra estación; el último
+       recurso es el punto MENOS apretado (max-min distancia) que no sea repliegue — apretada sí,
+       muda o en el patio no. */
+    const thk=fase+k*2*Math.PI/N;
+    let mejor=null,ancho=Math.PI/N;
+    while(true){
+      let mb=-Infinity; mejor=null;
+      for(const c of cands){
+        if(c._usado||c.repliegue)continue;                      // el repliegue es el último escalón, no compite aquí
+        if(c.poste&&usadas.has(c.poste.id))continue;
+        if(Math.abs(norm(c.th-thk))>ancho)continue;
+        if(!lejos(c))continue;
+        const v=nota(c)-1.6*repite(c);
+        if(S._dbgHsu){ (S._dbg=S._dbg||[]).push({k,anc:c.ancla||(c.poste&&c.poste.id),x:Math.round(c.x),y:Math.round(c.y),v:+v.toFixed(2),n:+nota(c).toFixed(2),rep:repite(c)}); }
+        if(v>mb){mb=v;mejor=c;}
       }
-      // el filtro de separación va ANTES del top-14 por alcance radial: si no, al ensanchar el
-      // sector el top-14 devuelve siempre las mismas esquinas extremas ya ocupadas (cazado en
-      // Ayora: dos estaciones a 108 m con paso ideal de 400)
-      const elegibles=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho&&(sinSep||lejosM(p.m)));
-      // dos bolsas de anclas: las más RADIALES y las más ESQUINA (menos vecinos a 90 m). El top
-      // radial solo trae la mitad de la verdad: en un borde recto el punto más radial es un punto
-      // de fila cualquiera, y la ESQUINA convexa —donde el anemómetro tiene el ángulo limpio— se
-      // queda fuera de la bolsa (cazado en planta real: HSU a media fila con la esquina a 60 m,
-      // y otra en el pasillo entre dos masas en vez del contorno). La esquinidad se mide barata:
-      // vecinos dentro de 90 m con la rejilla de cielo.
-      const porR=elegibles.slice().sort((a,b)=>b.r-a.r).slice(0,14);
-      const porEsq=elegibles.slice().sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,14);
-      const vistos=new Set(), delSector=[];
-      for(const p of porR.concat(porEsq)){ if(vistos.has(p.m.id))continue; vistos.add(p.m.id); delSector.push(p); }
-      let repliegue=null,rArco=-1;
-      for(const p of delSector){
-        const cl=cieloDe(p.m), loc=cieloDe(p.m,CIELO_LOCAL);
-        // el empuje de 7 m va hacia la BISECTRIZ del abanico local: al lado abierto del contorno,
-        // no "lejos del centroide" (que en un apéndice puede apuntar a lo largo de la fila)
-        const pos={x:p.m.x+Math.cos(loc.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(loc.rumbo)*HSU_OFFSET};
-        const e=dNcuDe(pos);
-        const c={x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,rumbo:loc.rumbo,dNcu:e.d,z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id};
-        if(cl.arco>rArco){rArco=cl.arco;repliegue=c;}            // el menos malo, por si nadie luce
-        // el arco lejano es REQUISITO, no solo puntuación: un patio interior de la planta da
-        // arco local decente (y pocos vecinos: parece esquina) pero está rodeado de seguidores
-        // mirando a 250 m — cazado en planta real, HSU plantada en el patio entre cuatro bloques
-        if(cl.arco<CIELO_ARCO)continue;
-        cands.push(c);
+      if(mejor||ancho>=Math.PI)break;
+      ancho*=2;
+    }
+    if(mejor&&repite(mejor)){
+      /* EL SECTOR CEDE: si su mejor punto repite orientación con una estación ya puesta (todo un
+         flanco diagonal cae en varias cuñas y las llenaría de anemómetros mirando al mismo
+         viento — cazado en San José), y en la bolsa global hay un candidato sano, a distancia y
+         con orientación NUEVA de nota comparable (hasta medio punto menos), se lo lleva él: la
+         punta o la esquina sin dato valen más que el tercer clon del flanco. Si no existe, el
+         sector se queda su repetido — mejor eso que un hueco. */
+      let alt=null,ab=-Infinity;
+      for(const c of cands){
+        if(c._usado||c.repliegue)continue;
+        if(c.poste&&usadas.has(c.poste.id))continue;
+        if(!lejos(c)||repite(c))continue;
+        const v=nota(c);
+        if(v>ab){ab=v;alt=c;}
       }
-      if(!cands.length&&repliegue)cands.push(repliegue);         // un flanco con mala exposición sigue necesitando su dato meteo
-    };
-    let ancho=Math.PI/N;
-    recoge(ancho);
-    // el sector se ENSANCHA no solo si está vacío: también si todo lo suyo cae a menos de minSep
-    // de una estación ya puesta (planta estrecha: el sector angular cubre un tramo corto de borde
-    // y colapsaría sobre la anterior) — se busca más lejos antes de aceptar dos anemómetros juntos
-    while(cands.every(c=>!lejos(c))&&ancho<Math.PI){ ancho*=2; recoge(ancho); }
-    if(!cands.length) recoge(Math.PI,true);      // de verdad no hay sitio a distancia: mejor apretada que faltar
-    if(!cands.length)continue;
-    let zmin=Infinity,zmax=-Infinity;
-    for(const c of cands)if(c.z!=null){if(c.z<zmin)zmin=c.z;if(c.z>zmax)zmax=c.z;}
-    let mejor=null,mb=-Infinity;
-    for(const c of cands){ if(!lejos(c))continue; const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
-    if(!mejor) for(const c of cands){ const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
-    if(!mejor.poste&&mejor.ancla!=null){
-      /* AFINADO LOCAL: la esquina buena puede caer en el SECTOR ANGULAR de al lado, o la bolsa del
-         sector (14 + esquinidad) no la vio. Desde el ancla elegida se miran los vecinos de
-         contorno a <=150 m cruzando sectores — la bolsa une los 16 de mayor esquinidad con los 8
-         más CERCANOS (la esquinidad sola vuelve a favorecer entrantes: un escalón entre bloques
-         también tiene pocos vecinos) — y cada uno se puntúa con la MISMA nota del sector (arcos,
-         contorno global, enlace, cota): si alguno gana con claridad, el ancla se desliza allí.
-         Cazado en planta real: HSU en el escalón entre dos bloques con el borde recto limpio a
-         100 m, y otra en la punta oeste con la esquina SO a 50. */
-      const am=motors.find(mm=>mm.id===mejor.ancla);
-      if(am){
-        const todos=pol.filter(p=>!anclas.has(p.m.id)&&p.m.id!==mejor.ancla&&Math.hypot(p.m.x-am.x,p.m.y-am.y)<=150);
-        const porEsq2=todos.slice().sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,16);
-        const porDist=todos.slice().sort((a,b)=>Math.hypot(a.m.x-am.x,a.m.y-am.y)-Math.hypot(b.m.x-am.x,b.m.y-am.y)).slice(0,8);
-        const vistos2=new Set(), bolsa=[];
-        for(const p of porEsq2.concat(porDist)){ if(vistos2.has(p.m.id))continue; vistos2.add(p.m.id); bolsa.push(p); }
-        let vMejor=nota(mejor,k,th,zmin,zmax), sl=null;
-        for(const p of bolsa){
-          const cl2=cieloDe(p.m), lo2=cieloDe(p.m,CIELO_LOCAL);
-          if(cl2.arco<CIELO_ARCO)continue;
-          const pos2={x:p.m.x+Math.cos(lo2.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(lo2.rumbo)*HSU_OFFSET};
-          if(!lejos({x:pos2.x,y:pos2.y}))continue;
-          const e2=dNcuDe(pos2);
-          const c2={x:pos2.x,y:pos2.y,poste:null,arco:cl2.arco,arcoL:lo2.arco,rumbo:lo2.rumbo,dNcu:e2.d,z:(p.m.z!=null?p.m.z:null),ncu:e2.ncu,ancla:p.m.id};
-          const v2=nota(c2,k,th,zmin,zmax);
-          if(v2>vMejor+0.15){ vMejor=v2; sl=c2; }
-        }
-        if(sl)mejor=sl;
+      if(alt&&ab>=nota(mejor)-0.5) mejor=alt;
+    }
+    if(!mejor){
+      // agotamiento: el punto SANO menos apretado (max-min distancia) — no el de mejor nota, que
+      // dejaba un par a 78 m en Ayora — antes que cualquier repliegue: apretada sí, en el patio no
+      let rd=-1,relaj=null;
+      for(const c of cands){
+        if(c._usado||c.repliegue)continue;
+        if(c.poste&&usadas.has(c.poste.id))continue;
+        let dmin=Infinity;
+        for(const r of rsus){ const e=Math.hypot(r.x-c.x,r.y-c.y); if(e<dmin)dmin=e; }
+        if(dmin>rd){rd=dmin;relaj=c;}
+      }
+      mejor=relaj;
+    }
+    if(!mejor){
+      // de verdad no queda nada sano: el mejor repliegue (patio, pasillo o sin enlace) con su nota
+      let mb2=-Infinity;
+      for(const c of cands){
+        if(c._usado)continue;
+        if(c.poste&&usadas.has(c.poste.id))continue;
+        const v=nota(c)-1.6*repite(c);
+        if(v>mb2){mb2=v;mejor=c;}
       }
     }
+    if(!mejor)break;
+    mejor._usado=true;
     if(mejor.poste){
       usadas.add(mejor.poste.id);
-      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:mejor.x,y:mejor.y,adjusted:false,ncu:mejor.poste.id,integrada:true,_rumbo:mejor.rumbo});
+      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:mejor.x,y:mejor.y,adjusted:false,ncu:mejor.poste.id,integrada:true,_rumbo:mejor.rumbo,_th:mejor.th});
     } else {
       if(mejor.ancla!=null)anclas.add(mejor.ancla);
       const pos={x:mejor.x,y:mejor.y};
       // guarda de mesas de siempre: corrección mínima con prórroga (colocación automática)
       separaDeModulos(pos,motors,[],S.p,radius,{soloGuarda:true,prorroga:true,guarda:S.p.clearHSU});
       const e=dNcuDe(pos);
-      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:e.ncu?e.ncu.id:null,_rumbo:mejor.rumbo});
+      rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:e.ncu?e.ncu.id:null,_rumbo:mejor.rumbo,_th:mejor.th});
     }
   }
   /* POST-PASE de FUSIÓN: una HSU suelta al lado de una NCU de borde franco es un poste

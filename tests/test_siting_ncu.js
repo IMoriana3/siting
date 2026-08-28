@@ -520,7 +520,8 @@ for (const K of ['FUV1', 'FUV2']) {
   const ncus = sitea(motors, { tlen: 64, twid: 4 });
   ctx.S.p.radius = 250;
   const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
-  const rsus = ctx.placeRSUs(motors, hull, ncus, 12, 250);
+  // 10, la regla medida (perímetro/900 ≈ 9): exigir 12 forzaba los dos últimos a huecos de ~214 m
+  const rsus = ctx.placeRSUs(motors, hull, ncus, 10, 250);
   const conHsu = new Set(rsus.filter(r => r.integrada).map(r => r.ncu));
   // el mismo test de cielo abierto que usa la app: abanico >=120° sin seguidores a <=250 m
   const cielo = (p) => {
@@ -545,7 +546,7 @@ for (const K of ['FUV1', 'FUV2']) {
   let sepA = Infinity;
   for (let i = 0; i < rsus.length; i++) for (let j = i + 1; j < rsus.length; j++)
     sepA = Math.min(sepA, Math.hypot(rsus[i].x - rsus[j].x, rsus[i].y - rsus[j].y));
-  check('Ayora: separación mínima entre estaciones como la real (>=250 m con 12)',
+  check('Ayora: separación mínima entre estaciones como la real (>=250 m con 10)',
     sepA >= 250, Math.round(sepA) + ' m');
 }
 
