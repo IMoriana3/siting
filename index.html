@@ -1400,13 +1400,24 @@ function placeRSUs(motors,hull,ncus,N,radius){
       rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:pos.x,y:pos.y,adjusted:false,ncu:e.ncu?e.ncu.id:null});
     }
   }
-  /* POST-PASE de FUSIÓN: una HSU suelta que ha quedado al lado de una NCU de borde franco es un
-     poste desperdiciado — se incorpora. Cazado en Ayora (32 m entre ambas). */
+  /* POST-PASE de FUSIÓN: una HSU suelta al lado de una NCU de borde franco es un poste
+     desperdiciado — se incorpora (cazado en Ayora: 32 m entre ambas). Y no solo pegada: criterio
+     de campo («esa HSU podría ir donde te marco y así quitamos una HSU aislada») — dentro del
+     MISMO FLANCO (hasta HSU_FUSION_MED), un poste existente y bien expuesto vale más que un poste
+     nuevo. Dos salvaguardas para no deshacer lo aprendido de la exposición: la NCU tiene que ser
+     borde franco DE VERDAD (arco lejano y local >= CIELO_ARCO) y no se cambia una esquina limpia
+     por un rincón (el arco local del poste no puede bajar del de la suelta menos 90°). La
+     separación mínima entre estaciones se respeta igual. */
+  const HSU_FUSION_MED=250;
   for(const r of rsus){
     if(r.integrada)continue;
     let best=null,bd=Infinity;
     for(const n of ncus){ if(usadas.has(n.id))continue; const d=Math.hypot(n.x-r.x,n.y-r.y); if(d<bd){bd=d;best=n;} }
-    if(best&&bd<=HSU_FUSION&&arcoCielo(best)>=CIELO_ARCO&&cieloDe(best,CIELO_LOCAL).arco>=CIELO_ARCO
+    if(!best)continue;
+    const locN=cieloDe(best,CIELO_LOCAL).arco;
+    const cerca=bd<=HSU_FUSION;
+    const flanco=bd<=HSU_FUSION_MED && locN>=cieloDe(r,CIELO_LOCAL).arco-90;
+    if((cerca||flanco)&&arcoCielo(best)>=CIELO_ARCO&&locN>=CIELO_ARCO
        &&rsus.every(o=>o===r||Math.hypot(o.x-best.x,o.y-best.y)>=minSep)){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
   }
   return rsus;
