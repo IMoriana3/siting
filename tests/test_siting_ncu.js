@@ -694,6 +694,31 @@ for (const K of ['FUV1', 'FUV2']) {
   check("el corte lógico _gwCut existe y splitGW corta por él",
     html.includes("n._gwCut=(cSel<cLo||cSel>cHi)") && html.includes("ncu._gwCut!=null"));
 
+// ── 9b) LA HSU VA AL SALIENTE CONVEXO, NO AL RINCÓN CÓNCAVO ────────────────
+// Petición de campo: la HSU mide el viento del EXTERIOR con menos afección de
+// los propios seguidores — la punta del apéndice (abanico local ~270°), no el
+// encuentro cóncavo con el bloque (filas pegadas por dos lados). Y el empuje
+// de 7 m va hacia la bisectriz del cielo libre local, o sea AL CAMPO, no
+// "lejos del centroide" (que en un apéndice apunta a lo largo de la fila).
+{
+  const motors = reticula({ nx: 50, ny: 6, px: 12, py: 70, L: 64, W: 4 });
+  const ap = reticula({ nx: 7, ny: 2, px: 12, py: 70, L: 64, W: 4 });
+  ap.forEach(m => { m.x += 240; m.y += 420; m.id = 'A' + m.id; });
+  const all = motors.concat(ap);
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(all);
+  const rsus = ctx.placeRSUs(all, hull, [], 4, 250);
+  const sur = rsus.filter(r => r.y > 350).sort((a, b) => b.y - a.y)[0];
+  check('el sector sur tiene su HSU', !!sur, JSON.stringify(rsus.map(r => [r.id, Math.round(r.x), Math.round(r.y)])));
+  if (sur) {
+    check('y está en la PUNTA del apéndice, empujada al campo abierto (y>492, en su ancho)',
+      sur.y > 492 && sur.x > 200 && sur.x < 355,
+      Math.round(sur.x) + ',' + Math.round(sur.y));
+    const h = holg(sur.x, sur.y, all, P);
+    check('con su guarda a las mesas', h >= 2 - 1e-9, h.toFixed(2) + ' m');
+  }
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
