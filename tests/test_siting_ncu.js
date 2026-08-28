@@ -756,6 +756,22 @@ for (const K of ['FUV1', 'FUV2']) {
   check('planta alargada, 6 HSU: ningún par por debajo de perímetro/(2N) - barrido',
     rsus.length === 6 && dmin >= minSep - 90 - 1e-6,
     rsus.length + ' HSU, d.mín ' + Math.round(dmin) + ' (mín ' + Math.round(minSep - 90) + ')');
+  // DIVERSIDAD DE ORIENTACIÓN (cazado en San José: tres HSU apiladas en el borde oeste): dos
+  // estaciones que miran al mismo viento (bisectriz a <45°) no pueden quedar a menos del doble
+  // de la separación mínima (menos el barrido de guarda)
+  // la penalización es blanda a propósito (un flanco larguísimo puede necesitar dos estaciones,
+  // y aquí solo hay 4 orientaciones para 6 HSU): se exige que la repetición apretada sea rara —
+  // como mucho un par — no imposible
+  let malPares = 0;
+  for (let i = 0; i < rsus.length; i++) for (let j = i + 1; j < rsus.length; j++) {
+    const a2 = rsus[i]._rumbo, b2 = rsus[j]._rumbo;
+    if (a2 == null || b2 == null) continue;
+    let dr = Math.abs(a2 - b2); while (dr > Math.PI) dr = Math.abs(dr - 2 * Math.PI);
+    const d = Math.hypot(rsus[i].x - rsus[j].x, rsus[i].y - rsus[j].y);
+    if (dr < Math.PI / 4 && d < 2 * minSep - 90) malPares++;
+  }
+  check('y la repetición de orientación apretada es rara (como mucho un par de 15)',
+    malPares <= 1, malPares + ' pares');
 }
 
 // ── 9d) LA NCU AL POSTE DE LA HSU (compartir poste, la inversa de la fusión) ─
