@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b68</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b69</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -1326,6 +1326,15 @@ function placeRSUs(motors,hull,ncus,N,radius){
   // CONTORNO GLOBAL: la estación va al perímetro del ARCHIPIÉLAGO, no al estrecho entre dos
   // lóbulos (que puede tener arco local y hasta lejano por el eje del pasillo, pero no es
   // exterior de planta). Distancia del candidato al hull convexo, saturada a 200 m.
+  // las ESQUINAS que dibuja el ingeniero son los VÉRTICES del contorno (las puntas del hull):
+  // cercanía a un vértice convexo puntúa aparte del borde — a media fila se está sobre el hull
+  // pero no en la esquina, y las estaciones acababan a media fila (cazado dos veces en San José)
+  const dVert=(x,y)=>{
+    if(!hull||hull.length<3)return 1e9;
+    let d=Infinity;
+    for(const v of hull){ const e=Math.hypot(x-v.x,y-v.y); if(e<d)d=e; }
+    return d;
+  };
   const dHull=(x,y)=>{
     if(!hull||hull.length<2)return 0;
     let d=Infinity;
@@ -1345,7 +1354,8 @@ function placeRSUs(motors,hull,ncus,N,radius){
     const enlace=c.dNcu<=radius ? 0.25*(1-c.dNcu/radius) : -3;
     const cota=(conZ&&zmaxG>zminG&&c.z!=null)?( (c.z-zminG)/(zmaxG-zminG) ):0;
     const borde=1-Math.min(dHull(c.x,c.y),200)/200;
-    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + 1.5*borde + enlace + cota;
+    const esquina=1-Math.min(dVert(c.x,c.y),150)/150;
+    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + 1.5*borde + 1.2*esquina + enlace + cota;
   };
   /* DIVERSIDAD DE ORIENTACIÓN: dos estaciones en el mismo flanco miran al mismo viento
      (bisectrices de cielo a <45°) — cazado en San José: cuatro HSU apiladas en la diagonal NE.
@@ -1387,6 +1397,15 @@ function placeRSUs(motors,hull,ncus,N,radius){
       let a=porBin.get(b); if(!a){a=[];porBin.set(b,a);} a.push(p);
     }
     const vistosG=new Set();
+    // cada vértice del hull aporta su seguidor más cercano: las puntas de la planta entran
+    // SIEMPRE en la bolsa, caigan en el huso que caigan
+    if(hull&&hull.length>2){
+      for(const v of hull){
+        let best=null,bd=Infinity;
+        for(const p of pol){ const e=Math.hypot(p.m.x-v.x,p.m.y-v.y); if(e<bd){bd=e;best=p;} }
+        if(best&&!vistosG.has(best.m.id)){ vistosG.add(best.m.id); bolsaG.push(best); }
+      }
+    }
     for(const arr of porBin.values()){
       arr.sort((a,b)=>b.r-a.r);
       const sub=arr.slice(0,6);
@@ -1488,6 +1507,35 @@ function placeRSUs(motors,hull,ncus,N,radius){
       }
     }
     if(!mejor)break;
+    if(!mejor.poste&&mejor.ancla!=null){
+      /* AFINADO LOCAL (restaurado: se perdió en la reescritura de la selección): desde el ancla
+         elegida se miran los vecinos de contorno a <=200 m — 16 por esquinidad + los 8 más
+         cercanos — y cada uno se puntúa con la MISMA nota (arcos en la posición, vértice,
+         contorno, enlace): si alguno gana, el ancla se desliza. Es lo que lleva la estación de
+         la media fila a la esquina de verdad. */
+      const am=motors.find(mm=>mm.id===mejor.ancla);
+      if(am){
+        const todos=pol.filter(p=>!anclas.has(p.m.id)&&p.m.id!==mejor.ancla&&Math.hypot(p.m.x-am.x,p.m.y-am.y)<=200);
+        const porEsq2=todos.slice().sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,16);
+        const porDist=todos.slice().sort((a,b)=>Math.hypot(a.m.x-am.x,a.m.y-am.y)-Math.hypot(b.m.x-am.x,b.m.y-am.y)).slice(0,8);
+        const vistos2=new Set(), bolsa2=[];
+        for(const p of porEsq2.concat(porDist)){ if(vistos2.has(p.m.id))continue; vistos2.add(p.m.id); bolsa2.push(p); }
+        let vMejor=nota(mejor)-1.6*repite(mejor), sl=null;
+        for(const p of bolsa2){
+          const lo0=cieloDe(p.m,CIELO_LOCAL);
+          const pos2={x:p.m.x+Math.cos(lo0.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(lo0.rumbo)*HSU_OFFSET};
+          const cl2=cieloDe(pos2), lo2=cieloDe(pos2,CIELO_LOCAL);
+          if(cl2.arco<CIELO_ARCO)continue;
+          if(!lejos({x:pos2.x,y:pos2.y}))continue;
+          const e2=dNcuDe(pos2);
+          if(e2.d>radius)continue;
+          const c2={x:pos2.x,y:pos2.y,poste:null,arco:cl2.arco,arcoL:lo2.arco,rumbo:lo2.rumbo,dNcu:e2.d,z:(p.m.z!=null?p.m.z:null),ncu:e2.ncu,ancla:p.m.id,th:p.th};
+          const v2=nota(c2)-1.6*repite(c2);
+          if(v2>vMejor+0.05){ vMejor=v2; sl=c2; }
+        }
+        if(sl)mejor=sl;
+      }
+    }
     mejor._usado=true;
     if(mejor.poste){
       usadas.add(mejor.poste.id);
