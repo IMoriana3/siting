@@ -719,6 +719,28 @@ for (const K of ['FUV1', 'FUV2']) {
   }
 }
 
+// ── 9c) DOS ANEMÓMETROS JUNTOS MIDEN EL MISMO VIENTO: separación mínima ────
+// Cazado en planta diagonal real: dos sectores angulares contiguos colapsaban
+// en el mismo tramo del flanco oeste (dos HSU a ~130 m). El paso ideal entre
+// estaciones es perímetro/N; no se admite un candidato a menos de la mitad de
+// eso de una estación ya puesta — salvo flanco sin nada más.
+{
+  const motors = reticula({ nx: 17, ny: 20, px: 12, py: 70, L: 64, W: 4 });   // 192x1330, alargada
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  const per = ctx.polyPerimeter(hull);
+  const rsus = ctx.placeRSUs(motors, hull, [], 6, 250);
+  let dmin = Infinity;
+  for (let i = 0; i < rsus.length; i++) for (let j = i + 1; j < rsus.length; j++)
+    dmin = Math.min(dmin, Math.hypot(rsus[i].x - rsus[j].x, rsus[i].y - rsus[j].y));
+  const minSep = Math.max(80, Math.min(500, per / 12));
+  // la corrección de guarda posterior puede desplazar el punto elegido hasta la prórroga (90 m):
+  // la separación garantizada es minSep menos ese desplazamiento — el fallo cazado eran 70-130 m
+  check('planta alargada, 6 HSU: ningún par por debajo de perímetro/(2N) - barrido',
+    rsus.length === 6 && dmin >= minSep - 90 - 1e-6,
+    rsus.length + ' HSU, d.mín ' + Math.round(dmin) + ' (mín ' + Math.round(minSep - 90) + ')');
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
