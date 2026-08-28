@@ -212,6 +212,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <div class="param">
           <label>Radio NCU <span class="hint">metros</span></label>
           <input type="number" id="radius" value="250" min="50" step="10">
+          <div class="rsu-suggest" id="rsug" style="display:none">Con radio <b class="mono" id="rsug-r"></b> m: <b class="mono" id="rsug-n"></b> NCU (−1) · <a id="rsug-use">usar</a></div>
         </div>
         <div class="param">
           <label>Largo mesa <span class="hint">m (eje N-S)</span></label>
@@ -479,6 +480,35 @@ function partitionComponent(motors, comp, adj, radius, capNCU){
    respetando el tope, recentrado con 1-centro — y se acepta la PRIMERA k cuya solución valida
    TODO: cada motor a <=radio de su 1-centro, ningún grupo sobre capacidad y cada grupo CONEXO en
    la malla. Si ninguna k menor valida, se queda la partición que había. Determinista (sin azar). */
+/* k-CENTRO CON TOPE DE CAPACIDAD: la pieza que comparten la saturación y la sugerencia de radio.
+   Devuelve los grupos [{x,y,motorIdx}] o null si k no da. El radio llega ya con su margen
+   descontado por el llamador; valida cobertura en la VIGA (puntoTCU) y malla conexa por grupo. */
+function resuelveKCentro(motors, comp, k, radius, capNCU, adj){
+  const R2=radius*radius;
+  const cen=centroid(comp.map(i=>motors[i]));
+  let s0=comp[0],sd=-1; for(const i of comp){const d=dist2(motors[i],cen); if(d>sd){sd=d;s0=i;}}
+  const seeds=[s0];
+  while(seeds.length<k){ let best=comp[0],bd=-1;
+    for(const i of comp){ let d=Infinity; for(const s of seeds){const dd=dist2(motors[i],motors[s]); if(dd<d)d=dd;} if(d>bd){bd=d;best=i;} }
+    seeds.push(best); }
+  let C=seeds.map(i=>({x:motors[i].x,y:motors[i].y}));
+  for(let it=0;it<25;it++){
+    const grp=C.map(()=>[]);
+    const cand=[]; for(const i of comp) C.forEach((c,j)=>cand.push([dist2(motors[i],c),i,j]));
+    cand.sort((a,b)=>a[0]-b[0]);
+    const asg=new Map();
+    for(const[d,i,j]of cand){ if(asg.has(i)||grp[j].length>=capNCU)continue; asg.set(i,j); grp[j].push(i); }
+    if(asg.size<comp.length) return null;                    // con tope no cupo todo el mundo: k no da
+    C=grp.map(g=>{ let cx=0,cy=0; for(const i of g){cx+=motors[i].x;cy+=motors[i].y;} cx/=g.length; cy/=g.length;
+      for(let t=0;t<40;t++){ let fd=-1,f=-1; for(const i of g){const d=(motors[i].x-cx)**2+(motors[i].y-cy)**2; if(d>fd){fd=d;f=i;}} if(fd<=R2)break; const st=1/(t+2); cx+=(motors[f].x-cx)*st; cy+=(motors[f].y-cy)*st; }
+      return {x:cx,y:cy,g}; });
+    const ok=C.every(c=>c.g.length>0 && c.g.length<=capNCU
+      && c.g.every(i=>{const q=puntoTCU(motors[i]);return (q.x-c.x)**2+(q.y-c.y)**2<=R2;})
+      && connectedSet(c.g,adj));
+    if(ok) return C.map(c=>({x:c.x,y:c.y,motorIdx:c.g}));
+  }
+  return null;
+}
 function compactaComponente(motors, comp, part, adj, radius, capNCU){
   const kMin=Math.max(1,Math.ceil(comp.length/capNCU));
   if(part.length<=kMin) return part;
@@ -488,32 +518,8 @@ function compactaComponente(motors, comp, part, adj, radius, capNCU){
      margen es el desplazamiento que la guarda podrá necesitar (la calle objetivo y un par de
      metros). Si con margen no cabe, k+1: mejor una NCU más que una NCU pegada a una mesa. */
   const margen=Math.min(CLEAR_OBJ+2, radius*0.05);
-  const R2=(radius-margen)*(radius-margen);
   for(let k=kMin;k<part.length;k++){
-    // semillas: el más lejano del centroide y luego punto-más-lejano de las semillas ya puestas
-    const cen=centroid(comp.map(i=>motors[i]));
-    let s0=comp[0],sd=-1; for(const i of comp){const d=dist2(motors[i],cen); if(d>sd){sd=d;s0=i;}}
-    const seeds=[s0];
-    while(seeds.length<k){ let best=comp[0],bd=-1;
-      for(const i of comp){ let d=Infinity; for(const s of seeds){const dd=dist2(motors[i],motors[s]); if(dd<d)d=dd;} if(d>bd){bd=d;best=i;} }
-      seeds.push(best); }
-    let C=seeds.map(i=>({x:motors[i].x,y:motors[i].y}));
-    let sol=null;
-    for(let it=0;it<25&&!sol;it++){
-      const grp=C.map(()=>[]);
-      const cand=[]; for(const i of comp) C.forEach((c,j)=>cand.push([dist2(motors[i],c),i,j]));
-      cand.sort((a,b)=>a[0]-b[0]);
-      const asg=new Map();
-      for(const[d,i,j]of cand){ if(asg.has(i)||grp[j].length>=capNCU)continue; asg.set(i,j); grp[j].push(i); }
-      if(asg.size<comp.length) break;                       // con tope no cupo todo el mundo: k no da
-      C=grp.map(g=>{ let cx=0,cy=0; for(const i of g){cx+=motors[i].x;cy+=motors[i].y;} cx/=g.length; cy/=g.length;
-        for(let t=0;t<40;t++){ let fd=-1,f=-1; for(const i of g){const d=(motors[i].x-cx)**2+(motors[i].y-cy)**2; if(d>fd){fd=d;f=i;}} if(fd<=R2)break; const st=1/(t+2); cx+=(motors[f].x-cx)*st; cy+=(motors[f].y-cy)*st; }
-        return {x:cx,y:cy,g}; });
-      const ok=C.every(c=>c.g.length>0 && c.g.length<=capNCU
-        && c.g.every(i=>{const q=puntoTCU(motors[i]);return (q.x-c.x)**2+(q.y-c.y)**2<=R2;})
-        && connectedSet(c.g,adj));
-      if(ok) sol=C.map(c=>({x:c.x,y:c.y,motorIdx:c.g}));
-    }
+    const sol=resuelveKCentro(motors, comp, k, radius-margen, capNCU, adj);
     if(sol) return sol;                                      // primera k válida = mínimo alcanzado
   }
   return part;
@@ -1501,6 +1507,7 @@ function loadProject(P){
      con la del arranque y el panel enseña la de otra planta. */
   (function(){ const s=suggestRSU(S.hull), a=document.getElementById("rsu-sug"); if(a)a.textContent=s; })();
   applyTablesPref(P.tcus.some(t=>t[6]!=null)||!!P.mesa, P.tables);   // arranca en mesas si la planta las trae; luego manda el usuario si ya la hizo
+  pintaSugerenciaRadio(null);   // la sugerencia de radio es del cálculo, no del plano entregado
   /* El panel NO miente: las cotas que enseña son las de la planta cargada (ver reflejaCotasPanel). */
   reflejaCotasPanel();
   assignColors(); updatePanel(); fit();
@@ -1809,6 +1816,40 @@ function tcuPt(m){
   const a=((m.az||0))*Math.PI/180;
   return {x:m.x-sep/2*Math.cos(a), y:m.y+sep/2*Math.sin(a)};
 }
+/* SUGERENCIA DE RADIO: ¿cuánto habría que subir el radio para AHORRAR una NCU? Se sondea una
+   escalera de radios mayores y, por cada componente de la malla con 2+ NCUs, se pregunta al
+   k-centro compartido (con el mismo margen de guarda que usa la saturación) si con una NCU menos
+   cabe. El primer radio que lo logra en algún componente es la sugerencia — la geometría no
+   cambia con el radio, así que las componentes son las mismas. Es orientativa: el que decide si
+   el enlace aguanta ese radio es el ingeniero (la capa RF ayuda a juzgarlo). */
+function sugiereRadio(){
+  if(!S.ncus.length||S.ncus.length<2||S.motors.length>3000) return null;
+  const adj=S.ncus._adj; if(!adj) return null;
+  const idxs=[]; S.motors.forEach((m,i)=>{ if(m.ncu!=null) idxs.push(i); });
+  if(!idxs.length) return null;
+  const comps=components(idxs, adj);
+  const compDe=new Map(); comps.forEach((c,ci)=>c.forEach(i=>compDe.set(i,ci)));
+  const porComp=new Map();
+  S.ncus.forEach(n=>{ if(!n.motorIdx.length)return; const ci=compDe.get(n.motorIdx[0]);
+    if(ci!=null) porComp.set(ci,(porComp.get(ci)||0)+1); });
+  for(const d of [10,20,30,40,50,75,100]){
+    const rc=S.p.radius+d; if(rc>500) break;
+    const margen=Math.min(CLEAR_OBJ+2, rc*0.05);
+    for(const [ci,kg] of porComp){
+      if(kg<2) continue;
+      const comp=comps[ci]; if(comp.length>2000) continue;
+      if(resuelveKCentro(S.motors, comp, kg-1, rc-margen, S.p.capNCU, adj)) return {radio:rc, ncus:S.ncus.length-1};
+    }
+  }
+  return null;
+}
+function pintaSugerenciaRadio(sug){
+  const caja=document.getElementById("rsug"); if(!caja)return;
+  if(!sug){ caja.style.display="none"; return; }
+  document.getElementById("rsug-r").textContent=sug.radio;
+  document.getElementById("rsug-n").textContent=sug.ncus;
+  caja.style.display="flex";
+}
 /* ===================== Cálculo ===================== */
 function readParams(){
   S.p.radius=Math.max(20,+document.getElementById("radius").value||250);
@@ -1838,6 +1879,7 @@ function recompute(refit){
   S.rsus=[];
   S.hull=convexHull(recinto());
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  pintaSugerenciaRadio(sugiereRadio());
   assignColors(); S.sel=null;
   updatePanel();
   if(refit) fit(); else draw();
@@ -2659,6 +2701,7 @@ function autoSite(desdeCero){
 document.getElementById("numOrder").addEventListener("change",e=>{ S.numMode=e.target.value; renumber(); });
 document.getElementById("gwAxis").addEventListener("change",e=>{ S.p.gwAxis=e.target.value; S.ncus.forEach(n=>{ if(!n.manual) placeCut(n,S.p.gwAxis,S.p.radius,S.p.capGW,S.motors); recomputeGW(n); }); updatePanel(); draw(); });
 document.getElementById("rsu-use").onclick=()=>{ document.getElementById("nrsu").value=document.getElementById("rsu-sug").textContent; recompute(false); };
+document.getElementById("rsug-use").onclick=()=>{ document.getElementById("radius").value=document.getElementById("rsug-r").textContent; recompute(false); };
 ["circles","gw","blocks","grid","tables","rf"].forEach(k=>{ document.getElementById("t-"+k).onchange=e=>{ S.v[k]=e.target.checked; if(k==="tables")S.tablesUser=e.target.checked; renderLegend(); draw(); }; });   // 'tables': la elección del usuario se recuerda al cambiar de planta
 (function(){ const t=document.getElementById("rf-tilt"); if(t)t.addEventListener("input",()=>{ const v=document.getElementById("rf-tilt-v"); if(v)v.textContent=t.value+"°"; if(S.v.rf)draw(); }); })();
  /* Las cotas de mesa cambian la GUARDA, no el reparto: antes aquí solo se redibujaba, y al ensanchar

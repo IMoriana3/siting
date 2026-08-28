@@ -653,6 +653,37 @@ for (const K of ['FUV1', 'FUV2']) {
     ncusL.length + ' NCU, ' + (ncusL._autoReps || []).length + ' rep');
 }
 
+// ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
+// El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
+// dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
+// k-centro compartido debe decir que con 280 caben 3 — y callar cuando no
+// hay nada que ahorrar (una sola NCU).
+{
+  const src3 = (html.match(/function sugiereRadio\(\)\{[\s\S]*?\n\}\n/) || [''])[0];
+  check('se localiza sugiereRadio', src3.length > 0);
+  vm.runInContext(src3, ctx);
+  const pip = (x, y, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const xi = P[i][0], yi = P[i][1], xj = P[j][0], yj = P[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c; } return c; };
+  const mulberry32 = a => () => { let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const rnd = mulberry32(4000), R = [[0, 0], [640, 0], [640, 560], [0, 560]], pts = [];
+  for (let y = 0; y <= 560; y += 70) for (let x = 0; x <= 640; x += 12)
+    if (pip(x, y, R)) pts.push({ x: x + (rnd() - 0.5), y: y + (rnd() - 0.5) * 2 });
+  pts.sort((a, b) => a.y - b.y || a.x - b.x);
+  const motors = pts.slice(0, 400).map((p, i) => ({ x: p.x, y: p.y, pb: null, id: 'M' + (i + 1), len: 64, wid: 8.4, az: 0 }));
+  const ncus = sitea(motors, { tlen: 64, twid: 8.4, clearNCU: 2 });
+  ctx.S.motors = motors; ctx.S.ncus = ncus; ctx.S.p.radius = 250;
+  const sug = vm.runInContext('sugiereRadio()', ctx);
+  check('rect 640x560: 4 NCUs a radio 250, y la sugerencia encuentra 3 con radio <=280',
+    ncus.length === 4 && sug && sug.radio > 250 && sug.radio <= 280 && sug.ncus === 3, JSON.stringify(sug));
+  // sin nada que ahorrar: una sola NCU -> sin sugerencia
+  const chico = reticula({ nx: 10, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  const ncus2 = sitea(chico, { tlen: 64, twid: 4 });
+  ctx.S.motors = chico; ctx.S.ncus = ncus2; ctx.S.p.radius = 250;
+  check('planta de 1 NCU: sin sugerencia', ncus2.length === 1 && vm.runInContext('sugiereRadio()', ctx) === null);
+}
+
 // ── 8) CABLEADO: los caminos que no pasan por placeCut llevan la guarda ────
 // Comprobaciones de FUENTE, no de comportamiento: placeNCUat/addNCU/arrastre/
 // autoSite viven pegados al DOM y no se pueden ejecutar aquí. Si alguien quita
