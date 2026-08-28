@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b69</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b70</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -1257,8 +1257,8 @@ const CIELO_ARCO=120;// posición hay un abanico >=120° sin ningún seguidor a 
    (mismo poste, sin equipo suelto); si no, se ancla al seguidor del borde de ese sector, empujada
    HACIA AFUERA de la planta (antes el "afuera" era "lejos de la NCU", que podía apuntar adonde
    fuera) y con la guarda de mesas de siempre. */
-function placeRSUs(motors,hull,ncus,N,radius){
-  if(N<1||!motors.length)return [];
+function placeRSUs(motors,hull,ncus,N,radius,fijas){
+  if(N<1||!motors.length)return (fijas||[]).slice();
   let cx=0,cy=0;for(const m of motors){cx+=m.x;cy+=m.y;}cx/=motors.length;cy/=motors.length;
   let sxx=0,syy=0,sxy=0;for(const m of motors){const dx=m.x-cx,dy=m.y-cy;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy;}
   const fase=0.5*Math.atan2(2*sxy,sxx-syy);   // eje principal: fase de los sectores
@@ -1370,6 +1370,8 @@ function placeRSUs(motors,hull,ncus,N,radius){
      tenga NADA más (mejor un dato apretado que un flanco ciego). */
   const minSep=Math.max(80,Math.min(500,(hull&&hull.length>2?polyPerimeter(hull):0)/(2*N)));
   const usadas=new Set(), anclas=new Set(), rsus=[];
+  // las estaciones MANUALES entran primero: cuentan para el total, la separación y la orientación
+  for(const f of (fijas||[])) rsus.push(f);
   const lejos=(c)=>rsus.every(r=>Math.hypot(r.x-c.x,r.y-c.y)>=minSep);
   // rumbo y alcance radial de cada motor, una vez
   const pol=motors.map(m=>({m,th:Math.atan2(m.y-cy,m.x-cx),r:Math.hypot(m.x-cx,m.y-cy)}));
@@ -1440,7 +1442,7 @@ function placeRSUs(motors,hull,ncus,N,radius){
     cands.push(c);
     if(c.z!=null){ if(c.z<zminG)zminG=c.z; if(c.z>zmaxG)zmaxG=c.z; }
   }
-  for(let k=0;k<N;k++){
+  for(let k=rsus.length;k<N;k++){
     /* UNA ESTACIÓN POR SECTOR ANGULAR (rodear es requisito meteorológico: viento y nubes entran
        por cualquier lado), elegida de la BOLSA GLOBAL con la nota completa. La causa raíz del
        apilamiento de San José no era el sector: era la nota PLANA (arcos medidos sobre el motor,
@@ -1559,7 +1561,7 @@ function placeRSUs(motors,hull,ncus,N,radius){
      separación mínima entre estaciones se respeta igual. */
   const HSU_FUSION_MED=250;
   for(const r of rsus){
-    if(r.integrada)continue;
+    if(r.integrada||r.manual)continue;    // lo que puso la mano no se recoloca solo
     // no solo la NCU más cercana: se prueban TODAS las del alcance por orden de distancia y la
     // HSU se sube al primer poste que pase las salvaguardas — comunicando con esa NCU RECEPTORA
     // (cambia de red: r.ncu). Cazado en campo: la más cercana era interior (sin cielo) y la
@@ -2186,9 +2188,10 @@ function recompute(refit){
      listado/CSV mentían (cazado en Ayora: la incorporada de la NCU-02 salía como de la NCU-03).
      El hull se mide sin las HSU de la pasada anterior, que ya no existen. */
   applyNumbering();
-  S.rsus=[];
+  S.rsus=(S.rsus||[]).filter(r=>r.manual);   // las colocadas A MANO sobreviven al recálculo
   S.hull=convexHull(recinto());
-  S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  { const _man=(S.rsus||[]).filter(r=>r.manual);
+    S.rsus=placeRSUs(S.motors,S.hull,S.ncus,Math.max(S.p.nrsu,_man.length),S.p.radius,_man); }
   compartePoste(S.motors,S.ncus,S.rsus,S.reps,S.p.radius);
   pintaSugerenciaRadio(sugiereRadio());
   pintaResumen();
@@ -2628,7 +2631,11 @@ cv.addEventListener("pointerdown",e=>{
   if(S.assignMode){ drag={mode:"rect",x0:e.clientX,y0:e.clientY,x1:e.clientX,y1:e.clientY,moved:false}; cv.setPointerCapture(e.pointerId); return; }
   const rect=cv.getBoundingClientRect(); const mx=(e.clientX-rect.left)*DPR,my=(e.clientY-rect.top)*DPR;
   let best=null,bd=15*DPR; for(const n of S.ncus){const s=w2s(n);const d=Math.hypot(s.x-mx,s.y-my);if(d<bd){bd=d;best=n;}}
+  // las HSU también se arrastran (la mano del ingeniero manda): si no hay NCU bajo el puntero,
+  // se prueba con las estaciones — la NCU tiene prioridad si están solapadas (poste compartido)
+  let bestR=null; if(!best&&!S.preset){ let bdr=15*DPR; for(const r of (S.rsus||[])){const s=w2s(r);const d=Math.hypot(s.x-mx,s.y-my);if(d<bdr){bdr=d;bestR=r;}} }
   if(best){ S.sel=best.id; updatePanel(); drag = S.preset ? {mode:"pan",x:e.clientX,y:e.clientY,ox:S.T.ox,oy:S.T.oy,moved:false} : {mode:"ncu",ncu:best,moved:false}; }
+  else if(bestR){ drag={mode:"rsu",rsu:bestR,moved:false}; }
   else { drag={mode:"pan",x:e.clientX,y:e.clientY,ox:S.T.ox,oy:S.T.oy,moved:false}; }
   cv.setPointerCapture(e.pointerId);
 });
@@ -2637,6 +2644,13 @@ cv.addEventListener("pointermove",e=>{
   if(pinch&&ptrs.size>=2){ movePinch(); return; }
   if(drag&&drag.mode==="rect"){ drag.x1=e.clientX; drag.y1=e.clientY; if(Math.abs(drag.x1-drag.x0)+Math.abs(drag.y1-drag.y0)>3)drag.moved=true; draw(); return; }
   if(drag&&drag.mode==="pan"){ const dx=(e.clientX-drag.x)*DPR,dy=(e.clientY-drag.y)*DPR; if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true; S.T.ox=drag.ox+dx; S.T.oy=drag.oy+dy; draw(); return; }
+  if(drag&&drag.mode==="rsu"){ drag.moved=true;
+    const rect=cv.getBoundingClientRect(); const mx=(e.clientX-rect.left)*DPR,my=(e.clientY-rect.top)*DPR;
+    const r=drag.rsu; r.x=(mx-S.T.ox)/S.T.scale; r.y=(S.T.oy-my)/S.T.scale;
+    const tip=document.getElementById("tooltip");
+    tip.style.opacity=1; tip.style.left=(e.clientX-rect.left+12)+"px"; tip.style.top=(e.clientY-rect.top+12)+"px";
+    tip.innerHTML=`<span class="t-id">${r.id}</span><br>manual`;
+    draw(); return; }
   if(drag&&drag.mode==="ncu"){ drag.moved=true;
     const rect=cv.getBoundingClientRect(); const mx=(e.clientX-rect.left)*DPR,my=(e.clientY-rect.top)*DPR;
     const n=drag.ncu; n.x=(mx-S.T.ox)/S.T.scale; n.y=(S.T.oy-my)/S.T.scale; n.manual=true; recomputeGW(n);
@@ -2662,6 +2676,15 @@ cv.addEventListener("pointerup",e=>{
   ptrs.delete(e.pointerId);
   if(pinch){ if(ptrs.size<2)pinch=null; drag=null; return; }
   if(drag&&drag.mode==="rect"){ handleRect(drag); drag=null; draw(); return; }
+  if(drag&&drag.mode==="rsu"&&drag.moved){ const _r=drag.rsu;
+    /* la mano del ingeniero manda: guarda mínima (sin prórroga: nada de teletransportar el gesto),
+       la estación deja el poste si iba incorporada, cambia de red a la NCU más cercana, y queda
+       MANUAL — los recálculos la respetan (placeRSUs la recibe como fija). */
+    separaDeModulos(_r,S.motors,[],S.p,S.p.radius,{soloGuarda:true,guarda:S.p.clearHSU});
+    _r.manual=true; _r.integrada=false; _r.adjusted=false;
+    let bn=null,bd2=Infinity; for(const n of S.ncus){const d=Math.hypot(n.x-_r.x,n.y-_r.y); if(d<bd2){bd2=d;bn=n;}}
+    _r.ncu=bn?bn.id:null; _r._rumbo=null; _r._th=null;
+    updatePanel(); drag=null; draw(); return; }
   if(drag&&drag.mode==="ncu"&&drag.moved){ const _mv=drag.ncu;
     separaDeModulos(_mv,S.motors,[],S.p,S.p.radius,{soloGuarda:true,guarda:S.p.clearNCU});   // si se suelta sobre una mesa, se libra al punto legal más cercano; donde ya libra, se respeta la mano
     reassignToNearest(S.motors,S.ncus,S.ncus._adj,S.p.radius,S.p.capNCU,S.p.capGW,S.p.gwAxis); applyNumbering(); S.sel=_mv.id; assignColors(); updatePanel(); }
@@ -3025,7 +3048,8 @@ function autoSite(desdeCero){
       if(n.count>0){ splitGW(S.motors,n,S.p.capGW,S.p.gwAxis); n.gw.forEach((arr,g)=>arr.forEach(i=>S.motors[i].gw=g+1)); } });
   }
   applyNumbering();   // ANTES de colocar las HSU: guardan su asociación por id de NCU (ver recompute)
-  S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  { const _man=(S.rsus||[]).filter(r=>r.manual);
+    S.rsus=placeRSUs(S.motors,S.hull,S.ncus,Math.max(S.p.nrsu,_man.length),S.p.radius,_man); }
   pintaResumen();
   assignColors(); updatePanel(); fit();
   const sin=S.motors.filter(m=>m.ncu==null).length;

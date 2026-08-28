@@ -960,6 +960,25 @@ for (const K of ['FUV1', 'FUV2']) {
     vm.runInContext('suggestRSU', ctx)(ctx.convexHull(chico)) === 1);
 }
 
+// ── 9k) LA MANO DEL INGENIERO MANDA: HSU manual fija en los recálculos ─────
+// Una HSU arrastrada a mano queda manual: placeRSUs la recibe como FIJA —
+// cuenta para el total, la separación y la orientación — y no se recoloca ni
+// se fusiona sola.
+{
+  const motors = reticula({ nx: 20, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  const fija = { id: 'HSU-01', x: -40, y: 105, manual: true, ncu: null, integrada: false };
+  const rsus = ctx.placeRSUs(motors, hull, [], 3, 250, [fija]);
+  const f = rsus.find(r => r.manual);
+  check('la manual entra fija: misma posición, y salen las 3 en total',
+    rsus.length === 3 && f && Math.hypot(f.x - (-40), f.y - 105) < 0.01,
+    JSON.stringify(rsus.map(r => [Math.round(r.x), Math.round(r.y), !!r.manual])));
+  const dmins = rsus.filter(r => r !== f).map(r => Math.hypot(r.x - f.x, r.y - f.y));
+  check('y las automáticas la respetan (separación mínima también contra la manual)',
+    dmins.every(d => d >= 80 - 1e-6), dmins.map(d => Math.round(d)).join(' '));
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
