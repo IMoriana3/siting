@@ -791,12 +791,16 @@ for (const K of ['FUV1', 'FUV2']) {
   ctx.S.p.radius = 250;
   const hA = ctx.convexHull(mA);
   const rA = ctx.placeRSUs(mA, hA, nA, 10, 250);
-  const antes = nA.map(n2 => [n2.x, n2.y]);
   ctx.compartePoste(mA, nA, rA, [], 250);
-  const movidas = nA.filter((n2, i) => Math.hypot(n2.x - antes[i][0], n2.y - antes[i][1]) > 0.5).length;
-  check('Ayora (13+ NCU): en planta grande no dispara — como las 41 HSU reales (0 en poste); '
-    + 'sin el umbral, 3 grupos de borde cabían desde el poste y se movían',
-    movidas === 0, movidas + ' NCU movidas');
+  // el freno es el GRUPO, no la planta: en Ayora solo se mudan las NCUs cuyo grupo entero sigue
+  // cabiendo en el radio desde el poste — y la mudanza JAMÁS rompe cobertura, guarda ni GW
+  const R2A = 250 * 250;
+  const rotas = nA.filter(n2 => n2.motorIdx.some(i => (mA[i].x - n2.x) ** 2 + (mA[i].y - n2.y) ** 2 > R2A)).length;
+  const sinGuarda = rA.filter(r2 => r2.integrada && holg(r2.x, r2.y, mA, ctx.S.p) < 2 - 1e-9).length;
+  const gwMalA = nA.filter(n2 => n2.gw[0].length > 80 || n2.gw[1].length > 80).length;
+  check('Ayora: compartir poste solo donde el grupo cabe, sin romper cobertura, guarda ni GW',
+    rotas === 0 && sinGuarda === 0 && gwMalA === 0,
+    rotas + ' rotas, ' + sinGuarda + ' sin guarda, ' + gwMalA + ' GW mal');
 }
 
 // ── 9e) ISLA: ANFITRIONA REUBICADA ANTES QUE REPETIDOR ─────────────────────
@@ -832,6 +836,23 @@ for (const K of ['FUV1', 'FUV2']) {
   check('isla que NO cabe reubicando: repetidor, como siempre',
     ncus2.length === 1 && reps2.length === 1,
     ncus2.length + ' NCU, ' + reps2.length + ' rep');
+}
+
+// ── 9f) LA HSU VA A LA ESQUINA, NO A MEDIA FILA ────────────────────────────
+// Petición de campo: «¿por qué no las pone en la esquina y así tienen más
+// ángulo limpio?» — en un borde recto el punto más radial del sector es un
+// punto de fila cualquiera (180° de cielo local); la esquina convexa da ~270°.
+// La bolsa de anclas lleva ahora también las de mayor esquinidad (menos
+// vecinos a 90 m) y el peso local manda: la estación cae en una esquina.
+{
+  const motors = reticula({ nx: 20, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  const rsus = ctx.placeRSUs(motors, hull, [], 1, 250);
+  const esquinas = [[0, -32], [228, -32], [0, 242], [228, 242]];
+  const d = Math.min(...esquinas.map(e => Math.hypot(rsus[0].x - e[0], rsus[0].y - e[1])));
+  check('rectángulo: la única HSU cae a <=45 m de una esquina (ángulo limpio ~270°)',
+    rsus.length === 1 && d <= 45, Math.round(rsus[0].x) + ',' + Math.round(rsus[0].y) + ' d.esq=' + Math.round(d));
 }
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
