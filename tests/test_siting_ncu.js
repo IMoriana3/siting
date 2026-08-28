@@ -243,6 +243,31 @@ for (const K of ['FUV1', 'FUV2']) {
   check('HSU con guarda 10 desde dentro de una mesa: sale hasta los 10 m', h >= 10 - 1e-9, h.toFixed(2) + ' m');
 }
 
+// ── 5d) MARGEN GW SIN PUNTO LEGAL: manda el gateway, no la guarda ──────────
+// Bífila densa medida: una NCU de 141 con margen GW de 35 m donde NO existe
+// ningún punto con los 2 m — "librar manda" aceptaba un punto fuera y el
+// gateway desbordaba (85/56). Prioridad acordada: mesa > GW (hardware) >
+// guarda. El corte DURO se queda dentro del margen con la mejor holgura que
+// haya (ámbar), y el GW no se rompe.
+{
+  const pip = (x, y, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const xi = P[i][0], yi = P[i][1], xj = P[j][0], yj = P[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c; } return c; };
+  const mulberry32 = a => () => { let t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const rnd = mulberry32(4000), R = [[0, 0], [580, 0], [580, 490], [0, 490]], pts = [];
+  for (let y = 0; y <= 490; y += 70) for (let x = 0; x <= 580; x += 12)
+    if (pip(x, y, R)) pts.push({ x: x + (rnd() - 0.5), y: y + (rnd() - 0.5) * 2 });
+  pts.sort((a, b) => a.y - b.y || a.x - b.x);
+  const motors = pts.slice(0, 400).map((p, i) => ({ x: p.x, y: p.y, pb: null, id: 'M' + (i + 1), len: 64, wid: 8.4, az: 0 }));
+  const ncus = sitea(motors, { tlen: 64, twid: 8.4, clearNCU: 2 });
+  const gwMal = ncus.filter(n => n.gw[0].length > 80 || n.gw[1].length > 80).length;
+  check('bífila densa: ningún gateway desborda aunque el margen no dé la guarda', gwMal === 0,
+    ncus.map(n => n.gw[0].length + '/' + n.gw[1].length).join(' '));
+  const dentroMesa = ncus.filter(n => holg(n.x, n.y, motors, ctx.S.p) < 0).length;
+  check('y ninguna NCU acaba dentro de una mesa por ello', dentroMesa === 0);
+}
+
 // ── 6) SIN SITIO NO SE MIENTE: pasillo < 2·guarda, holgura anotada ─────────
 // Paso 10,5 con mesa de 8,4: pasillo de 2,1 m -> 1,05 de holgura máxima. No hay
 // punto legal que cubra al grupo; lo honesto es quedarse en el mejor punto,
