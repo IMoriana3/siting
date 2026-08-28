@@ -221,20 +221,21 @@ for (const K of ['FUV1', 'FUV2']) {
   check('guarda configurable: siteAll respeta el "Libre NCU" del panel (4 m)', malas === 0, malas + ' por debajo');
 }
 
-// ── 5c) GUARDA ALTA: preferencia que avisa, no orden que rompe ─────────────
-// Con "Libre NCU" mayor que lo que el campo da (6 m en pasillos de 4-5), la
-// prioridad es: dentro de mesa NUNCA > tope GW (hardware) > guarda pedida
-// (preferencia, ámbar). Medido antes del arreglo: una NCU partida se iba
-// fuera del margen del corte a por sus 6 m y desbordaba un gateway. Y el
-// fallback es LO MEJOR alcanzable sin tocar el corte, no el primer 2,0.
+// ── 5c) GUARDA ALTA: se persigue hasta 180 m antes de rendirse ─────────────
+// La guarda configurada es DURA ("si no puede estar a menos, no puede"). Con
+// "Libre NCU" 6 en un campo cuyos pasillos dan 4,5 como mucho, el punto legal
+// está FUERA del campo — a ~120 m del centro de carga, más allá de la antigua
+// prórroga de 90: el último tramo del barrido (hasta BARRIDO_MAX=180) lo
+// alcanza y las NCU CUMPLEN, no se quedan a 4,5 con un aviso. Los gateways no
+// desbordan jamás por la guarda: el corte es lógico (_gwCut) y se reclava.
 {
   const motors = reticula({ nx: 50, ny: 6, px: 12, py: 70, L: 64, W: 4 });
   const ncus = sitea(motors, { tlen: 64, twid: 4, clearNCU: 6 });
   const gwMal = ncus.filter(n => n.gw[0].length > 80 || n.gw[1].length > 80).length;
   const hs = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
   check('guarda 6 en campo de 4-5: ningún gateway desborda por perseguirla', gwMal === 0, gwMal + ' GW>80');
-  check('y el fallback es lo mejor del campo (>=4), no el primer 2,0',
-    hs.every(h => h >= 4 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
+  check('el punto legal está a ~120 m y el barrido largo lo alcanza: TODAS a >=6',
+    hs.every(h => h >= 6 - 1e-9), hs.map(h => h.toFixed(1)).join(' '));
   // la HSU sí persigue su guarda con la prórroga: naive dentro de la mesa, "Libre HSU" 10
   ctx.S.p = { tlen: 64, twid: 4, radius: 250 };
   const pos = { x: 114, y: 20 };                     // dentro de una mesa
@@ -243,12 +244,12 @@ for (const K of ['FUV1', 'FUV2']) {
   check('HSU con guarda 10 desde dentro de una mesa: sale hasta los 10 m', h >= 10 - 1e-9, h.toFixed(2) + ' m');
 }
 
-// ── 5d) MARGEN GW SIN PUNTO LEGAL: manda el gateway, no la guarda ──────────
+// ── 5d) MARGEN GW SIN PUNTO LEGAL: la guarda manda y el GW ni se entera ────
 // Bífila densa medida: una NCU de 141 con margen GW de 35 m donde NO existe
-// ningún punto con los 2 m — "librar manda" aceptaba un punto fuera y el
-// gateway desbordaba (85/56). Prioridad acordada: mesa > GW (hardware) >
-// guarda. El corte DURO se queda dentro del margen con la mejor holgura que
-// haya (ámbar), y el GW no se rompe.
+// ningún punto con los 2 m. La guarda es dura: la NCU sale del margen a por
+// su punto legal — y el reparto en gateways, que es LÓGICO (qué TCU habla
+// con qué GW del mismo armario), se reclava en el borde del margen (_gwCut)
+// y corta por ahí: ni guarda incumplida ni GW desbordado (antes: 85/56).
 {
   const pip = (x, y, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
     const xi = P[i][0], yi = P[i][1], xj = P[j][0], yj = P[j][1];
@@ -264,22 +265,56 @@ for (const K of ['FUV1', 'FUV2']) {
   const gwMal = ncus.filter(n => n.gw[0].length > 80 || n.gw[1].length > 80).length;
   check('bífila densa: ningún gateway desborda aunque el margen no dé la guarda', gwMal === 0,
     ncus.map(n => n.gw[0].length + '/' + n.gw[1].length).join(' '));
-  const dentroMesa = ncus.filter(n => holg(n.x, n.y, motors, ctx.S.p) < 0).length;
-  check('y ninguna NCU acaba dentro de una mesa por ello', dentroMesa === 0);
+  const hs5d = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
+  check('y la guarda dura se cumple saliendo del margen', hs5d.every(h => h >= 2 - 1e-9),
+    hs5d.map(h => h.toFixed(2)).join(' '));
 }
 
-// ── 6) SIN SITIO NO SE MIENTE: pasillo < 2·guarda, holgura anotada ─────────
-// Paso 10,5 con mesa de 8,4: pasillo de 2,1 m -> 1,05 de holgura máxima. No hay
-// punto legal que cubra al grupo; lo honesto es quedarse en el mejor punto,
-// ANOTAR la holgura real y que el panel avise (ámbar <2 m, rojo encima).
+// ── 5e) GUARDA DURA CON EL BORDE A ALCANCE: se cumple, cueste lo que cueste ─
+// Planta baja (2 filas): el pasillo interior da 4 como mucho, pero el borde
+// está a ~77 m — dentro de la prórroga. Con "Libre NCU" 10 la NCU tiene que
+// SALIR del campo hasta los 10 m, no quedarse a 4 con un aviso.
+{
+  const motors = reticula({ nx: 30, ny: 2, px: 12, py: 70, L: 64, W: 4 });
+  const ncus = sitea(motors, { tlen: 64, twid: 4, clearNCU: 10 });
+  const hs = ncus.map(n => holg(n.x, n.y, motors, ctx.S.p));
+  const R2 = 250 * 250;
+  const fuera = ncus.reduce((a, n) => a + n.motorIdx.filter(i => {
+    const dx = motors[i].x - n.x, dy = motors[i].y - n.y; return dx * dx + dy * dy > R2;
+  }).length, 0);
+  check('guarda 10 con borde a alcance: TODAS las NCU a >=10 m', hs.every(h => h >= 10 - 1e-9),
+    hs.map(h => h.toFixed(1)).join(' '));
+  check('y sin perder cobertura al salir', fuera === 0, fuera + ' TCU fuera');
+}
+
+// ── 6) SIN SITIO NO SE MIENTE: guarda inalcanzable, holgura anotada y ROJO ─
+// Paso 10,5 con mesa de 8,4: pasillo de 2,1 m -> 1,05 de holgura máxima. En
+// una planta que el siting parte en NCUs de borde, el barrido largo (180 m)
+// llega al exterior y CUMPLE; para el caso inalcanzable de verdad hace falta
+// un punto a >180 m de todo borde: campo denso de ~500x500 y la NCU en el
+// centro. Ahí lo honesto es quedarse en el mejor punto, ANOTAR la holgura
+// real y que el panel lo ponga en ROJO (guarda dura: por debajo es
+// incumplimiento, nunca un "ya vale").
 {
   const motors = reticula({ nx: 30, ny: 10, px: 10.5, py: 65, L: 64, W: 8.4 });
   const ncus = sitea(motors, { tlen: 64, twid: 8.4 });
   const dentro = ncus.filter(n => holg(n.x, n.y, motors, ctx.S.p) < 0).length;
-  check('denso: ni aun así ninguna NCU dentro de una mesa', dentro === 0, dentro + ' dentro');
-  const anotadas = ncus.filter(n => n.holgura != null && n.holgura < 2).length;
-  check('denso: la holgura incumplida queda anotada para el aviso del panel',
-    anotadas === ncus.length, anotadas + ' de ' + ncus.length + ' anotadas');
+  check('denso: ninguna NCU dentro de una mesa', dentro === 0, dentro + ' dentro');
+  const cortas = ncus.filter(n => { const h = holg(n.x, n.y, motors, ctx.S.p);
+    return h < 2 - 1e-9 && !(n.holgura != null && n.holgura < 2); }).length;
+  check('denso: o cumple los 2 m o la holgura real queda anotada para el ROJO',
+    cortas === 0, cortas + ' cortas sin anotar');
+  // centro de un campo 500x500: el borde queda a ~255 m, fuera incluso del barrido largo
+  const grande = reticula({ nx: 48, ny: 8, px: 10.5, py: 65, L: 64, W: 8.4 });
+  ctx.S.p = { tlen: 64, twid: 8.4, radius: 250 };
+  const n6 = { x: 247, y: 227, motorIdx: [] };
+  const cercanos = []; grande.forEach((m, i) => { if (Math.hypot(m.x - 247, m.y - 227) < 120) cercanos.push(i); });
+  n6.motorIdx = cercanos;
+  ctx.separaDeModulos(n6, grande, cercanos, ctx.S.p, 250, { guarda: 2 });
+  const h6 = holg(n6.x, n6.y, grande, ctx.S.p);
+  check('inalcanzable de verdad: fuera de mesa, en el mejor punto (~1,05) y anotado <2',
+    h6 >= 0 && h6 < 2 && n6.holgura != null && n6.holgura < 2 && Math.abs(n6.holgura - h6) < 0.1,
+    'holgura ' + h6.toFixed(2) + ' anotada ' + n6.holgura);
 }
 
 // ── 6a) PÁRAMO TRAE SUS COTAS MEDIDAS ──────────────────────────────────────
@@ -652,6 +687,12 @@ for (const K of ['FUV1', 'FUV2']) {
     ncusL.length === 2 && (ncusL._autoReps || []).length === 0,
     ncusL.length + ' NCU, ' + (ncusL._autoReps || []).length + ' rep');
 }
+
+  check("el panel pinta en ROJO la guarda incumplida (mínimo configurado), no en ámbar",
+    html.includes("m de una mesa (mínimo ${_gN} m)") && html.includes("m de una mesa (mínimo ${_gH} m)") &&
+    !html.includes("el pasillo no da más"));
+  check("el corte lógico _gwCut existe y splitGW corta por él",
+    html.includes("n._gwCut=(cSel<cLo||cSel>cHi)") && html.includes("ncu._gwCut!=null"));
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
