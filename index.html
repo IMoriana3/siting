@@ -1227,13 +1227,16 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
   ncus._autoReps=autoReps;
   return ncus;
 }
+/* CANTIDAD de HSUs, calibrada con las 10 plantas reales entregadas (layouts cobertura-zigbee):
+   el ajuste por mínimos cuadrados de nº de estaciones contra PERÍMETRO de planta da 1 HSU por
+   cada ~900 m de contorno (Ayora 8133 m/10 — dos son de nieve extra—, San José 8936/8, Panbianco
+   5168/6, Benante 3458/4, Páramo 1673/3, Polvorín 1057/2, Fayón 398/1, Túnez 313/1...). La
+   dispersión real es 160-1100 m/HSU — pliegos y sensores de cliente mandan — así que esto es la
+   SUGERENCIA del panel, no una imposición: mínimo 1, tope 12. */
 function suggestRSU(hull){
   if(hull.length<3)return 1;
-  const area=polyArea(hull),perim=polyPerimeter(hull),ha=area/10000;
-  const compact=(4*Math.PI*area)/(perim*perim||1);
-  if(ha<6&&compact>0.6)return 1;
-  let n=Math.round(perim/700); if(compact<0.5)n+=1;
-  return Math.max(3,Math.min(n,12));
+  const perim=polyPerimeter(hull);
+  return Math.max(1,Math.min(12,Math.round(perim/900)));
 }
 const HSU_OFFSET=20;// metros: MEDIDO en las 41 HSU reales de 11 plantas (layouts cobertura-zigbee):
                     // distancia a la viga más cercana 13-58 m, mediana 24 — la estación se separa
@@ -1320,13 +1323,29 @@ function placeRSUs(motors,hull,ncus,N,radius){
        centrado  el rumbo del candidato, centrado en su sector, para que el reparto siga RODEANDO. */
   const CIELO_LOCAL=80;   // metros del abanico cercano: lo que de verdad frena el viento en el anemómetro
   const PESO_POSTE=ncus.length<=2?3:0.5;   // aprendido de los reales: el poste solo domina en plantas pequeñas
+  // CONTORNO GLOBAL: la estación va al perímetro del ARCHIPIÉLAGO, no al estrecho entre dos
+  // lóbulos (que puede tener arco local y hasta lejano por el eje del pasillo, pero no es
+  // exterior de planta). Distancia del candidato al hull convexo, saturada a 200 m.
+  const dHull=(x,y)=>{
+    if(!hull||hull.length<2)return 0;
+    let d=Infinity;
+    for(let i=0;i<hull.length;i++){
+      const a=hull[i],b=hull[(i+1)%hull.length];
+      const vx=b.x-a.x,vy=b.y-a.y,l2=vx*vx+vy*vy||1;
+      let t=((x-a.x)*vx+(y-a.y)*vy)/l2; t=t<0?0:(t>1?1:t);
+      const e=Math.hypot(x-(a.x+t*vx), y-(a.y+t*vy));
+      if(e<d)d=e;
+    }
+    return d;
+  };
   const nota=(c,k,th,zmin,zmax)=>{
     const arco=c.arco/270;
     const local=(c.arcoL!=null?c.arcoL:c.arco)/270;
     const enlace=c.dNcu<=radius ? 0.25*(1-c.dNcu/radius) : -3;
     const cota=(conZ&&zmax>zmin&&c.z!=null)?( (c.z-zmin)/(zmax-zmin) ):0;
     const desvio=1-Math.abs(norm(Math.atan2(c.y-cy,c.x-cx)-th))/(Math.PI/N);
-    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + enlace + cota + 0.25*desvio;
+    const borde=1-Math.min(dHull(c.x,c.y),200)/200;
+    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + 1.5*borde + enlace + cota + 0.25*desvio;
   };
   const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
   /* SEPARACIÓN MÍNIMA entre estaciones: en una planta diagonal o cóncava dos sectores angulares

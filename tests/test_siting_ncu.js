@@ -912,6 +912,37 @@ for (const K of ['FUV1', 'FUV2']) {
     html.match(/pintaResumen[\s\S]{0,1500}totals\.rep/) !== null);
 }
 
+// ── 9j) EL ESTRECHO ENTRE LÓBULOS NO ES EXTERIOR, Y CUÁNTAS HSU ───────────
+// Los trazos del ingeniero siguen el PERÍMETRO del archipiélago: el pasillo
+// entre dos lóbulos puede tener arco por su eje, pero no es exterior de
+// planta. Término de contorno global (distancia al hull) en la puntuación.
+// Y la cantidad sugerida sale de las 10 plantas reales: ~1 HSU/900 m de
+// perímetro (mín 1, tope 12).
+{
+  const A = reticula({ nx: 16, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  const B = reticula({ nx: 16, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  B.forEach((m, i) => { m.x += 380; m.id = 'B' + (i + 1); });
+  const all = A.concat(B);
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(all);
+  const rsus = ctx.placeRSUs(all, hull, [], 4, 250);
+  // las BOCAS del pasillo (esquinas convexas sobre el propio hull) son perímetro legítimo;
+  // lo vetado es el estrecho PROFUNDO, lejos del contorno del archipiélago
+  const enEstrecho = rsus.filter(r => r.x > 190 && r.x < 370 && r.y > 40 && r.y < 170).length;
+  check('archipiélago de dos lóbulos: ninguna HSU en el estrecho profundo',
+    rsus.length === 4 && enEstrecho === 0,
+    enEstrecho + ' en el estrecho: ' + JSON.stringify(rsus.map(r => [Math.round(r.x), Math.round(r.y)])));
+  // la cantidad, calibrada con las reales
+  const srcS = (html.match(/function suggestRSU\(hull\)\{[\s\S]*?\n\}\n/) || [''])[0];
+  check('se localiza suggestRSU', srcS.length > 0);
+  vm.runInContext(srcS, ctx);
+  const rect = reticula({ nx: 50, ny: 20, px: 12, py: 70, L: 64, W: 4 });   // per ~3836 m -> 4
+  const chico = reticula({ nx: 10, ny: 2, px: 12, py: 70, L: 64, W: 4 });   // per ~356 m -> 1
+  check('cantidad sugerida: ~1 HSU por 900 m de perímetro real (4 y 1)',
+    vm.runInContext('suggestRSU', ctx)(ctx.convexHull(rect)) === 4 &&
+    vm.runInContext('suggestRSU', ctx)(ctx.convexHull(chico)) === 1);
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
