@@ -799,6 +799,41 @@ for (const K of ['FUV1', 'FUV2']) {
     movidas === 0, movidas + ' NCU movidas');
 }
 
+// ── 9e) ISLA: ANFITRIONA REUBICADA ANTES QUE REPETIDOR ─────────────────────
+// Petición de campo: si la NCU vecina puede REUBICARSE y cubrir directo su
+// grupo Y la isla (1-centro de la unión dentro del radio con margen), sobra
+// el repetidor — cero equipos extra. Solo si la unión no cabe, el repetidor
+// de siempre; y si tampoco, NCU propia.
+{
+  const main = reticula({ nx: 12, ny: 3, px: 12, py: 70, L: 64, W: 4 });
+  const isla = reticula({ nx: 12, ny: 1, px: 12, py: 70, L: 64, W: 4 });
+  isla.forEach((m, i) => { m.y -= 250; m.id = 'I' + (i + 1); });
+  const all = main.concat(isla);
+  ctx.S.p = { tlen: 64, twid: 4, radius: 250, capNCU: 160, capGW: 80, gwAxis: 'EW' };
+  const run = (motors) => vm.runInContext('(m,o)=>siteAll(m,o)', ctx)(motors,
+    { radius: 250, capNCU: 160, capGW: 80, reachX: 40, reachY: 90, gwAxis: 'EW', repMax: 12 });
+  const ncus = run(all);
+  const reps = ncus._autoReps || [];
+  const R2 = 250 * 250;
+  const fuera = ncus.reduce((a, n) => a + n.motorIdx.filter(i => {
+    const dx = all[i].x - n.x, dy = all[i].y - n.y; return dx * dx + dy * dy > R2; }).length, 0);
+  check('isla que cabe reubicando: UNA NCU, CERO repetidores, todo a radio',
+    ncus.length === 1 && reps.length === 0 && ncus[0].count === 48 && fuera === 0,
+    ncus.length + ' NCU, ' + reps.length + ' rep, ' + (ncus[0] ? ncus[0].count : 0) + ' TCU, ' + fuera + ' fuera');
+  check('y la NCU reubicada guarda su holgura a las mesas',
+    holg(ncus[0].x, ncus[0].y, all, ctx.S.p) >= 2 - 1e-9,
+    holg(ncus[0].x, ncus[0].y, all, ctx.S.p).toFixed(2) + ' m');
+  // control: isla más lejos — la unión NO cabe y vuelve el repetidor de siempre
+  const isla2 = reticula({ nx: 12, ny: 1, px: 12, py: 70, L: 64, W: 4 });
+  isla2.forEach((m, i) => { m.y -= 330; m.id = 'J' + (i + 1); });
+  const all2 = main.concat(isla2);
+  const ncus2 = run(all2);
+  const reps2 = ncus2._autoReps || [];
+  check('isla que NO cabe reubicando: repetidor, como siempre',
+    ncus2.length === 1 && reps2.length === 1,
+    ncus2.length + ' NCU, ' + reps2.length + ' rep');
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el

@@ -1141,13 +1141,14 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
   ncus=relaxBoundaries(motors,ncus,adjG,radius,capNCU,4);
   // propuesta: acercar la frontera (la NCU) a la mediana del grupo lo maximo posible SIN sacar ninguna TCU del radio
   ncus.forEach(n=>placeCut(n,gwAxis,radius,capGW,motors));
-  /* ISLAS PEQUEÑAS → REPETIDOR, no NCU. Criterio de campo: una isla con pocas TCU no justifica
-     su NCU (equipo + gateway + alimentación); si una NCU vecina del mismo power block tiene hueco
-     y existe un punto que CUBRA la isla entera Y quede a radio de esa NCU, ahí va un repetidor
-     (con la guarda de mesas de siempre) y las TCU de la isla cuelgan de la NCU vecina. Se añade
-     un enlace virtual a la malla para que el panel no cante "salta un claro": el claro lo puentea
-     el repetidor, que para eso está. Si no hay anfitriona posible (isla demasiado lejos, dispersa
-     o sin hueco de capacidad), la isla lleva su NCU como siempre. */
+  /* ISLAS PEQUEÑAS: primero ANFITRIONA REUBICADA, luego repetidor, y NCU propia como último
+     recurso. Criterio de campo («la lógica dice que debería ir ahí la NCU y quitar el repetidor»):
+     una isla con pocas TCU no justifica su NCU, y si una NCU vecina del mismo power block con
+     hueco puede REUBICARSE de modo que cubra DIRECTO su grupo entero Y la isla (1-centro de la
+     unión dentro del radio con el margen de la saturación), esa es la mejor jugada: CERO equipos
+     extra — ni repetidor ni poste. placeCut recoloca la NCU en la unión (con su corte GW y su
+     guarda) y el claro lo puentea la propia NCU, que queda a alcance de los dos lados. Si la
+     unión no cabe, el repetidor de siempre (un equipo); y si tampoco, la isla lleva su NCU. */
   const autoReps=[]; const R2=radius*radius;
   for(const isla of islas){
     const comp=isla.comp;
@@ -1157,10 +1158,30 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
     let rIsla=0; for(const i of comp){const d=Math.hypot(motors[i].x-cx,motors[i].y-cy); if(d>rIsla)rIsla=d;}
     let servida=false;
     if(rIsla<=radius){
-      const cubre=(x,y)=>{ for(const i of comp){const q=puntoTCU(motors[i]);const dx=q.x-x,dy=q.y-y; if(dx*dx+dy*dy>R2)return false;} return true; };
+      const cubre=(x,y)=>{ for(const i of comp){const q=puntoTCU(motors[i]);const dx=x-q.x,dy=y-q.y; if(dx*dx+dy*dy>R2)return false;} return true; };
       const hosts=ncus.filter(n=>n.pb===isla.pb&&n.motorIdx.length+comp.length<=capNCU)
                       .sort((a,b)=>((a.x-cx)**2+(a.y-cy)**2)-((b.x-cx)**2+(b.y-cy)**2));
+      // 1er escalón: anfitriona REUBICADA que cubra directo la unión — cero equipos extra
+      const margen=Math.min(CLEAR_OBJ+2,radius*0.05), R2u=(radius-margen)*(radius-margen);
       for(const host of hosts){
+        const union=host.motorIdx.concat(comp);
+        let ux=0,uy=0; for(const i of union){ux+=motors[i].x;uy+=motors[i].y;} ux/=union.length; uy/=union.length;
+        let cabe=false;
+        for(let it=0;it<40;it++){ let fd=-1,f=-1;
+          for(const i of union){const q=puntoTCU(motors[i]);const d=(q.x-ux)**2+(q.y-uy)**2; if(d>fd){fd=d;f=i;}}
+          if(fd<=R2u){cabe=true;break;}
+          const st=1/(it+2), qf=puntoTCU(motors[f]); ux+=(qf.x-ux)*st; uy+=(qf.y-uy)*st; }
+        if(!cabe) continue;
+        host.motorIdx.push(...comp); host.count=host.motorIdx.length;
+        placeCut(host,gwAxis,radius,capGW,motors);        // recentra en la unión, con corte GW y guarda
+        // puente en la malla: el claro lo cubre la propia NCU (a alcance directo de ambos lados)
+        let bi=-1,bj=-1,bd=Infinity;
+        for(const i of comp)for(const j of host.motorIdx){ if(comp.indexOf(j)>=0)continue;
+          const d=(motors[i].x-motors[j].x)**2+(motors[i].y-motors[j].y)**2; if(d<bd){bd=d;bi=i;bj=j;} }
+        if(bi>=0){ adjG.get(bi).push(bj); adjG.get(bj).push(bi); }
+        servida=true; break;
+      }
+      if(!servida) for(const host of hosts){
         let pos=null;
         for(let t=0;t<=1.0001;t+=0.05){
           const x=cx+(host.x-cx)*t, y=cy+(host.y-cy)*t;
