@@ -855,6 +855,31 @@ for (const K of ['FUV1', 'FUV2']) {
     rsus.length === 1 && d <= 45, Math.round(rsus[0].x) + ',' + Math.round(rsus[0].y) + ' d.esq=' + Math.round(d));
 }
 
+// ── 9g) FUSIÓN DE FLANCO: la HSU aislada se va al poste expuesto del flanco ─
+// Petición de campo: «esa HSU podría ir donde te marco y así quitamos una HSU
+// aislada» — dentro del mismo flanco (<=250 m), un poste existente y bien
+// expuesto vale más que un poste nuevo. Salvaguardas: la NCU es borde franco
+// de verdad (ambos arcos >=120°) y no se cambia una esquina limpia por un
+// rincón (arco local del poste >= el de la suelta − 90°).
+{
+  const motors = reticula({ nx: 20, ny: 4, px: 12, py: 70, L: 64, W: 4 });
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  // NCU expuesta a media altura del flanco oeste: la HSU elige su esquina (~140 m), y se fusiona
+  const nOeste = [{ id: 'NCU-01', x: -20, y: 105 }];
+  const r1 = ctx.placeRSUs(motors, hull, nOeste, 1, 250);
+  check('NCU expuesta en el flanco: la HSU se incorpora a su poste (adiós poste aislado)',
+    r1.length === 1 && r1[0].integrada && r1[0].ncu === 'NCU-01' &&
+    Math.hypot(r1[0].x - (-20), r1[0].y - 105) < 0.5,
+    JSON.stringify([Math.round(r1[0].x), Math.round(r1[0].y), !!r1[0].integrada]));
+  // NCU interior (rodeada de filas): NO vale como poste — la HSU se queda suelta en su esquina
+  const nDentro = [{ id: 'NCU-01', x: 114, y: 105 }];
+  const r2 = ctx.placeRSUs(motors, hull, nDentro, 1, 250);
+  check('NCU interior: no se fusiona — la exposición manda y la HSU queda suelta',
+    r2.length === 1 && !r2[0].integrada,
+    JSON.stringify([Math.round(r2[0].x), Math.round(r2[0].y), !!r2[0].integrada]));
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
