@@ -353,8 +353,10 @@ for (const K of ['FUV1', 'FUV2']) {
 {
   const P = vm.runInContext('AYORA', ctx);
   const conCotas = P.tcus.filter(t => t[6] != null && Math.abs(t[7] - 8.384) < 0.001).length;
-  check('el preset de Ayora trae el dato del DWG en los 754 TCU (envolvente 8,384)',
-    conCotas === P.tcus.length, conCotas + ' de ' + P.tcus.length);
+  // 751, no 754: en campo se desmontaron TK 040-05, TK 050-05 y TK 051-05 (NCU 7) — el as-built
+  // de factiun-cartera/planos/ayora.json manda. El conteo también queda congelado.
+  check('el preset de Ayora trae el dato del DWG en los 751 TCU as-built (envolvente 8,384)',
+    P.tcus.length === 751 && conCotas === P.tcus.length, conCotas + ' de ' + P.tcus.length);
   const largos = [...new Set(P.tcus.map(t => Math.round(t[6] * 100) / 100))].sort((a, b) => a - b);
   check('con los tres largos del DWG (37,85 · 56,31 · 74,76) y bífilo 2,384',
     largos.length === 3 && Math.abs(largos[0] - 37.85) < 0.01 && Math.abs(largos[2] - 74.76) < 0.01 &&
