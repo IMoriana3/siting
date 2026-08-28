@@ -756,6 +756,49 @@ for (const K of ['FUV1', 'FUV2']) {
     rsus.length + ' HSU, d.mín ' + Math.round(dmin) + ' (mín ' + Math.round(minSep - 90) + ')');
 }
 
+// ── 9d) LA NCU AL POSTE DE LA HSU (compartir poste, la inversa de la fusión) ─
+// Petición de campo: si la HSU queda suelta en el borde bueno y el grupo de su
+// NCU cabe entero en el radio desde ese poste, la NCU se muda ahí — un poste,
+// un tendido y una alimentación menos. Con validación: cobertura con margen,
+// guarda «Libre NCU», malla conexa. Y en plantas grandes NO dispara (el grupo
+// no cabe desde el borde), como en las 41 HSU reales medidas.
+{
+  const src4 = (html.match(/function compartePoste\([\s\S]*?\n\}\n/) || [''])[0];
+  const srcCon = (html.match(/function ncuConnected\([\s\S]*?\n\}\n/) || [''])[0];
+  check('se localizan compartePoste y ncuConnected', src4.length > 0 && srcCon.length > 0);
+  vm.runInContext(srcCon + src4, ctx);
+  // planta pequeña: un bloque de 96x140 (desde el poste del borde, el rincón más lejano queda
+  // a ~215 m: dentro del radio con el margen de la saturación)
+  const motors = reticula({ nx: 9, ny: 3, px: 12, py: 70, L: 64, W: 4 });
+  const ncus = sitea(motors, { tlen: 64, twid: 4 });
+  ctx.S.p.radius = 250; ctx.S.p.nrsu = 1;
+  const hull = ctx.convexHull(motors);
+  const rsus = ctx.placeRSUs(motors, hull, ncus, 1, 250);
+  ctx.compartePoste(motors, ncus, rsus, [], 250);
+  const n = ncus[0], r = rsus[0];
+  const R2 = 250 * 250;
+  const fuera = n.motorIdx.filter(i => (motors[i].x - n.x) ** 2 + (motors[i].y - n.y) ** 2 > R2).length;
+  check('planta pequeña: la NCU se muda al poste de la HSU (integrada, mismo punto)',
+    ncus.length === 1 && r.integrada && r.ncu === n.id && Math.hypot(n.x - r.x, n.y - r.y) < 0.5,
+    JSON.stringify({ n: [Math.round(n.x), Math.round(n.y)], r: [Math.round(r.x), Math.round(r.y)], int: r.integrada }));
+  check('y desde el poste sigue cubriendo todo el grupo con su guarda',
+    fuera === 0 && holg(n.x, n.y, motors, ctx.S.p) >= 2 - 1e-9,
+    fuera + ' fuera, h=' + holg(n.x, n.y, motors, ctx.S.p).toFixed(2));
+  // planta grande (Ayora real): el grupo NO cabe desde el borde -> ninguna NCU se mueve
+  const PA = vm.runInContext('AYORA', ctx);
+  const mA = PA.tcus.map((t, i) => ({ x: t[0], y: t[1], pb: null, id: 'M' + i, len: t[6], wid: t[7], az: t[8] || 0 }));
+  const nA = sitea(mA, { tlen: 64, twid: 8.4 });
+  ctx.S.p.radius = 250;
+  const hA = ctx.convexHull(mA);
+  const rA = ctx.placeRSUs(mA, hA, nA, 10, 250);
+  const antes = nA.map(n2 => [n2.x, n2.y]);
+  ctx.compartePoste(mA, nA, rA, [], 250);
+  const movidas = nA.filter((n2, i) => Math.hypot(n2.x - antes[i][0], n2.y - antes[i][1]) > 0.5).length;
+  check('Ayora (13+ NCU): en planta grande no dispara — como las 41 HSU reales (0 en poste); '
+    + 'sin el umbral, 3 grupos de borde cabían desde el poste y se movían',
+    movidas === 0, movidas + ' NCU movidas');
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el

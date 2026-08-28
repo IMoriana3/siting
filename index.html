@@ -1927,6 +1927,53 @@ function readParams(){
   const _guarda=(id)=>{ const el=document.getElementById(id), v=el?parseFloat(el.value):NaN; return (isFinite(v)&&v>=0)?v:CLEAR_MOD; };
   S.p.clearNCU=_guarda("clearNCU"); S.p.clearHSU=_guarda("clearHSU");
 }
+/* PETICIÓN DE CAMPO: si una HSU queda suelta y la NCU de su red puede montarse EN SU MISMO POSTE
+   sin romper nada, la NCU se lleva al poste de la HSU — un poste, un tendido y una alimentación
+   menos. Es la INVERSA de la fusión (que trae la HSU a una NCU de borde franco): aquí quien está
+   en el sitio bueno es la HSU, y la NCU la acompaña si su grupo sigue cabiendo. Antes de mover se
+   valida TODO: cobertura del grupo entero desde el poste (en la viga y con el margen de la
+   saturación), guarda de mesas con el «Libre NCU», malla conexa, que ningún repetidor cuya única
+   anfitriona posible sea esta NCU quede sin alcance, y el corte GW se reclava en su margen legal
+   (_gwCut). Solo en PLANTAS PEQUEÑAS (<=4 NCU): en las 41 HSU reales medidas el poste compartido
+   solo aparece en plantas de 1 NCU y en las de >=12 no aparece nunca — y la cobertura sola no
+   basta como freno (medido en Ayora: 3 grupos de borde cabían desde el poste y en la entrega
+   real ninguna NCU está ahí). */
+function compartePoste(motors,ncus,rsus,reps,radius){
+  if(ncus.length>4) return;
+  const R2m=Math.pow(radius-Math.min(CLEAR_OBJ+2,radius*0.05),2);
+  const gN=S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD;
+  const adj=ncus._adj;
+  for(const r of rsus){
+    if(r.integrada) continue;
+    const n=ncus.find(x=>x.id===r.ncu);
+    if(!n||n.manual||!n.motorIdx||!n.motorIdx.length) continue;
+    if(rsus.some(o=>o!==r&&o.integrada&&o.ncu===n.id)) continue;      // ya hospeda otra estación
+    let ok=true;
+    for(const i of n.motorIdx){ const q=puntoTCU(motors[i]); const dx=q.x-r.x,dy=q.y-r.y; if(dx*dx+dy*dy>R2m){ok=false;break;} }
+    if(!ok) continue;
+    let h=Infinity; for(const m of motors){ const e=dModulo(r.x,r.y,m,S.p); if(e<h){h=e; if(h<gN)break;} }
+    if(h<gN) continue;                                                // el poste no da la guarda de NCU
+    if((reps||[]).some(rp=>{
+      if(Math.hypot(rp.x-n.x,rp.y-n.y)>radius) return false;          // no colgaba de esta NCU
+      if(ncus.some(o=>o!==n&&Math.hypot(rp.x-o.x,rp.y-o.y)<=radius)) return false; // tiene otra anfitriona
+      return Math.hypot(rp.x-r.x,rp.y-r.y)>radius;                    // desde el poste ya no llegaría
+    })) continue;
+    const px=n.x,py=n.y,pc=n._gwCut;
+    n.x=r.x; n.y=r.y;
+    if(!ncuConnected(n,adj)){ n.x=px; n.y=py; n._gwCut=pc; continue; }
+    n.holgura=+h.toFixed(2);
+    if(n.motorIdx.length>S.p.capGW){
+      const vals=n.motorIdx.map(i=>S.p.gwAxis==="NS"?motors[i].y:motors[i].x).sort((a,b)=>a-b);
+      const lo=vals[n.motorIdx.length-S.p.capGW-1]+0.01, hi=vals[S.p.capGW]-0.01;
+      const cLo=Math.min(lo,hi), cHi=Math.max(lo,hi);
+      const cSel=S.p.gwAxis==="NS"?n.y:n.x;
+      n._gwCut=(cSel<cLo||cSel>cHi)?Math.min(Math.max(cSel,cLo),cHi):null;
+    } else n._gwCut=null;
+    splitGW(motors,n,S.p.capGW,S.p.gwAxis);
+    n.gw.forEach((arr2,g)=>arr2.forEach(i=>{motors[i].gw=g+1;}));
+    r.integrada=true; r.x=n.x; r.y=n.y;
+  }
+}
 function recompute(refit){
   readParams();
   if(S.fromAyora){ assignColors(); updatePanel(); if(refit) fit(); else draw(); return; }
@@ -1940,6 +1987,7 @@ function recompute(refit){
   S.rsus=[];
   S.hull=convexHull(recinto());
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  compartePoste(S.motors,S.ncus,S.rsus,S.reps,S.p.radius);
   pintaSugerenciaRadio(sugiereRadio());
   assignColors(); S.sel=null;
   updatePanel();
