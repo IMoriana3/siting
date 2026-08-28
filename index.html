@@ -1411,14 +1411,22 @@ function placeRSUs(motors,hull,ncus,N,radius){
   const HSU_FUSION_MED=250;
   for(const r of rsus){
     if(r.integrada)continue;
-    let best=null,bd=Infinity;
-    for(const n of ncus){ if(usadas.has(n.id))continue; const d=Math.hypot(n.x-r.x,n.y-r.y); if(d<bd){bd=d;best=n;} }
-    if(!best)continue;
-    const locN=cieloDe(best,CIELO_LOCAL).arco;
-    const cerca=bd<=HSU_FUSION;
-    const flanco=bd<=HSU_FUSION_MED && locN>=cieloDe(r,CIELO_LOCAL).arco-90;
-    if((cerca||flanco)&&arcoCielo(best)>=CIELO_ARCO&&locN>=CIELO_ARCO
-       &&rsus.every(o=>o===r||Math.hypot(o.x-best.x,o.y-best.y)>=minSep)){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
+    // no solo la NCU más cercana: se prueban TODAS las del alcance por orden de distancia y la
+    // HSU se sube al primer poste que pase las salvaguardas — comunicando con esa NCU RECEPTORA
+    // (cambia de red: r.ncu). Cazado en campo: la más cercana era interior (sin cielo) y la
+    // buena, la de la esquina, estaba 20 m más allá — la fusión abortaba sin mirarla.
+    const locR=cieloDe(r,CIELO_LOCAL).arco;
+    const orden=ncus.filter(n=>!usadas.has(n.id))
+                    .map(n=>({n,d:Math.hypot(n.x-r.x,n.y-r.y)}))
+                    .filter(c=>c.d<=HSU_FUSION_MED)
+                    .sort((a,b)=>a.d-b.d);
+    for(const {n,d} of orden){
+      const locN=cieloDe(n,CIELO_LOCAL).arco;
+      if(d>HSU_FUSION && locN<locR-90) continue;              // lejos Y peor rincón: no
+      if(arcoCielo(n)<CIELO_ARCO||locN<CIELO_ARCO) continue;  // no es borde franco de verdad
+      if(!rsus.every(o=>o===r||Math.hypot(o.x-n.x,o.y-n.y)>=minSep)) continue;
+      usadas.add(n.id); r.x=n.x; r.y=n.y; r.ncu=n.id; r.integrada=true; break;
+    }
   }
   return rsus;
 }
