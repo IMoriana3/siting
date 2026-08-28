@@ -1230,39 +1230,51 @@ function placeRSUs(motors,hull,ncus,N,radius){
   const CEL=64, grid=new Map();
   for(const m of motors){ const k=Math.floor(m.x/CEL)+","+Math.floor(m.y/CEL);
     let a=grid.get(k); if(!a){a=[];grid.set(k,a);} a.push(m); }
-  const arcoCielo=(p)=>{
-    const oc=new Uint8Array(72), R2c=CIELO_R*CIELO_R, c=Math.ceil(CIELO_R/CEL);
+  // Devuelve el abanico libre de seguidores {arco en grados, rumbo de su bisectriz} mirando a
+  // radio R (CIELO_R por defecto). El rumbo sirve para EMPUJAR la HSU hacia el lado abierto.
+  const cieloDe=(p,R)=>{
+    const Rc=R||CIELO_R;
+    const oc=new Uint8Array(72), R2c=Rc*Rc, c=Math.ceil(Rc/CEL);
     const ci=Math.floor(p.x/CEL), cj=Math.floor(p.y/CEL);
     for(let i=ci-c;i<=ci+c;i++)for(let j=cj-c;j<=cj+c;j++){
       const arr=grid.get(i+","+j); if(!arr)continue;
       for(const m of arr){ const dx=m.x-p.x,dy=m.y-p.y,d2=dx*dx+dy*dy;
         if(d2>R2c||d2<1)continue;
         oc[Math.floor(((Math.atan2(dy,dx)+Math.PI)/(2*Math.PI))*72)%72]=1; } }
-    let libre=0,run=0;
-    for(let i=0;i<144;i++){ if(oc[i%72])run=0; else if(++run>libre)libre=run; if(libre>=72)break; }
-    return Math.min(libre,72)*5;
+    let libre=0,run=0,fin=0;
+    for(let i=0;i<144;i++){ if(oc[i%72])run=0; else if(++run>libre){libre=run;fin=i;} if(libre>=72){fin=i;break;} }
+    libre=Math.min(libre,72);
+    return {arco:libre*5, rumbo:((fin-(libre-1)/2)+0.5)/72*2*Math.PI-Math.PI};
   };
+  const arcoCielo=(p)=>cieloDe(p).arco;
   const norm=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
   const conZ=motors.some(m=>m.z!=null);
   /* CRITERIO DE IMPLANTACIÓN, no umbrales sueltos: cada sector elige su emplazamiento PUNTUANDO
      candidatos como lo haría el ingeniero.
        poste     una NCU de borde franco hospeda la HSU: un poste, un tendido y una alimentación
                  menos. Es el criterio dominante (peso 3).
-       cielo     exposición meteorológica: el arco libre de seguidores (borde de lóbulo 150-205°,
-                 pasillo 90, bahía 35-60 mirando a CIELO_R). Se exige >=CIELO_ARCO para hospedar
-                 en NCU; en un seguidor de borde puntúa de forma continua.
+       cielo     exposición meteorológica LEJANA: el arco libre de seguidores (borde de lóbulo
+                 150-205°, pasillo 90, bahía 35-60 mirando a CIELO_R). Se exige >=CIELO_ARCO para
+                 hospedar en NCU; en un seguidor de borde puntúa de forma continua.
+       local     exposición CERCANA (80 m): la afección de los PROPIOS seguidores al anemómetro.
+                 Un rincón cóncavo del contorno puede ver campo abierto a lo lejos y aún así tener
+                 filas pegadas comiéndole el viento; la punta o esquina convexa del contorno mide
+                 hacia el exterior con el aire limpio. Además la HSU se empuja hacia la BISECTRIZ
+                 de ese abanico local (el lado abierto), no "lejos del centroide".
        enlace    la HSU habla con su NCU por radio: candidato a más del radio queda penalizado
                  fuerte (y el panel lo canta); a igualdad, más cerca de la NCU mejor.
        cota      si los datos traen z (columna z/cota/alt del CSV), el punto ALTO del sector ve el
                  viento y no queda abrigado en una vaguada: puntúa la cota normalizada del sector.
                  Sin z, el término no aplica (no se inventa topografía).
        centrado  el rumbo del candidato, centrado en su sector, para que el reparto siga RODEANDO. */
+  const CIELO_LOCAL=80;   // metros del abanico cercano: lo que de verdad frena el viento en el anemómetro
   const nota=(c,k,th,zmin,zmax)=>{
     const arco=c.arco/270;
+    const local=(c.arcoL!=null?c.arcoL:c.arco)/270;
     const enlace=c.dNcu<=radius ? (1-c.dNcu/radius) : -3;
     const cota=(conZ&&zmax>zmin&&c.z!=null)?( (c.z-zmin)/(zmax-zmin) ):0;
     const desvio=1-Math.abs(norm(Math.atan2(c.y-cy,c.x-cx)-th))/(Math.PI/N);
-    return 3*(c.poste?1:0) + 1.5*Math.min(arco,1) + enlace + cota + 0.5*desvio;
+    return 3*(c.poste?1:0) + 1.5*Math.min(arco,1) + 1.5*Math.min(local,1) + enlace + cota + 0.5*desvio;
   };
   const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
   const usadas=new Set(), anclas=new Set(), rsus=[];
@@ -1277,18 +1289,20 @@ function placeRSUs(motors,hull,ncus,N,radius){
     const recoge=(ancho)=>{
       for(const n of ncus){ if(usadas.has(n.id))continue;
         if(Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th))>ancho)continue;
-        const a=arcoCielo(n); if(a<CIELO_ARCO)continue;
-        cands.push({x:n.x,y:n.y,poste:n,arco:a,dNcu:0,z:null});
+        const cl=cieloDe(n); if(cl.arco<CIELO_ARCO)continue;
+        cands.push({x:n.x,y:n.y,poste:n,arco:cl.arco,arcoL:cieloDe(n,CIELO_LOCAL).arco,dNcu:0,z:null});
       }
       const delSector=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho).sort((a,b)=>b.r-a.r).slice(0,14);
       let repliegue=null,rArco=-1;
       for(const p of delSector){
-        const a=arcoCielo(p.m);
-        const dl=p.r||1, pos={x:p.m.x+(p.m.x-cx)/dl*HSU_OFFSET, y:p.m.y+(p.m.y-cy)/dl*HSU_OFFSET};
+        const cl=cieloDe(p.m), loc=cieloDe(p.m,CIELO_LOCAL);
+        // el empuje de 7 m va hacia la BISECTRIZ del abanico local: al lado abierto del contorno,
+        // no "lejos del centroide" (que en un apéndice puede apuntar a lo largo de la fila)
+        const pos={x:p.m.x+Math.cos(loc.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(loc.rumbo)*HSU_OFFSET};
         const e=dNcuDe(pos);
-        const c={x:pos.x,y:pos.y,poste:null,arco:a,dNcu:e.d,z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id};
-        if(a>rArco){rArco=a;repliegue=c;}                        // el menos malo, por si nadie luce
-        if(a<60)continue;                                        // ni de lejos es borde
+        const c={x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,dNcu:e.d,z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id};
+        if(cl.arco>rArco){rArco=cl.arco;repliegue=c;}            // el menos malo, por si nadie luce
+        if(cl.arco<60)continue;                                  // ni de lejos es borde
         cands.push(c);
       }
       if(!cands.length&&repliegue)cands.push(repliegue);         // un flanco con mala exposición sigue necesitando su dato meteo
