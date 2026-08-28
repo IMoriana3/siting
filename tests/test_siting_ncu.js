@@ -534,8 +534,17 @@ for (const K of ['FUV1', 'FUV2']) {
     Math.hypot(n.x - r.x, n.y - r.y) <= 40));
   check('Ayora: ninguna HSU suelta pegada a una NCU libre (poste compartido)',
     malas.length === 0, malas.map(r => r.id).join(' '));
-  check('Ayora: las NCUs de borde de lóbulo hospedan HSU incorporada',
-    rsus.some(r => r.integrada), rsus.filter(r => r.integrada).length + ' incorporadas');
+  // APRENDIDO DE LOS REALES (41 HSU medidas en 11 layouts entregados): en plantas de >=3 NCU
+  // NINGUNA HSU va en poste de NCU (0 de 38; dNCU real 89-350 m) — el poste solo domina en
+  // plantas pequeñas (Bagnarelli/Fayón/Túnez, 1 NCU). Y las estaciones guardan separación
+  // (Ayora real: sep. mínima 408 m con paso ideal ~400).
+  check('Ayora: el poste ya no domina — como en la planta real (0/10 en poste)',
+    rsus.filter(r => r.integrada).length <= 2, rsus.filter(r => r.integrada).length + ' incorporadas');
+  let sepA = Infinity;
+  for (let i = 0; i < rsus.length; i++) for (let j = i + 1; j < rsus.length; j++)
+    sepA = Math.min(sepA, Math.hypot(rsus[i].x - rsus[j].x, rsus[i].y - rsus[j].y));
+  check('Ayora: separación mínima entre estaciones como la real (>=250 m con 12)',
+    sepA >= 250, Math.round(sepA) + ' m');
 }
 
 // ── 7f) EXTERIOR DE GRUPO PERO INTERIOR DE PLANTA: AHÍ NO VA UNA HSU ───────
@@ -572,8 +581,10 @@ for (const K of ['FUV1', 'FUV2']) {
   const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
   const rsus = ctx.placeRSUs(motors, hull, [], 2, 250);
   const este = rsus.reduce((a, b) => a.x > b.x ? a : b);
+  // el anclaje sigue siendo el motor alto; el empuje al lado abierto es HSU_OFFSET (20 m,
+  // medido en las 41 HSU reales: 13-58 m de la viga) más lo que corrija la guarda
   check('topografía: la HSU del este se ancla en el punto alto del flanco',
-    Math.hypot(este.x - 468, este.y - 70) <= 20, Math.hypot(este.x - 468, este.y - 70).toFixed(1) + ' m del cerro');
+    Math.hypot(este.x - 468, este.y - 70) <= 35, Math.hypot(este.x - 468, este.y - 70).toFixed(1) + ' m del cerro');
 }
 {
   // enlace y sectores vacíos, sobre las plantas reales: ninguna HSU suelta fuera
@@ -711,9 +722,13 @@ for (const K of ['FUV1', 'FUV2']) {
   const sur = rsus.filter(r => r.y > 350).sort((a, b) => b.y - a.y)[0];
   check('el sector sur tiene su HSU', !!sur, JSON.stringify(rsus.map(r => [r.id, Math.round(r.x), Math.round(r.y)])));
   if (sur) {
-    check('y está en la PUNTA del apéndice, empujada al campo abierto (y>492, en su ancho)',
-      sur.y > 492 && sur.x > 200 && sur.x < 355,
-      Math.round(sur.x) + ',' + Math.round(sur.y));
+    // la punta del apéndice: las dos filas acaban en y=490 (centros); la HSU debe quedar en la
+    // banda de la última fila o más allá, a <=40 m de la esquina de la punta, empujada al lado
+    // abierto por la bisectriz del cielo local (S o SE según el anclaje)
+    const dPunta = Math.min(Math.hypot(sur.x - 312, sur.y - 490), Math.hypot(sur.x - 240, sur.y - 490));
+    check('y está en la PUNTA del apéndice, empujada al campo abierto',
+      sur.y > 470 && sur.x > 200 && sur.x < 360 && dPunta <= 45,
+      Math.round(sur.x) + ',' + Math.round(sur.y) + ' dPunta=' + Math.round(dPunta));
     const h = holg(sur.x, sur.y, all, P);
     check('con su guarda a las mesas', h >= 2 - 1e-9, h.toFixed(2) + ' m');
   }
