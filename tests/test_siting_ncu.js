@@ -897,6 +897,19 @@ for (const K of ['FUV1', 'FUV2']) {
     rsus.length + ' HSU, ' + dentro + ' en el patio: ' + JSON.stringify(rsus.map(r => [Math.round(r.x), Math.round(r.y)])));
 }
 
+// ── 9i) RESUMEN DE IMPLANTACIÓN sobre el lienzo (cableado en el fuente) ────
+// Al calcular, la tabla de la portada del informe aparece como tarjeta
+// flotante en la esquina del plano; los presets (plano entregado) la ocultan.
+{
+  check('el resumen existe, se pinta al calcular y los presets lo ocultan',
+    html.includes('id="resumen"') &&
+    /compartePoste\(S\.motors[\s\S]{0,200}pintaResumen\(\);/.test(html) &&
+    html.includes('if(!S.ncus.length||S.preset||S.fromAyora){ el.classList.remove("open"); return; }'));
+  check('y lleva la tabla del informe (media, máxima con id, HSUs y totales)',
+    html.includes('equipmentData()') && html.match(/pintaResumen[\s\S]{0,900}g\.lejana/) !== null &&
+    html.match(/pintaResumen[\s\S]{0,1500}totals\.rep/) !== null);
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el

@@ -99,6 +99,16 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .bar>span{display:block;height:100%;background:var(--blue);border-radius:20px}
 
 /* overlay sobre el lienzo */
+.resumen{position:absolute;left:14px;top:14px;max-height:min(62vh,480px);max-width:min(46vw,520px);overflow:auto;background:rgba(13,19,26,.93);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px);display:none}
+.resumen.open{display:block}
+.resumen h4{margin:0 0 6px;font-size:12px;letter-spacing:.4px;color:var(--amber,#eab308);display:flex;align-items:center;gap:8px}
+.resumen h4 .cerrar{margin-left:auto;cursor:pointer;color:var(--muted,#8aa0b4);font-size:14px;line-height:1;padding:0 2px}
+.resumen h4 .cerrar:hover{color:#fff}
+.resumen table{border-collapse:collapse;font-family:var(--mono);font-size:11px;white-space:nowrap}
+.resumen th,.resumen td{padding:2px 8px 2px 0;text-align:right;border-bottom:1px solid rgba(255,255,255,.07)}
+.resumen th{color:var(--muted,#8aa0b4);font-weight:600;text-align:right}
+.resumen th:first-child,.resumen td:first-child{text-align:left;padding-right:12px}
+.resumen .tot{color:var(--muted,#8aa0b4);margin-top:6px;font-size:11px}
 .legend{position:absolute;left:14px;bottom:14px;max-height:min(52vh,360px);overflow-y:auto;background:rgba(13,19,26,.92);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)}
 .legend .li{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .legend .li:last-child{margin-bottom:0}
@@ -308,6 +318,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <button class="btn" id="measure-mode">Regla</button>
       </div>
       <div class="legend" id="legend"></div>
+      <div class="resumen" id="resumen"></div>
         <div class="zoomctl">
           <button id="zoom-in" aria-label="Acercar">+</button>
           <button id="zoom-out" aria-label="Alejar">−</button>
@@ -1647,7 +1658,8 @@ function loadProject(P){
      con la del arranque y el panel enseña la de otra planta. */
   (function(){ const s=suggestRSU(S.hull), a=document.getElementById("rsu-sug"); if(a)a.textContent=s; })();
   applyTablesPref(P.tcus.some(t=>t[6]!=null)||!!P.mesa, P.tables);   // arranca en mesas si la planta las trae; luego manda el usuario si ya la hizo
-  pintaSugerenciaRadio(null);   // la sugerencia de radio es del cálculo, no del plano entregado
+  pintaSugerenciaRadio(null);
+  { const _r=document.getElementById("resumen"); if(_r)_r.classList.remove("open"); }   // la sugerencia de radio es del cálculo, no del plano entregado
   /* El panel NO miente: las cotas que enseña son las de la planta cargada (ver reflejaCotasPanel). */
   reflejaCotasPanel();
   assignColors(); updatePanel(); fit();
@@ -2067,6 +2079,7 @@ function recompute(refit){
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
   compartePoste(S.motors,S.ncus,S.rsus,S.reps,S.p.radius);
   pintaSugerenciaRadio(sugiereRadio());
+  pintaResumen();
   assignColors(); S.sel=null;
   updatePanel();
   if(refit) fit(); else draw();
@@ -2575,6 +2588,26 @@ function equipmentData(){
   const reps=(S.reps||[]).map(r=>({id:r.id, x:r.x, y:r.y}));
   return { ncus, rsus, reps, totals:{ ncu:ncus.length, gw:nGW, rsu:rsus.length, rep:reps.length, tcu:S.motors.length } };
 }
+/* RESUMEN DE IMPLANTACIÓN sobre el lienzo: al calcular, la misma tabla que abre la portada del
+   informe (por NCU: TCUs, GW1/GW2, distancia media, la más lejana con su id, HSUs) aparece como
+   tarjeta flotante en la esquina del plano — para leer el resultado sin abrir el PDF ni el modal.
+   Solo en los flujos de CÁLCULO (los presets son plano entregado, no propuesta); se puede cerrar
+   y el siguiente recálculo la vuelve a traer. */
+function pintaResumen(){
+  const el=document.getElementById("resumen"); if(!el)return;
+  if(!S.ncus.length||S.preset||S.fromAyora){ el.classList.remove("open"); return; }
+  const D=equipmentData();
+  const f0=(v)=>v==null?"\u2014":String(Math.round(v));
+  let filas="";
+  for(const n of D.ncus){
+    const gw=n.gws.length?n.gws.map(g=>g.n).join("/"):String(n.total);
+    filas+=`<tr><td>${n.id}</td><td>${n.total}</td><td>${gw}</td><td>${f0(n.g.med)}</td><td>${f0(n.g.max)}</td><td>${n.g.lejana||"\u2014"}</td><td>${n.nHsu?(n.hsuInc?n.nHsu+"\u2009(inc)":n.nHsu):"\u2014"}</td></tr>`;
+  }
+  el.innerHTML=`<h4>Resumen de implantación <span class="cerrar" title="Cerrar" onclick="document.getElementById('resumen').classList.remove('open')">\u00d7</span></h4>
+  <table><thead><tr><th>NCU</th><th>TCU</th><th>GW1/2</th><th>d\u0304 m</th><th>d.m\u00e1x</th><th>m\u00e1s lejana</th><th>HSU</th></tr></thead><tbody>${filas}</tbody></table>
+  <div class="tot">${D.totals.ncu} NCU \u00b7 ${D.totals.gw} GW \u00b7 ${D.totals.tcu} TCU \u00b7 ${D.totals.rsu} HSU${D.totals.rep?` \u00b7 ${D.totals.rep} repetidor(es)`:""} \u00b7 radio ${S.p.radius} m</div>`;
+  el.classList.add("open");
+}
 function openEquip(){
   const D=equipmentData();
   document.getElementById("eq-t-ncu").textContent=D.totals.ncu;
@@ -2881,6 +2914,7 @@ function autoSite(desdeCero){
   }
   applyNumbering();   // ANTES de colocar las HSU: guardan su asociación por id de NCU (ver recompute)
   S.rsus=placeRSUs(S.motors,S.hull,S.ncus,S.p.nrsu,S.p.radius);
+  pintaResumen();
   assignColors(); updatePanel(); fit();
   const sin=S.motors.filter(m=>m.ncu==null).length;
   const msg=document.getElementById("msg-auto");
