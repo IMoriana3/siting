@@ -1315,7 +1315,7 @@ function placeRSUs(motors,hull,ncus,N,radius){
     const enlace=c.dNcu<=radius ? 0.25*(1-c.dNcu/radius) : -3;
     const cota=(conZ&&zmax>zmin&&c.z!=null)?( (c.z-zmin)/(zmax-zmin) ):0;
     const desvio=1-Math.abs(norm(Math.atan2(c.y-cy,c.x-cx)-th))/(Math.PI/N);
-    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 2*Math.min(local,1) + enlace + cota + 0.5*desvio;
+    return PESO_POSTE*(c.poste?1:0) + 0.75*Math.min(arco,1) + 3*Math.min(local,1) + enlace + cota + 0.25*desvio;
   };
   const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
   /* SEPARACIÓN MÍNIMA entre estaciones: en una planta diagonal o cóncava dos sectores angulares
@@ -1347,7 +1347,20 @@ function placeRSUs(motors,hull,ncus,N,radius){
       // el filtro de separación va ANTES del top-14 por alcance radial: si no, al ensanchar el
       // sector el top-14 devuelve siempre las mismas esquinas extremas ya ocupadas (cazado en
       // Ayora: dos estaciones a 108 m con paso ideal de 400)
-      const delSector=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho&&(sinSep||lejosM(p.m))).sort((a,b)=>b.r-a.r).slice(0,14);
+      const elegibles=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho&&(sinSep||lejosM(p.m)));
+      // dos bolsas de anclas: las más RADIALES y las más ESQUINA (menos vecinos a 90 m). El top
+      // radial solo trae la mitad de la verdad: en un borde recto el punto más radial es un punto
+      // de fila cualquiera, y la ESQUINA convexa —donde el anemómetro tiene el ángulo limpio— se
+      // queda fuera de la bolsa (cazado en planta real: HSU a media fila con la esquina a 60 m,
+      // y otra en el pasillo entre dos masas en vez del contorno). La esquinidad se mide barata:
+      // vecinos dentro de 90 m con la rejilla de cielo.
+      const nVec=(m)=>{ let c=0; const ci=Math.floor(m.x/CEL), cj=Math.floor(m.y/CEL), k=Math.ceil(90/CEL);
+        for(let i=ci-k;i<=ci+k;i++)for(let j=cj-k;j<=cj+k;j++){ const arr=grid.get(i+","+j); if(!arr)continue;
+          for(const q of arr){ const dx=q.x-m.x,dy=q.y-m.y; if(dx*dx+dy*dy<=8100)c++; } } return c; };
+      const porR=elegibles.slice().sort((a,b)=>b.r-a.r).slice(0,14);
+      const porEsq=elegibles.slice().sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,14);
+      const vistos=new Set(), delSector=[];
+      for(const p of porR.concat(porEsq)){ if(vistos.has(p.m.id))continue; vistos.add(p.m.id); delSector.push(p); }
       let repliegue=null,rArco=-1;
       for(const p of delSector){
         const cl=cieloDe(p.m), loc=cieloDe(p.m,CIELO_LOCAL);
@@ -1955,12 +1968,11 @@ function readParams(){
    valida TODO: cobertura del grupo entero desde el poste (en la viga y con el margen de la
    saturación), guarda de mesas con el «Libre NCU», malla conexa, que ningún repetidor cuya única
    anfitriona posible sea esta NCU quede sin alcance, y el corte GW se reclava en su margen legal
-   (_gwCut). Solo en PLANTAS PEQUEÑAS (<=4 NCU): en las 41 HSU reales medidas el poste compartido
-   solo aparece en plantas de 1 NCU y en las de >=12 no aparece nunca — y la cobertura sola no
-   basta como freno (medido en Ayora: 3 grupos de borde cabían desde el poste y en la entrega
-   real ninguna NCU está ahí). */
+   (_gwCut). El freno es EL GRUPO, no la planta («NCU 2 y NCU 13...», criterio de campo): si el
+   grupo de esa NCU cabe entero en el radio desde el poste, compartir vale igual en una planta de
+   20 NCUs — dos postes plantados a cien metros son un poste de más. En los grupos grandes la
+   cobertura corta sola: el 1-centro no llega desde el borde y la NCU se queda donde está. */
 function compartePoste(motors,ncus,rsus,reps,radius){
-  if(ncus.length>4) return;
   const R2m=Math.pow(radius-Math.min(CLEAR_OBJ+2,radius*0.05),2);
   const gN=S.p.clearNCU!=null?S.p.clearNCU:CLEAR_MOD;
   const adj=ncus._adj;
