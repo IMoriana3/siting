@@ -510,7 +510,7 @@ function compactaComponente(motors, comp, part, adj, radius, capNCU){
         for(let t=0;t<40;t++){ let fd=-1,f=-1; for(const i of g){const d=(motors[i].x-cx)**2+(motors[i].y-cy)**2; if(d>fd){fd=d;f=i;}} if(fd<=R2)break; const st=1/(t+2); cx+=(motors[f].x-cx)*st; cy+=(motors[f].y-cy)*st; }
         return {x:cx,y:cy,g}; });
       const ok=C.every(c=>c.g.length>0 && c.g.length<=capNCU
-        && c.g.every(i=>(motors[i].x-c.x)**2+(motors[i].y-c.y)**2<=R2)
+        && c.g.every(i=>{const q=puntoTCU(motors[i]);return (q.x-c.x)**2+(q.y-c.y)**2<=R2;})
         && connectedSet(c.g,adj));
       if(ok) sol=C.map(c=>({x:c.x,y:c.y,motorIdx:c.g}));
     }
@@ -550,6 +550,10 @@ function dModulo(px,py,m,P){                       // distancia del punto al rec
   const ou=Math.max(u,0), ov=Math.max(v,0);
   return (ou||ov)?Math.hypot(ou,ov):Math.max(u,v);                  // negativo si el punto cae dentro
 }
+/* El punto que hay que CUBRIR es el de la TCU (la viga, con el desplazamiento del bífilo), que es
+   como mide el panel — validar contra el motor dejaba TCUs a 251-253 m marcadas sin cobertura en
+   bífilas justas de radio. En los bancos (sin tcuPt cargado) cae al motor, que allí es lo mismo. */
+function puntoTCU(m){ return (typeof tcuPt==="function") ? tcuPt(m) : m; }
 const BARRIDO_FINO=30;    // metros: la espiral fina (paso 0,5) alrededor del punto ideal
 const BARRIDO_CALLE=90;   // metros: prórroga en malla gruesa, SOLO automático y SOLO si el fino no
                           // dio ni los 2 m. Existe por Páramo: sin cotas por TCU, el modelo del
@@ -574,7 +578,7 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
   const o=opts||{}, R2=radius*radius, tolCorte=o.tolCorte!=null?o.tolCorte:6;
   // guarda configurable (Parámetros: "Libre NCU"/"Libre HSU"); la calle objetivo nunca baja de ella
   const guarda=(o.guarda!=null&&o.guarda>=0)?o.guarda:CLEAR_MOD, calle=Math.max(CLEAR_OBJ,guarda);
-  const cubre=(x,y)=>{for(const i of arr){const dx=motors[i].x-x,dy=motors[i].y-y;if(dx*dx+dy*dy>R2)return false;}return true;};
+  const cubre=(x,y)=>{for(const i of arr){const q=puntoTCU(motors[i]);const dx=q.x-x,dy=q.y-y;if(dx*dx+dy*dy>R2)return false;}return true;};
   const enCorte=(x,y)=>{ if(!o.ejeCorte)return true; const c=o.ejeCorte==="EW"?x:y, c0=o.ejeCorte==="EW"?n._cx0:n._cy0;
     return (o.corteLo!=null) ? (c>=o.corteLo&&c<=o.corteHi) : Math.abs(c-c0)<=tolCorte; };
   n._cx0=n.x; n._cy0=n.y;
@@ -657,7 +661,8 @@ function separaDeModulos(n,motors,arr,P,radius,opts){
     if(mejorCH>h0){ pon(mejorC); } else { n.holgura=+h0.toFixed(2); }
     return;
   }
-  if(minL){ pon(minL); return; }                               // romper el corte, solo por debajo del suelo duro
+  if(o.corteDuro&&mejorC&&mejorCH>=0){ pon(mejorC); return; }  // corte DURO: mejor ámbar dentro del margen que un GW roto
+  if(minL&&!o.corteDuro){ pon(minL); return; }                 // romper el corte, solo por debajo del suelo duro
   // Puede NO haber solución dentro del campo: si el pasillo entre mesas mide menos de 2*CLEAR_MOD
   // (El Burgo: 12 m de paso - 8,4 de mesa = 3,6 m de pasillo -> 1,8 m como mucho), los 2 m solo se
   // logran sacando la NCU fuera de la fila. Aquí se deja el mejor punto posible y se ANOTA la holgura
@@ -674,14 +679,14 @@ function placeCut(n,gwAxis,radius,capGW,motors){
   const arr=n.motorIdx; const R2=radius*radius;
   // 1) centro que CUBRA el grupo (1-centro aproximado): partir del centroide y acercarse al mas lejano
   let cx=0,cy=0; for(const i of arr){cx+=motors[i].x;cy+=motors[i].y;} cx/=arr.length; cy/=arr.length;
-  for(let it=0;it<30;it++){ let far=-1,fd=-1; for(const i of arr){const dx=motors[i].x-cx,dy=motors[i].y-cy,d=dx*dx+dy*dy; if(d>fd){fd=d;far=i;}} if(fd<=R2) break; const st=1/(it+2); cx+=(motors[far].x-cx)*st; cy+=(motors[far].y-cy)*st; }
+  for(let it=0;it<30;it++){ let far=-1,fd=-1; for(const i of arr){const q=puntoTCU(motors[i]);const dx=q.x-cx,dy=q.y-cy,d=dx*dx+dy*dy; if(d>fd){fd=d;far=i;}} if(fd<=R2) break; const st=1/(it+2); const qf=puntoTCU(motors[far]); cx+=(qf.x-cx)*st; cy+=(qf.y-cy)*st; }
   n.x=cx; n.y=cy;
   if(arr.length<=capGW){ separaDeModulos(n,motors,arr,S.p,radius,{guarda:S.p.clearNCU}); return; }   // sin reparto GW: libre de buscar la calle
   // 2) deslizar la frontera hacia la mediana del eje de corte sin romper cobertura
   const vals=arr.map(i=> gwAxis==="NS"?motors[i].y:motors[i].x).sort((a,b)=>a-b);
   const med=vals[Math.floor(vals.length/2)];
   const base = gwAxis==="NS" ? cy : cx;
-  const fits=(coord)=>{ const X=gwAxis==="NS"?cx:coord, Y=gwAxis==="NS"?coord:cy; for(const i of arr){const dx=motors[i].x-X,dy=motors[i].y-Y; if(dx*dx+dy*dy>R2) return false;} return true; };
+  const fits=(coord)=>{ const X=gwAxis==="NS"?cx:coord, Y=gwAxis==="NS"?coord:cy; for(const i of arr){const q=puntoTCU(motors[i]);const dx=q.x-X,dy=q.y-Y; if(dx*dx+dy*dy>R2) return false;} return true; };
   let chosen=base; for(let k=12;k>=0;k--){ const coord=base+(k/12)*(med-base); if(fits(coord)){ chosen=coord; break; } }
   if(gwAxis==="NS"){ n.y=chosen; } else { n.x=chosen; }
   /* Último paso: librar las mesas sin desbordar ningún gateway. El margen del corte no es un número
@@ -689,7 +694,18 @@ function placeCut(n,gwAxis,radius,capGW,motors){
      (count-capGW)-ésimo y el capGW-ésimo del eje ordenado. Con 120 TCU y capGW 80 eso son décadas de
      metros de holgura real — lo que permite alcanzar el camino en Páramo sin romper el reparto. */
   const lo=vals[arr.length-capGW-1]+0.01, hi=vals[capGW]-0.01;
-  separaDeModulos(n,motors,arr,S.p,radius,{ejeCorte:gwAxis, corteLo:Math.min(lo,hi), corteHi:Math.max(lo,hi), guarda:S.p.clearNCU});
+  const cLo=Math.min(lo,hi), cHi=Math.max(lo,hi), px=n.x, py=n.y;
+  separaDeModulos(n,motors,arr,S.p,radius,{ejeCorte:gwAxis, corteLo:cLo, corteHi:cHi, guarda:S.p.clearNCU});
+  /* Si dentro del margen GW no había NI la guarda dura, 'librar manda' aceptaba un punto fuera y
+     el gateway desbordaba (medido en bífila densa: margen de 35 m sin ningún punto a 2 m -> GW
+     85/56). La prioridad acordada es mesa > GW (hardware) > guarda: reintento con corte DURO —
+     dentro del margen con la mejor holgura que haya (ámbar), fuera solo si lo in-margen queda
+     DENTRO de una mesa (lo inmontable sigue mandando sobre todo). */
+  const cSel=gwAxis==="NS"?n.y:n.x;
+  if(cSel<cLo||cSel>cHi){
+    n.x=px; n.y=py;
+    separaDeModulos(n,motors,arr,S.p,radius,{ejeCorte:gwAxis, corteLo:cLo, corteHi:cHi, guarda:S.p.clearNCU, corteDuro:true});
+  }
 }
 /* Fusiona NCUs pequeñas SOLO en una vecina del mismo PB con la que haya enlace real. */
 // Consolidación aglomerativa: fusiona NCUs vecinas (mismo PB, conectadas por la malla)
@@ -1128,7 +1144,7 @@ function siteAll(motors,{radius=250,capNCU=160,capGW=80,reachX=40,reachY=90,merg
     let rIsla=0; for(const i of comp){const d=Math.hypot(motors[i].x-cx,motors[i].y-cy); if(d>rIsla)rIsla=d;}
     let servida=false;
     if(rIsla<=radius){
-      const cubre=(x,y)=>{ for(const i of comp){const dx=motors[i].x-x,dy=motors[i].y-y; if(dx*dx+dy*dy>R2)return false;} return true; };
+      const cubre=(x,y)=>{ for(const i of comp){const q=puntoTCU(motors[i]);const dx=q.x-x,dy=q.y-y; if(dx*dx+dy*dy>R2)return false;} return true; };
       const hosts=ncus.filter(n=>n.pb===isla.pb&&n.motorIdx.length+comp.length<=capNCU)
                       .sort((a,b)=>((a.x-cx)**2+(a.y-cy)**2)-((b.x-cx)**2+(b.y-cy)**2));
       for(const host of hosts){
