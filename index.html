@@ -211,7 +211,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <h3>Parámetros</h3>
         <div class="param">
           <label>Radio NCU <span class="hint">metros</span></label>
-          <input type="number" id="radius" value="250" min="50" step="10">
+          <input type="number" id="radius" value="300" min="50" step="10">
           <div class="rsu-suggest" id="rsug" style="display:none">Con radio <b class="mono" id="rsug-r"></b> m: <b class="mono" id="rsug-n"></b> NCU (−1) · <a id="rsug-use">usar</a></div>
         </div>
         <div class="param">
@@ -227,8 +227,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <div style="flex:1"><label>Cap. GW</label><input type="number" id="capGW" value="80" min="1"></div>
         </div>
         <div class="param" style="display:flex;gap:10px">
-          <div style="flex:1"><label>Libre NCU <span class="hint">m a mesas</span></label><input type="number" id="clearNCU" value="2" min="0" step="0.5"></div>
-          <div style="flex:1"><label>Libre HSU <span class="hint">m a mesas</span></label><input type="number" id="clearHSU" value="2" min="0" step="0.5"></div>
+          <div style="flex:1"><label>Libre NCU <span class="hint">m a mesas</span></label><input type="number" id="clearNCU" value="6" min="0" step="0.5"></div>
+          <div style="flex:1"><label>Libre HSU <span class="hint">m a mesas</span></label><input type="number" id="clearHSU" value="10" min="0" step="0.5"></div>
         </div>
         <div class="param" style="display:flex;gap:10px">
           <div style="flex:1"><label>Alcance E-W <span class="hint">m</span></label><input type="number" id="reachX" value="40" min="5" step="5"></div>
@@ -262,7 +262,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       <div class="sec">
         <h3>Vista</h3>
         <div class="toggles">
-          <label class="tg"><input type="checkbox" id="t-circles"> <span>Mostrar radios de cobertura (<span id="circ-r">250</span> m)</span></label>
+          <label class="tg"><input type="checkbox" id="t-circles"> <span>Mostrar radios de cobertura (<span id="circ-r">300</span> m)</span></label>
           <label class="tg"><input type="checkbox" id="t-gw"> Distinguir los dos GW por tono</label>
           <label class="tg"><input type="checkbox" id="t-blocks" checked> Sombrear power blocks</label>
           <label class="tg"><input type="checkbox" id="t-grid" checked> Cuadrícula (100 m)</label>
@@ -1335,6 +1335,9 @@ function placeRSUs(motors,hull,ncus,N,radius){
        queda sin estación — el sector se ENSANCHA hasta encontrar candidatos, sin repetir anclas. */
     const cands=[];
     const lejosM=(m)=>rsus.every(r=>Math.hypot(r.x-m.x,r.y-m.y)>=minSep);
+    const nVec=(m)=>{ let c=0; const ci=Math.floor(m.x/CEL), cj=Math.floor(m.y/CEL), k=Math.ceil(90/CEL);
+      for(let i=ci-k;i<=ci+k;i++)for(let j=cj-k;j<=cj+k;j++){ const arr=grid.get(i+","+j); if(!arr)continue;
+        for(const q of arr){ const dx=q.x-m.x,dy=q.y-m.y; if(dx*dx+dy*dy<=8100)c++; } } return c; };
     const recoge=(ancho,sinSep)=>{
       for(const n of ncus){ if(usadas.has(n.id))continue;
         if(Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th))>ancho)continue;
@@ -1354,9 +1357,6 @@ function placeRSUs(motors,hull,ncus,N,radius){
       // queda fuera de la bolsa (cazado en planta real: HSU a media fila con la esquina a 60 m,
       // y otra en el pasillo entre dos masas en vez del contorno). La esquinidad se mide barata:
       // vecinos dentro de 90 m con la rejilla de cielo.
-      const nVec=(m)=>{ let c=0; const ci=Math.floor(m.x/CEL), cj=Math.floor(m.y/CEL), k=Math.ceil(90/CEL);
-        for(let i=ci-k;i<=ci+k;i++)for(let j=cj-k;j<=cj+k;j++){ const arr=grid.get(i+","+j); if(!arr)continue;
-          for(const q of arr){ const dx=q.x-m.x,dy=q.y-m.y; if(dx*dx+dy*dy<=8100)c++; } } return c; };
       const porR=elegibles.slice().sort((a,b)=>b.r-a.r).slice(0,14);
       const porEsq=elegibles.slice().sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,14);
       const vistos=new Set(), delSector=[];
@@ -1370,7 +1370,10 @@ function placeRSUs(motors,hull,ncus,N,radius){
         const e=dNcuDe(pos);
         const c={x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,dNcu:e.d,z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id};
         if(cl.arco>rArco){rArco=cl.arco;repliegue=c;}            // el menos malo, por si nadie luce
-        if(cl.arco<60)continue;                                  // ni de lejos es borde
+        // el arco lejano es REQUISITO, no solo puntuación: un patio interior de la planta da
+        // arco local decente (y pocos vecinos: parece esquina) pero está rodeado de seguidores
+        // mirando a 250 m — cazado en planta real, HSU plantada en el patio entre cuatro bloques
+        if(cl.arco<CIELO_ARCO)continue;
         cands.push(c);
       }
       if(!cands.length&&repliegue)cands.push(repliegue);         // un flanco con mala exposición sigue necesitando su dato meteo
@@ -1388,6 +1391,29 @@ function placeRSUs(motors,hull,ncus,N,radius){
     let mejor=null,mb=-Infinity;
     for(const c of cands){ if(!lejos(c))continue; const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
     if(!mejor) for(const c of cands){ const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
+    if(!mejor.poste&&mejor.ancla!=null){
+      /* AFINADO LOCAL: la esquina buena puede caer en el SECTOR ANGULAR de al lado y la bolsa del
+         sector no la ve (cazado en planta real: HSU a media fila con la esquina a ~100 m). Desde
+         el ancla elegida se miran los ~10 vecinos de contorno (menos vecinos a 90 m) en un radio
+         de 150 m, cruzando sectores, y si alguno gana claramente en cielo local (>=15°) con el
+         lejano en regla, el ancla se desliza allí. */
+      const am=motors.find(mm=>mm.id===mejor.ancla);
+      if(am){
+        const cercanos=pol.filter(p=>!anclas.has(p.m.id)&&p.m.id!==mejor.ancla&&Math.hypot(p.m.x-am.x,p.m.y-am.y)<=150)
+                          .sort((a,b)=>nVec(a.m)-nVec(b.m)).slice(0,10);
+        let mejorLoc=cieloDe(am,CIELO_LOCAL).arco, sl=null;
+        for(const p of cercanos){
+          const cl2=cieloDe(p.m), lo2=cieloDe(p.m,CIELO_LOCAL);
+          if(cl2.arco<CIELO_ARCO||lo2.arco<mejorLoc+15)continue;
+          const pos2={x:p.m.x+Math.cos(lo2.rumbo)*HSU_OFFSET, y:p.m.y+Math.sin(lo2.rumbo)*HSU_OFFSET};
+          if(!rsus.every(r=>Math.hypot(r.x-pos2.x,r.y-pos2.y)>=minSep))continue;
+          mejorLoc=lo2.arco;
+          const e2=dNcuDe(pos2);
+          sl={x:pos2.x,y:pos2.y,poste:null,arco:cl2.arco,arcoL:lo2.arco,dNcu:e2.d,z:(p.m.z!=null?p.m.z:null),ncu:e2.ncu,ancla:p.m.id};
+        }
+        if(sl)mejor=sl;
+      }
+    }
     if(mejor.poste){
       usadas.add(mejor.poste.id);
       rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:mejor.x,y:mejor.y,adjusted:false,ncu:mejor.poste.id,integrada:true});
@@ -1803,7 +1829,7 @@ function downloadTpl(){
 }
 /* ===================== Estado + colores ===================== */
 const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
-  p:{radius:250,capNCU:160,capGW:80,nrsu:1,reachX:40,reachY:90,gwAxis:"EW"},
+  p:{radius:300,capNCU:160,capGW:80,nrsu:1,reachX:40,reachY:90,gwAxis:"EW"},
   v:{circles:false,gw:false,blocks:true,grid:true,tables:false,rf:false},
   T:{scale:1,ox:0,oy:0}, sel:null, hover:null, assignMode:false, placeMode:false, numMode:"rows", preset:false, fromAyora:false, measureMode:false, measure:{a:null,b:null}, projOX:null, projOY:null, ncuColor:{}, pbColor:{},
   tablesUser:null, hasDims:false};   // tablesUser: null hasta que el usuario elige formato (mesas/marcas); luego manda él

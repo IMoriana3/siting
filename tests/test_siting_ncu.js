@@ -880,6 +880,23 @@ for (const K of ['FUV1', 'FUV2']) {
     JSON.stringify([Math.round(r2[0].x), Math.round(r2[0].y), !!r2[0].integrada]));
 }
 
+// ── 9h) EL PATIO INTERIOR NO ES SITIO PARA UNA ESTACIÓN METEO ──────────────
+// Cazado en planta real: un patio entre cuatro bloques da arco local decente
+// y pocos vecinos (parece esquina), pero está rodeado de seguidores mirando a
+// 250 m. El arco LEJANO es ahora requisito también para las sueltas: ninguna
+// HSU dentro del patio.
+{
+  const motors = reticula({ nx: 30, ny: 8, px: 12, py: 70, L: 64, W: 4 })
+    .filter(m => !(m.x >= 96 && m.x <= 252 && m.y >= 140 && m.y <= 350));
+  const P = { tlen: 64, twid: 4, radius: 250 }; ctx.S.p = P;
+  const hull = ctx.convexHull(motors);
+  const rsus = ctx.placeRSUs(motors, hull, [], 4, 250);
+  const dentro = rsus.filter(r => r.x > 90 && r.x < 258 && r.y > 120 && r.y < 370).length;
+  check('patio interior: las 4 HSU salen y ninguna cae dentro del patio',
+    rsus.length === 4 && dentro === 0,
+    rsus.length + ' HSU, ' + dentro + ' en el patio: ' + JSON.stringify(rsus.map(r => [Math.round(r.x), Math.round(r.y)])));
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
