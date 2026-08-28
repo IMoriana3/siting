@@ -1277,7 +1277,14 @@ function placeRSUs(motors,hull,ncus,N,radius){
     return 3*(c.poste?1:0) + 1.5*Math.min(arco,1) + 1.5*Math.min(local,1) + enlace + cota + 0.5*desvio;
   };
   const dNcuDe=(p)=>{ let d=Infinity,q=null; for(const n of ncus){const dd=Math.hypot(n.x-p.x,n.y-p.y); if(dd<d){d=dd;q=n;}} return {d,ncu:q}; };
+  /* SEPARACIÓN MÍNIMA entre estaciones: en una planta diagonal o cóncava dos sectores angulares
+     contiguos pueden colapsar en el mismo tramo de borde (medido: dos HSU a ~130 m en el flanco
+     oeste — dos anemómetros midiendo el mismo viento). El paso ideal es perímetro/N; no se admite
+     un candidato a menos de la mitad de eso de una estación ya puesta, salvo que el sector no
+     tenga NADA más (mejor un dato apretado que un flanco ciego). */
+  const minSep=Math.max(80,Math.min(500,(hull&&hull.length>2?polyPerimeter(hull):0)/(2*N)));
   const usadas=new Set(), anclas=new Set(), rsus=[];
+  const lejos=(c)=>rsus.every(r=>Math.hypot(r.x-c.x,r.y-c.y)>=minSep);
   // rumbo y alcance radial de cada motor, una vez
   const pol=motors.map(m=>({m,th:Math.atan2(m.y-cy,m.x-cx),r:Math.hypot(m.x-cx,m.y-cy)}));
   for(let k=0;k<N;k++){
@@ -1290,7 +1297,10 @@ function placeRSUs(motors,hull,ncus,N,radius){
       for(const n of ncus){ if(usadas.has(n.id))continue;
         if(Math.abs(norm(Math.atan2(n.y-cy,n.x-cx)-th))>ancho)continue;
         const cl=cieloDe(n); if(cl.arco<CIELO_ARCO)continue;
-        cands.push({x:n.x,y:n.y,poste:n,arco:cl.arco,arcoL:cieloDe(n,CIELO_LOCAL).arco,dNcu:0,z:null});
+        // el poste también tiene que estar despejado DE CERCA: una NCU con un pasillo abierto a lo
+        // lejos pero filas pegadas alrededor no es sitio para el anemómetro
+        const lo=cieloDe(n,CIELO_LOCAL); if(lo.arco<CIELO_ARCO)continue;
+        cands.push({x:n.x,y:n.y,poste:n,arco:cl.arco,arcoL:lo.arco,dNcu:0,z:null});
       }
       const delSector=pol.filter(p=>!anclas.has(p.m.id)&&Math.abs(norm(p.th-th))<=ancho).sort((a,b)=>b.r-a.r).slice(0,14);
       let repliegue=null,rArco=-1;
@@ -1309,12 +1319,16 @@ function placeRSUs(motors,hull,ncus,N,radius){
     };
     let ancho=Math.PI/N;
     recoge(ancho);
-    while(!cands.length&&ancho<Math.PI){ ancho*=2; recoge(ancho); }
+    // el sector se ENSANCHA no solo si está vacío: también si todo lo suyo cae a menos de minSep
+    // de una estación ya puesta (planta estrecha: el sector angular cubre un tramo corto de borde
+    // y colapsaría sobre la anterior) — se busca más lejos antes de aceptar dos anemómetros juntos
+    while(cands.every(c=>!lejos(c))&&ancho<Math.PI){ ancho*=2; recoge(ancho); }
     if(!cands.length)continue;
     let zmin=Infinity,zmax=-Infinity;
     for(const c of cands)if(c.z!=null){if(c.z<zmin)zmin=c.z;if(c.z>zmax)zmax=c.z;}
     let mejor=null,mb=-Infinity;
-    for(const c of cands){ const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
+    for(const c of cands){ if(!lejos(c))continue; const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
+    if(!mejor) for(const c of cands){ const v=nota(c,k,th,zmin,zmax); if(v>mb){mb=v;mejor=c;} }
     if(mejor.poste){
       usadas.add(mejor.poste.id);
       rsus.push({id:"HSU-"+String(k+1).padStart(2,"0"),x:mejor.x,y:mejor.y,adjusted:false,ncu:mejor.poste.id,integrada:true});
@@ -1333,7 +1347,7 @@ function placeRSUs(motors,hull,ncus,N,radius){
     if(r.integrada)continue;
     let best=null,bd=Infinity;
     for(const n of ncus){ if(usadas.has(n.id))continue; const d=Math.hypot(n.x-r.x,n.y-r.y); if(d<bd){bd=d;best=n;} }
-    if(best&&bd<=HSU_FUSION&&arcoCielo(best)>=CIELO_ARCO){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
+    if(best&&bd<=HSU_FUSION&&arcoCielo(best)>=CIELO_ARCO&&cieloDe(best,CIELO_LOCAL).arco>=CIELO_ARCO){ usadas.add(best.id); r.x=best.x; r.y=best.y; r.ncu=best.id; r.integrada=true; }
   }
   return rsus;
 }
