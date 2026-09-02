@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b72</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b73</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -1238,6 +1238,76 @@ function suggestRSU(hull){
   const perim=polyPerimeter(hull);
   return Math.max(1,Math.min(12,Math.round(perim/900)));
 }
+/* ESQUINAS DE LA SILUETA QUE SE DIBUJA. Todo lo anterior (arcos de cielo, esquinidad por vecinos,
+   vértices del hull convexo) eran PROXIES de lo que el ingeniero ve: las esquinas del contorno
+   pintado. Después de seis intentos con proxies, se usa la cosa en sí — zonaBloque() con todos los
+   seguidores devuelve exactamente los lazos que se rellenan en pantalla; sus vértices convexos SON
+   las esquinas. Cada una trae su bisectriz exterior, que es hacia donde mira el anemómetro. */
+function medidasPlanta(motors){
+  const med=a=>a.length?a.slice().sort((x,y)=>x-y)[Math.floor(a.length/2)]:null;
+  const A=(med(motors.map(m=>m.az||0))||0)*Math.PI/180;
+  const wx=Math.cos(A), wy=-Math.sin(A), lx=Math.sin(A), ly=Math.cos(A);
+  const pp=m=>m.x*wx+m.y*wy, qq=m=>m.x*lx+m.y*ly;
+  const fil={},d=[];
+  for(const m of motors){const L=(m.len!=null?m.len:S.p.tlen);const k=Math.round(qq(m)/Math.max(1,L/2));(fil[k]=fil[k]||[]).push(m);}
+  for(const k in fil){const c=fil[k].slice().sort((a,b)=>pp(a)-pp(b));
+    for(let i=1;i<c.length;i++){const v=pp(c[i])-pp(c[i-1]);if(v>0.5)d.push(v);}}
+  const pitch=med(d)||12;
+  const col={},g=[];
+  for(const m of motors){const k=Math.round(pp(m)*2)/2;(col[k]=col[k]||[]).push(m);}
+  for(const k in col){const c=col[k].slice().sort((a,b)=>qq(a)-qq(b));
+    for(let i=1;i<c.length;i++){const la=(c[i-1].len!=null?c[i-1].len:S.p.tlen),lb=(c[i].len!=null?c[i].len:S.p.tlen);
+      const h=(qq(c[i])-qq(c[i-1]))-(la+lb)/2; if(h>0.2&&h<40)g.push(h);}}
+  return {pitch, gapL: g.length?med(g)/2:0};
+}
+function contornoPlanta(motors,paso){
+  const vacio={esquinas:[],muestras:[]};
+  if(!motors||motors.length<3) return vacio;
+  let lazos=[];
+  try{ const m=medidasPlanta(motors); lazos=zonaBloque(motors,[],m.pitch,m.gapL); }catch(_){ return vacio; }
+  /* MUESTRAS equiespaciadas a lo largo del contorno: el reparto por husos angulares desde el
+     centroide deja huecos en plantas alargadas (192x1330: todo cae en dos husos y los últimos
+     sectores se quedaban sin candidatos a distancia). Recorrer el perímetro por longitud de arco
+     no depende de la forma. */
+  const muestras=[], PASO=Math.max(25,paso||60);
+  for(const lz of lazos){
+    const n=lz.length; if(n<4) continue;
+    let A2=0; for(let i=0;i<n;i++){const j=(i+1)%n; A2+=lz[i][0]*lz[j][1]-lz[j][0]*lz[i][1];}
+    if(A2<=0) continue;
+    let resto=0;
+    for(let i=0;i<n;i++){
+      const p=lz[i], q=lz[(i+1)%n], seg=Math.hypot(q[0]-p[0],q[1]-p[1]);
+      if(seg<1e-9) continue;
+      const ux=(q[0]-p[0])/seg, uy=(q[1]-p[1])/seg, rb=Math.atan2(-ux,uy);   // normal exterior (lazo CCW)
+      let d=resto;
+      while(d<seg){ muestras.push({x:p[0]+ux*d, y:p[1]+uy*d, rumbo:rb}); d+=PASO; }
+      resto=d-seg;
+    }
+  }
+  const bruto=[], GIRO=45*Math.PI/180, MIRA=28;
+  for(const lz of lazos){
+    const n=lz.length; if(n<8) continue;
+    let A2=0; for(let i=0;i<n;i++){const j=(i+1)%n; A2+=lz[i][0]*lz[j][1]-lz[j][0]*lz[i][1];}
+    if(A2<=0) continue;                       // lazo horario = hueco interior: sus esquinas no son de planta
+    for(let i=0;i<n;i++){
+      let a=i,d0=0,gu=0;
+      while(d0<MIRA&&gu++<n){ const p=lz[a],q=lz[(a-1+n)%n]; d0+=Math.hypot(q[0]-p[0],q[1]-p[1]); a=(a-1+n)%n; }
+      let b=i; d0=0; gu=0;
+      while(d0<MIRA&&gu++<n){ const p=lz[b],q=lz[(b+1)%n]; d0+=Math.hypot(q[0]-p[0],q[1]-p[1]); b=(b+1)%n; }
+      const ux=lz[i][0]-lz[a][0], uy=lz[i][1]-lz[a][1], vx=lz[b][0]-lz[i][0], vy=lz[b][1]-lz[i][1];
+      const lu=Math.hypot(ux,uy)||1, lv=Math.hypot(vx,vy)||1;
+      const giro=Math.atan2((ux*vy-uy*vx)/(lu*lv),(ux*vx+uy*vy)/(lu*lv));
+      if(giro<GIRO) continue;                 // giro a la izquierda en lazo antihorario = esquina CONVEXA
+      const n1x=uy/lu,n1y=-ux/lu,n2x=vy/lv,n2y=-vx/lv;   // normales exteriores
+      let bx=n1x+n2x,by=n1y+n2y; const lb=Math.hypot(bx,by)||1;
+      bruto.push({x:lz[i][0],y:lz[i][1],rumbo:Math.atan2(by/lb,bx/lb),giro});
+    }
+  }
+  bruto.sort((p,q)=>q.giro-p.giro);           // la esquina más marcada representa a su tramo
+  const keep=[];
+  for(const c of bruto) if(keep.every(k=>Math.hypot(k.x-c.x,k.y-c.y)>45)) keep.push(c);
+  return {esquinas:keep, muestras};
+}
 const HSU_OFFSET=20;// metros: MEDIDO en las 41 HSU reales de 11 plantas (layouts cobertura-zigbee):
                     // distancia a la viga más cercana 13-58 m, mediana 24 — la estación se separa
                     // de la fila de verdad, no se monta rozándola
@@ -1377,6 +1447,7 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
      un candidato a menos de la mitad de eso de una estación ya puesta, salvo que el sector no
      tenga NADA más (mejor un dato apretado que un flanco ciego). */
   const minSep=Math.max(80,Math.min(500,(hull&&hull.length>2?polyPerimeter(hull):0)/(2*N)));
+  const sinNcus=!ncus||!ncus.length;   // sin NCUs no hay enlace que exigir (banco, o HSU antes del reparto)
   const usadas=new Set(), anclas=new Set(), rsus=[];
   // las estaciones MANUALES entran primero: cuentan para el total, la separación y la orientación
   for(const f of (fijas||[])) rsus.push(f);
@@ -1451,6 +1522,31 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
     }
   }
   const cands=[];
+  /* Las esquinas de la silueta entran como candidatas de PRIMERA CLASE (esqSil): su punto ya está
+     en el contorno pintado, empujado por la bisectriz exterior hasta librar la guarda. No se
+     afinan, no se barren y ganan a cualquier punto de fila mientras haya una libre en el flanco. */
+  { const cont=contornoPlanta(motors, Math.max(40,minSep/3));
+    const gH=S.p.clearHSU!=null?S.p.clearHSU:CLEAR_MOD;
+    const desdeContorno=(e,esEsq)=>{
+      let pos=null;
+      for(let t=2;t<=90;t+=3){
+        const px=e.x+Math.cos(e.rumbo)*t, py=e.y+Math.sin(e.rumbo)*t;
+        let h=Infinity;
+        for(const m of motors){ const q=dModulo(px,py,m,S.p); if(q<h){h=q; if(h<0)break;} }
+        if(h>=gH){ pos={x:px,y:py}; break; }
+      }
+      if(!pos) return;
+      let am=null,bd=Infinity;
+      for(const m of motors){ const d=Math.hypot(m.x-e.x,m.y-e.y); if(d<bd){bd=d;am=m;} }
+      const cl=cieloDe(pos), loc=cieloDe(pos,CIELO_LOCAL), en=dNcuDe(pos);
+      cands.push({x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,rumbo:e.rumbo,dNcu:en.d,
+                  z:(am&&am.z!=null?am.z:null),ncu:en.ncu,ancla:am?am.id:null,
+                  th:Math.atan2(pos.y-cy,pos.x-cx),geom:true,esqSil:!!esEsq,fijo:true,
+                  repliegue:(!sinNcus&&en.d>radius)||(!esEsq&&cl.arco<CIELO_ARCO)});
+    };
+    for(const e of cont.esquinas) desdeContorno(e,true);
+    for(const e of cont.muestras) desdeContorno(e,false);
+  }
   for(const n of ncus){ if(usadas.has(n.id))continue;
     const cl=cieloDe(n); if(cl.arco<CIELO_ARCO)continue;
     const lo=cieloDe(n,CIELO_LOCAL); if(lo.arco<CIELO_ARCO)continue;   // despejada también DE CERCA
@@ -1476,7 +1572,7 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
        del contorno» es la regla del ingeniero, y un escalón NE con 90° de campo abierto es sitio). */
     const c={x:pos.x,y:pos.y,poste:null,arco:cl.arco,arcoL:loc.arco,rumbo:loc.rumbo,dNcu:e.d,
              z:(p.m.z!=null?p.m.z:null),ncu:e.ncu,ancla:p.m.id,th:p.th,nv:nVec(p.m),geom:!!p.geom,
-             repliegue:(e.d>radius||dHull(pos.x,pos.y)>150)||(!p.geom&&cl.arco<CIELO_ARCO)};
+             repliegue:((!sinNcus&&e.d>radius)||dHull(pos.x,pos.y)>150)||(!p.geom&&cl.arco<CIELO_ARCO)};
     cands.push(c);
     if(c.z!=null){ if(c.z<zminG)zminG=c.z; if(c.z>zmaxG)zmaxG=c.z; }
   }
@@ -1492,7 +1588,7 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
       const p75=arcs[Math.floor(arcs.length*3/4)], p50=arcs[Math.floor(arcs.length/2)];
       umbEsqG=Math.max(p75,p50+20);
     }
-    for(const c of cands) c.esq=c.geom||(c.arcoL||0)>=umbEsqG; }
+    for(const c of cands) c.esq=c.esqSil||c.geom||(c.arcoL||0)>=umbEsqG; }
   for(let k=rsus.length;k<N;k++){
     /* UNA ESTACIÓN POR SECTOR ANGULAR (rodear es requisito meteorológico: viento y nubes entran
        por cualquier lado), elegida de la BOLSA GLOBAL con la nota completa. La causa raíz del
@@ -1512,7 +1608,7 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
        en San José: «ni una va a la esquina»). */
     let mejor=null,ancho=Math.PI/N;
     while(true){
-      let mb=-Infinity; mejor=null; let mbE=-Infinity,mejorE=null;
+      let mb=-Infinity; mejor=null; let mbE=-Infinity,mejorE=null, mbS=-Infinity,mejorS=null;
       for(const c of cands){
         if(c._usado||c.repliegue)continue;                      // el repliegue es el último escalón, no compite aquí
         if(c.poste&&usadas.has(c.poste.id))continue;
@@ -1520,10 +1616,15 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
         if(!lejos(c))continue;
         const v=nota(c)-1.6*repite(c);
         if(S._dbgHsu){ (S._dbg=S._dbg||[]).push({k,anc:c.ancla||(c.poste&&c.poste.id),x:Math.round(c.x),y:Math.round(c.y),v:+v.toFixed(2),n:+nota(c).toFixed(2),rep:repite(c),esq:!!c.esq}); }
+        if(c.esqSil&&v>mbS){mbS=v;mejorS=c;}
         if(c.esq&&v>mbE){mbE=v;mejorE=c;}
         if(v>mb){mb=v;mejor=c;}
       }
-      if(mejorE)mejor=mejorE;
+      // esquina de silueta primero, categórico — salvo que gane un POSTE compartido, que en
+      // plantas pequeñas es la regla medida en las entregas reales (PESO_POSTE 3 con <=2 NCU)
+      if(mejor&&mejor.poste&&mb>=mbS){ /* se queda el poste */ }
+      else if(mejorS)mejor=mejorS;
+      else if(mejorE)mejor=mejorE;
       if(mejor||ancho>=Math.PI)break;
       ancho*=2;
     }
@@ -1614,7 +1715,7 @@ function placeRSUs(motors,hull,ncus,N,radius,fijas){
     } else {
       if(mejor.ancla!=null)anclas.add(mejor.ancla);
       const pos={x:mejor.x,y:mejor.y};
-      if(mejor.esq&&mejor.rumbo!=null){
+      if(mejor.esq&&!mejor.fijo&&mejor.rumbo!=null){
         /* LA ESQUINA SE CONSERVA EMPUJANDO, no barriendo: en un escalón denso la calle no da el
            «Libre HSU» y la prórroga arrastraba la estación 80 m a la media fila (cazado en San
            José con Libre 10). El campo abierto de la propia esquina sí lo da unos metros más

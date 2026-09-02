@@ -45,6 +45,9 @@ const src = [
   grab(/function convexHull[\s\S]*?function polyPerimeter.*\n/, 'convexHull'),
   grab(/function buildAdjacency[\s\S]*?\n(?=function nextNcuId)/, 'núcleo (adyacencia→relax)'),
   grab(/function siteAll[\s\S]*?\n(?=function suggestRSU)/, 'siteAll'),
+  grab(/function zonaBloque\([\s\S]*?\n\}\n/, 'zonaBloque (silueta dibujada)'),
+  grab(/function medidasPlanta\([\s\S]*?\n\}\n/, 'medidasPlanta'),
+  grab(/function contornoPlanta\([\s\S]*?\n\}\n/, 'contornoPlanta (silueta)'),
   grab(/const HSU_OFFSET[\s\S]*?\n(?=\/\* ===================== Generador)/, 'placeRSUs'),
 ].join('\n');
 if (ko) { console.log('\nFALLOS: ' + ko); process.exit(1); }
@@ -584,10 +587,15 @@ for (const K of ['FUV1', 'FUV2']) {
   const hull = ctx.convexHull(motors.map(m => ({ x: m.x, y: m.y })));
   const rsus = ctx.placeRSUs(motors, hull, [], 2, 250);
   const este = rsus.reduce((a, b) => a.x > b.x ? a : b);
-  // el anclaje sigue siendo el motor alto; el empuje al lado abierto es HSU_OFFSET (20 m,
-  // medido en las 41 HSU reales: 13-58 m de la viga) más lo que corrija la guarda
-  check('topografía: la HSU del este se ancla en el punto alto del flanco',
-    Math.hypot(este.x - 468, este.y - 70) <= 35, Math.hypot(este.x - 468, este.y - 70).toFixed(1) + ' m del cerro');
+  /* La ESQUINA manda (regla de campo, repetida hasta el hartazgo: «ni una va a la esquina»): la
+     estación va a un vértice del contorno del flanco este, no a media fila aunque ahí esté el
+     cerro. La cota no desaparece — ORDENA entre las esquinas del flanco: de las dos del lado este
+     (norte y sur) se queda con la del lado del cerro. */
+  const enFlancoE = este.x > 440;
+  const dNorte = Math.hypot(este.x - 468, este.y - 70), dSur = Math.hypot(este.x - 468, este.y - 210);
+  check('topografía: la HSU del este va a la ESQUINA del flanco, la del lado del cerro',
+    enFlancoE && dNorte < dSur, 'x=' + este.x.toFixed(0) + ' y=' + este.y.toFixed(0) +
+    ' · al cerro ' + dNorte.toFixed(0) + ' m, a la esquina sur ' + dSur.toFixed(0) + ' m');
 }
 {
   // enlace y sectores vacíos, sobre las plantas reales: ninguna HSU suelta fuera
@@ -977,6 +985,32 @@ for (const K of ['FUV1', 'FUV2']) {
   const dmins = rsus.filter(r => r !== f).map(r => Math.hypot(r.x - f.x, r.y - f.y));
   check('y las automáticas la respetan (separación mínima también contra la manual)',
     dmins.every(d => d >= 80 - 1e-6), dmins.map(d => Math.round(d)).join(' '));
+}
+
+// ── 9l) LA ESTACIÓN VA A UNA ESQUINA DEL CONTORNO DIBUJADO ────────────────
+// Regla de campo, repetida hasta el hartazgo: «ni una va a la esquina». Tras
+// seis intentos con proxies (arco de cielo, vecinos a 90 m, vértices del hull)
+// se usa la cosa en sí: zonaBloque() devuelve los lazos que se PINTAN, y sus
+// vértices convexos son las esquinas que el ingeniero ve. Cada estación sale
+// de una de ellas, empujada por la bisectriz exterior hasta librar la guarda.
+{
+  const bloque = reticula({ nx: 24, ny: 5, px: 12, py: 70, L: 64, W: 4 });
+  const ap = reticula({ nx: 6, ny: 2, px: 12, py: 70, L: 64, W: 4 });
+  ap.forEach((m, i) => { m.x += 300; m.y += 420; m.id = 'A' + (i + 1); });
+  const all = bloque.concat(ap);
+  const P = { tlen: 64, twid: 4, radius: 250, clearHSU: 2 }; ctx.S.p = P;
+  const hull = ctx.convexHull(all);
+  const cont = ctx.contornoPlanta(all, 60);
+  check('la silueta dibujada da esquinas convexas (>=4 en una planta con apéndice)',
+    cont.esquinas.length >= 4, cont.esquinas.length + ' esquinas');
+  const rsus = ctx.placeRSUs(all, hull, [], 4, 250);
+  const dEsq = rsus.map(r => Math.min(...cont.esquinas.map(e => Math.hypot(e.x - r.x, e.y - r.y))));
+  check('y las 4 HSU salen de una esquina del contorno (<=45 m del vértice)',
+    rsus.length === 4 && dEsq.every(d => d <= 45),
+    dEsq.map(d => Math.round(d)).join(' '));
+  const malas = rsus.filter(r => holg(r.x, r.y, all, P) < 2 - 1e-9);
+  check('sin pisar mesa: la esquina se conserva EMPUJANDO por la bisectriz, no barriendo',
+    malas.length === 0, malas.map(r => r.id).join(' '));
 }
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
