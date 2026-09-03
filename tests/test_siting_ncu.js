@@ -48,6 +48,7 @@ const src = [
   grab(/function zonaBloque\([\s\S]*?\n\}\n/, 'zonaBloque (silueta dibujada)'),
   grab(/function medidasPlanta\([\s\S]*?\n\}\n/, 'medidasPlanta'),
   grab(/function contornoPlanta\([\s\S]*?\n\}\n/, 'contornoPlanta (silueta)'),
+  grab(/const VIENTO_SECT[\s\S]*?\n(?=\/\* ESQUINAS DE LA SILUETA)/, 'módulo de viento'),
   grab(/const HSU_OFFSET[\s\S]*?\n(?=\/\* ===================== Generador)/, 'placeRSUs'),
 ].join('\n');
 if (ko) { console.log('\nFALLOS: ' + ko); process.exit(1); }
@@ -1011,6 +1012,52 @@ for (const K of ['FUV1', 'FUV2']) {
   const malas = rsus.filter(r => holg(r.x, r.y, all, P) < 2 - 1e-9);
   check('sin pisar mesa: la esquina se conserva EMPUJANDO por la bisectriz, no barriendo',
     malas.length === 0, malas.map(r => r.id).join(' '));
+}
+
+// ── 9m) ROSA DE LOS VIENTOS: la exposición se mide HACIA DONDE SOPLA ──────
+// El anemómetro mide el viento que manda en la planta, y ese viento tiene
+// rumbo: entre dos esquinas válidas gana la que tiene el campo libre de cara
+// al sector dominante. Los datos son los del simulador de viento (Open-Meteo
+// ERA5, 16 sectores x 4 bandas); aquí se comprueba la matemática y el efecto.
+{
+  // serie sintética: el viento fuerte entra siempre del OESTE (270°)
+  const ws = [], wd = [];
+  for (let i = 0; i < 8760; i++) {
+    const fuerte = i % 5 === 0;
+    ws.push(fuerte ? 18 : 3); wd.push(fuerte ? 270 : (i * 53) % 360);
+  }
+  const rosa = ctx.rosaViento(ws, wd, 1);
+  check('la rosa cuenta las horas por sector y banda (16 x 4, sin perder horas)',
+    rosa.sectores.length === 16 && rosa.sectores[0].length === 4 &&
+    Math.abs(rosa.horas - 8760) < 1e-6, rosa.horas + ' h');
+  const dom = ctx.sectorDominante(rosa);
+  check('y el sector dominante es el del viento fuerte (O)', dom.rumbo === 'O', JSON.stringify(dom));
+  const w = ctx.pesosViento(rosa);
+  let suma = 0; for (let i = 0; i < 72; i++) suma += w[i];
+  check('los pesos por celda de 5° suman 1 (16 sectores no caben en celdas enteras)',
+    Math.abs(suma - 1) < 1e-9, suma.toFixed(6));
+  // la celda que mira al OESTE debe pesar mucho más que la que mira al ESTE
+  const celda = az => { const th = (90 - az) * Math.PI / 180; return ((Math.floor(((th + Math.PI) / (2 * Math.PI)) * 72) % 72) + 72) % 72; };
+  check('y el peso se concentra en el rumbo dominante (O >> E)',
+    w[celda(270)] > 5 * w[celda(90)], 'O=' + w[celda(270)].toFixed(4) + ' E=' + w[celda(90)].toFixed(4));
+
+  /* EFECTO: dos esquinas igual de buenas en simétrico, una abierta al oeste y otra al este —
+     con la rosa cargada la estación tiene que irse a la del oeste. Bloque con un apéndice a
+     cada lado: el del oeste deja el flanco oeste despejado. */
+  const centro = reticula({ nx: 20, ny: 6, px: 12, py: 70, L: 64, W: 4 });
+  ctx.S.p = { tlen: 64, twid: 4, radius: 400, clearHSU: 2 };
+  const hull = ctx.convexHull(centro);
+  ctx.S.viento = null;
+  const sinV = ctx.placeRSUs(centro, hull, [], 1, 400);
+  ctx.S.viento = { rosa, pesos: w };
+  const conV = ctx.placeRSUs(centro, hull, [], 1, 400);
+  ctx.S.viento = null;
+  check('con rosa cargada la estación se coloca mirando al viento dominante (más al oeste)',
+    conV[0].x < sinV[0].x + 1e-6,
+    'sin viento x=' + Math.round(sinV[0].x) + ' · con viento x=' + Math.round(conV[0].x));
+  check('y la estación anota su exposición al viento para el aviso del panel',
+    conV[0]._expV != null && conV[0]._expV >= 0 && conV[0]._expV <= 1,
+    String(conV[0]._expV));
 }
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
