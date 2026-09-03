@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b74</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b75</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -2717,6 +2717,37 @@ function fit(){
   draw();
 }
 const w2s=(p)=>({x:S.T.ox+p.x*S.T.scale, y:S.T.oy-p.y*S.T.scale});
+/* ROSA EN EL PLANO. Se pinta sobre el propio lienzo, en coordenadas de PANTALLA: así entra sola
+   en el PNG exportado y en las páginas del informe, que renderizan este mismo canvas. Arriba a la
+   derecha, bajo la botonera; con fondo claro translúcido porque el lienzo técnico es claro. */
+function rosaEnLienzo(){
+  const V=S.viento; if(!V||!V.rosa||!V.rosa.horas||!S.motors.length) return;
+  const sec=V.rosa.sectores, S16=sec.length;
+  const tot=sec.map(a=>a.reduce((p,q)=>p+q,0)), max=Math.max.apply(null,tot)||1;
+  const chico=cv.width<560;
+  const R=Math.max(34,Math.min(58,cv.width*0.055)), pad=10;
+  const cxp=cv.width-R-pad-4, cyp=(chico?0:44)+R+pad+4;
+  ctx.save();
+  ctx.fillStyle="rgba(255,255,255,.82)"; ctx.strokeStyle="rgba(10,29,48,.16)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(cxp,cyp,R+pad,0,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle="rgba(10,29,48,.14)";
+  [0.5,1].forEach(f=>{ ctx.beginPath(); ctx.arc(cxp,cyp,R*f,0,7); ctx.stroke(); });
+  const paso=2*Math.PI/S16, ancho=paso*0.86, MEDIO=-Math.PI/2;
+  sec.forEach((bandas,i)=>{
+    const c=i*paso+MEDIO, a0=c-ancho/2, a1=c+ancho/2; let acc=0;
+    bandas.forEach((h,b)=>{ if(h<=0)return;
+      const r0=R*acc/max, r1=R*(acc+h)/max; acc+=h;
+      ctx.beginPath(); ctx.arc(cxp,cyp,r1,a0,a1,false); ctx.arc(cxp,cyp,r0,a1,a0,true); ctx.closePath();
+      ctx.fillStyle=WROSA_COL[b]||"#2a3a50"; ctx.fill(); });
+  });
+  ctx.fillStyle="#5c7189"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ["N","E","S","O"].forEach((t,i)=>{ const a2=i*Math.PI/2;
+    ctx.fillText(t, cxp+Math.sin(a2)*(R+6), cyp-Math.cos(a2)*(R+6)); });
+  const dom=sectorDominante(V.rosa);
+  if(dom){ ctx.fillStyle="#0A1D30"; ctx.font="700 10px 'IBM Plex Mono',monospace";
+    ctx.fillText("viento "+dom.rumbo, cxp, cyp+R+pad+8); }
+  ctx.restore();
+}
 function draw(){
   const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
   ctx.fillStyle="#fafbfc"; ctx.fillRect(0,0,W,H);
@@ -2960,6 +2991,7 @@ function draw(){
     const ay=(Math.min(drag.y0,drag.y1)-r.top)*DPR, by=(Math.max(drag.y0,drag.y1)-r.top)*DPR;
     ctx.fillStyle="rgba(33,94,153,.12)"; ctx.strokeStyle="rgba(33,94,153,.85)"; ctx.lineWidth=1.5;
     ctx.fillRect(ax,ay,bx-ax,by-ay); ctx.strokeRect(ax,ay,bx-ax,by-ay); }
+  rosaEnLienzo();
   if((S.placeMode||S.assignMode)&&S.motors.length){
     const txt=S.placeMode?"Toca el plano para colocar la NCU":(S.sel?("Pincha o encuadra TCUs para "+S.sel):"Asignar TCUs: toca el rombo de una NCU para empezar");
     ctx.save(); ctx.font="700 13px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
@@ -3225,10 +3257,19 @@ function paginasInforme(){
     const linea=`${D.totals.ncu} NCU \u00b7 ${D.totals.gw} GW \u00b7 ${D.totals.rsu} HSU \u00b7 ${D.totals.rep} repetidores \u00b7 ${D.totals.tcu} TCU`+
       `   |   radio ${S.p.radius} m \u00b7 cap. ${S.p.capNCU}/${S.p.capGW} \u00b7 libre NCU ${S.p.clearNCU} m / HSU ${S.p.clearHSU} m`;
     c.fillStyle="#0A1D30"; c.font="500 24px 'IBM Plex Mono',monospace"; c.fillText(linea, 40, 128);
+    /* El viento va DICHO, no solo dibujado: la rosa sale en el mapa (el informe renderiza el
+       mismo lienzo), pero el rumbo dominante y las velocidades son dato de proyecto. */
+    const HV=(S.viento&&S.viento.rosa&&S.viento.rosa.horas)?30:0;   // hueco de la línea de viento
+    if(HV){
+      const R2=S.viento.rosa, dm=sectorDominante(R2);
+      c.fillStyle="#5a6b7a"; c.font="500 19px 'IBM Plex Mono',monospace";
+      c.fillText(`viento dominante ${dm?dm.rumbo:"\u2014"} \u00b7 media ${R2.media_kmh||0} km/h \u00b7 m\u00e1x ${R2.max_kmh||0} km/h`+
+        `   |   ${S.viento.fuente||"Open-Meteo"} ${S.viento.anos||""}`, 40, 128+24);
+    }
     const todos=S.motors.concat(S.ncus,S.rsus,S.reps||[]);
-    const vista=renderVista(PW-80, MAP_H, bboxDe(todos,40), null);
-    c.drawImage(vista.out, 40, 150);
-    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5,PW-80,MAP_H);
+    const vista=renderVista(PW-80, MAP_H-HV, bboxDe(todos,40), null);
+    c.drawImage(vista.out, 40, 150+HV);
+    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5+HV,PW-80,MAP_H-HV);
     c.fillStyle="#0A1D30"; c.font="700 22px 'IBM Plex Mono',monospace";
     c.fillText("Resumen por NCU"+(nCont?` (1\u2013${Math.min(filasPortada,nN)} de ${nN})`:""), 40, 150+MAP_H+42);
     cabTabla(c, TABLA_Y0);

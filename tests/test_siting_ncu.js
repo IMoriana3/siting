@@ -1060,6 +1060,20 @@ for (const K of ['FUV1', 'FUV2']) {
     String(conV[0]._expV));
 }
 
+// ── 9n) LA ROSA SALE EN EL PLANO Y EN EL INFORME (cableado en el fuente) ──
+// Se pinta sobre el propio lienzo en coordenadas de pantalla: así entra sola
+// en el PNG exportado y en las páginas del informe, que renderizan ese mismo
+// canvas. En la portada, además, el viento va DICHO (rumbo, media y máxima),
+// y el mapa baja lo justo para no comerse la línea.
+{
+  check('la rosa se dibuja en el lienzo y draw() la llama',
+    html.includes('function rosaEnLienzo()') && /rosaEnLienzo\(\);[\s\S]{0,400}function draw\(\)|function draw\(\)[\s\S]*?rosaEnLienzo\(\);/.test(html));
+  check('y el informe lleva la línea de viento con el mapa desplazado (sin solaparse)',
+    html.includes('viento dominante ${dm?dm.rumbo') &&
+    html.includes('const HV=(S.viento&&S.viento.rosa&&S.viento.rosa.horas)?30:0;') &&
+    html.includes('renderVista(PW-80, MAP_H-HV,') && html.includes('c.drawImage(vista.out, 40, 150+HV);'));
+}
+
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
 // El rectángulo de 640x560 con radio 250 exige 4 NCUs (ninguna puede cubrir
 // dos esquinas: los lados miden 560 y 640 > 2R=500). El sondeo con el
