@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b75</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b76</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -2724,11 +2724,21 @@ function rosaEnLienzo(){
   const V=S.viento; if(!V||!V.rosa||!V.rosa.horas||!S.motors.length) return;
   const sec=V.rosa.sectores, S16=sec.length;
   const tot=sec.map(a=>a.reduce((p,q)=>p+q,0)), max=Math.max.apply(null,tot)||1;
-  const chico=cv.width<560;
-  const R=Math.max(34,Math.min(58,cv.width*0.055)), pad=10;
-  const cxp=cv.width-R-pad-4, cyp=(chico?0:44)+R+pad+4;
+  /* TAMAÑO. Antes era cv.width*0.055 con tope 58 px y en un monitor grande el tope saltaba
+     siempre: la rosa salía del tamaño de un botón en un lienzo de 1.300 px de alto. Ahora se ata
+     al lado CORTO además de al ancho —así no se desmadra en un lienzo apaisado ni se encoge en el
+     mapa del informe (1.674x510)— y SIN tope: un tope en px de lienzo vuelve a encoger la rosa en
+     cuanto la pantalla es retina (px de dispositivo = 2 de CSS). En fracción pura mide lo mismo en
+     pantalla con DPR 1 y con DPR 2, un cuarto del alto. Tipos y huecos van en fracción de R. */
+  const R=Math.max(44,Math.min(cv.width*0.05, cv.height*0.11)), pad=R*0.16;
+  /* La botonera está en px de CSS y el lienzo en px de dispositivo: en una pantalla retina hay que
+     bajar el doble. cv.clientWidth da la escala real; en el informe el lienzo es más pequeño que su
+     estilo, la razón queda <1 y el max(1,·) la deja en la altura de una botonera normal. */
+  const esc=Math.max(1,Math.min(3, cv.width/(cv.clientWidth||cv.width)));
+  const barra=(cv.width<560)?0:Math.min(44*esc, cv.height*0.08);
+  const cxp=cv.width-R-pad-4, cyp=barra+R+pad+4;
   ctx.save();
-  ctx.fillStyle="rgba(255,255,255,.82)"; ctx.strokeStyle="rgba(10,29,48,.16)"; ctx.lineWidth=1;
+  ctx.fillStyle="rgba(255,255,255,.82)"; ctx.strokeStyle="rgba(10,29,48,.16)"; ctx.lineWidth=Math.max(1,R/58);
   ctx.beginPath(); ctx.arc(cxp,cyp,R+pad,0,7); ctx.fill(); ctx.stroke();
   ctx.strokeStyle="rgba(10,29,48,.14)";
   [0.5,1].forEach(f=>{ ctx.beginPath(); ctx.arc(cxp,cyp,R*f,0,7); ctx.stroke(); });
@@ -2740,12 +2750,13 @@ function rosaEnLienzo(){
       ctx.beginPath(); ctx.arc(cxp,cyp,r1,a0,a1,false); ctx.arc(cxp,cyp,r0,a1,a0,true); ctx.closePath();
       ctx.fillStyle=WROSA_COL[b]||"#2a3a50"; ctx.fill(); });
   });
-  ctx.fillStyle="#5c7189"; ctx.font="600 9px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const FC=Math.max(9,Math.round(R*0.19)), FD=Math.max(10,Math.round(R*0.21));
+  ctx.fillStyle="#5c7189"; ctx.font="600 "+FC+"px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
   ["N","E","S","O"].forEach((t,i)=>{ const a2=i*Math.PI/2;
-    ctx.fillText(t, cxp+Math.sin(a2)*(R+6), cyp-Math.cos(a2)*(R+6)); });
+    ctx.fillText(t, cxp+Math.sin(a2)*(R+pad*0.6), cyp-Math.cos(a2)*(R+pad*0.6)); });
   const dom=sectorDominante(V.rosa);
-  if(dom){ ctx.fillStyle="#0A1D30"; ctx.font="700 10px 'IBM Plex Mono',monospace";
-    ctx.fillText("viento "+dom.rumbo, cxp, cyp+R+pad+8); }
+  if(dom){ ctx.fillStyle="#0A1D30"; ctx.font="700 "+FD+"px 'IBM Plex Mono',monospace";
+    ctx.fillText("viento "+dom.rumbo, cxp, cyp+R+pad+FD*0.9); }
   ctx.restore();
 }
 function draw(){

@@ -1072,6 +1072,34 @@ for (const K of ['FUV1', 'FUV2']) {
     html.includes('viento dominante ${dm?dm.rumbo') &&
     html.includes('const HV=(S.viento&&S.viento.rosa&&S.viento.rosa.horas)?30:0;') &&
     html.includes('renderVista(PW-80, MAP_H-HV,') && html.includes('c.drawImage(vista.out, 40, 150+HV);'));
+
+  /* TAMAÑO DE LA ROSA. Con el tope de 58 px, en un monitor grande (lienzo 3230x1293) el disco
+     salía de 136 px: el tamaño de un botón. Y un tope en px de LIENZO se vuelve a quedar corto en
+     una pantalla retina, donde 1 px de CSS son 2 de dispositivo. Se mide la fórmula real. */
+  const srcR = (html.match(/function rosaEnLienzo\(\)\{[\s\S]*?\n\}/) || [''])[0];
+  check('se localiza rosaEnLienzo', srcR.length > 0);
+  const lR = (srcR.match(/const R=Math\.max[^;]+;/) || [''])[0];
+  const lE = (srcR.match(/const esc=[^;]+;/) || [''])[0];
+  const lB = (srcR.match(/const barra=[^;]+;/) || [''])[0];
+  const tam = (w,h,cssW)=>Function('cv','"use strict";'+lR+lE+lB+'return {R:R,pad:pad,barra:barra};')
+    ({width:w,height:h,clientWidth:cssW||w});
+  const disco = t => 2*(t.R+t.pad);
+  const monitor = tam(3230,1293);                        // el caso de la captura, DPR 1
+  check('en un monitor grande la rosa ocupa ~1/4 del alto, no 136 px',
+    disco(monitor) > 1293*0.20 && disco(monitor) < 1293*0.32, Math.round(disco(monitor))+' px de 1293');
+  const portatil = tam(1400,760);
+  check('en un portátil queda igual de proporcionada',
+    disco(portatil) > 760*0.20 && disco(portatil) < 760*0.32);
+  const retina = tam(2800,1520,1400);                    // el mismo portátil con DPR 2
+  check('con DPR 2 mide lo mismo EN PANTALLA (nada de topes en px de lienzo)',
+    Math.abs(retina.R/2 - portatil.R) < 0.6 && Math.abs(retina.barra - 2*portatil.barra) < 0.6);
+  const informe = tam(1674,510,3230);                    // el mapa de la portada del informe
+  check('en el mapa del informe se ve pero no se come el plano',
+    informe.R >= 44 && disco(informe) < 510*0.35 && informe.barra <= 510*0.08,
+    Math.round(disco(informe))+' px de 510');
+  check('los tipos crecen con el radio (no quedan 9 px en una rosa de 140)',
+    /const FC=Math\.max\(9,Math\.round\(R\*0\.19\)\), FD=Math\.max\(10,Math\.round\(R\*0\.21\)\);/.test(srcR) &&
+    srcR.includes('"600 "+FC+"px') && srcR.includes('"700 "+FD+"px'));
 }
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
