@@ -169,7 +169,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   <div class="header">
     <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
     <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span>
-    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b76</span></div></div>
+    <div><h1>Siting de comunicaciones</h1><div class="tag">Fase oferta · NCU / GW / HSU · <span id="build" title="Sello de build: si no coincide con el último despliegue, estás viendo una versión cacheada — fuerza la recarga">b77</span></div></div>
     <span class="badge-demo">Demo</span>
     <span class="brand">Factiun</span>
   </div>
@@ -2717,47 +2717,108 @@ function fit(){
   draw();
 }
 const w2s=(p)=>({x:S.T.ox+p.x*S.T.scale, y:S.T.oy-p.y*S.T.scale});
-/* ROSA EN EL PLANO. Se pinta sobre el propio lienzo, en coordenadas de PANTALLA: así entra sola
-   en el PNG exportado y en las páginas del informe, que renderizan este mismo canvas. Arriba a la
-   derecha, bajo la botonera; con fondo claro translúcido porque el lienzo técnico es claro. */
+/* ROSA DE LOS VIENTOS, EL GRÁFICO. La primera versión era un adorno: pétalos y cuatro letras, sin
+   escala ni leyenda —«no se ven velocidades, sectores»—. Esta es la rosa que se espera de un
+   cuaderno: escala en % DE HORAS con los anillos rotulados en números redondos, los 16 rumbos
+   marcados y ocho con nombre, pétalos apilados por banda de velocidad y leyenda con los rangos en
+   km/h. Se pinta en coordenadas de PANTALLA y sobre cualquier contexto, así que la misma tarjeta
+   vale para el lienzo del plano (y con él el PNG que se exporta) y para la portada del informe,
+   allí con su propio tamaño y en su franja, sin pisar el mapa. */
+function rosaR(w,h){ return Math.max(42, Math.min(w*0.072, h*0.078)); }
+/* La caja va aparte y solo depende del radio: así se puede MEDIR en el banco sin lienzo, y el
+   informe puede despejar la franja que necesita antes de dibujar nada. */
+function rosaCaja(R){
+  const f=(k,m)=>Math.max(m,Math.round(R*k));
+  const fTit=f(0.23,10), fRum=f(0.17,8), fLeg=f(0.17,8), fPct=f(0.15,7), fPie=f(0.17,8);
+  const mg=R*0.34, pad=R*0.20, Wc=R*3.4;             // mg: corona de rumbos; Wc: sitio para el texto
+  const yTit=pad+fTit*0.6;
+  const cy=yTit+fTit*0.6+R*0.12+mg+R;                // centro de la rosa
+  const yLegT=cy+R+mg+R*0.14+fLeg*0.6;               // "velocidad (km/h)"
+  const chLeg=fLeg*1.35, yLeg=yLegT+chLeg;           // 1ª fila de la leyenda (2 columnas x 2 filas)
+  const yPie=yLeg+chLeg+fPie*1.5;
+  const Hc=yPie+fPie*0.6+pad;
+  return {R,fTit,fRum,fLeg,fPct,fPie,mg,pad,Wc,Hc,yTit,cy,yLegT,yLeg,chLeg,yPie};
+}
+function pintaRosa(c,x0,y0,R,V){
+  const rosa=V&&V.rosa; if(!rosa||!rosa.horas) return;
+  const g=rosaCaja(R), sec=rosa.sectores, S16=sec.length, MONO="'IBM Plex Mono',monospace";
+  const tot=sec.map(a=>a.reduce((p,q)=>p+q,0));
+  const horas=rosa.horas||tot.reduce((p,q)=>p+q,0)||1;
+  const pmax=100*Math.max.apply(null,tot)/horas;
+  /* ESCALA. Los anillos van en números redondos —2, 5, 10 %…— y el último justo por encima del
+     pétalo mayor: sin eso el radio no dice nada y la rosa vuelve a ser un adorno. Se prueban 2, 3
+     y 4 anillos y gana el reparto que MENOS radio desperdicia (con 3 fijos, un máximo del 31 %
+     obligaba a una escala de 45 y el pétalo mayor se quedaba a media rosa). */
+  const NICE=[0.5,1,2,2.5,5,7.5,10,15,20,25,30,40,50];
+  let paso=NICE[NICE.length-1], nAn=4;
+  { let sobra=Infinity;
+    for(const v of NICE) for(const k of [2,3,4]){ const P=v*k;
+      if(P+1e-9<pmax) continue;
+      if(P/pmax<sobra){ sobra=P/pmax; paso=v; nAn=k; } } }
+  const PMAX=nAn*paso;
+  const cx=x0+g.Wc/2, cy=y0+g.cy, rr=q=>R*q/PMAX;
+  const pct=q=>(Math.abs(q-Math.round(q))<0.05?String(Math.round(q)):q.toFixed(1).replace(".",","))+" %";
+  const marco=(x,y,w,h,r)=>{ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+    c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); };
+  c.save(); c.textBaseline="middle";
+  c.fillStyle="rgba(255,255,255,.94)"; c.strokeStyle="rgba(10,29,48,.18)"; c.lineWidth=Math.max(1,R/70);
+  marco(x0,y0,g.Wc,g.Hc,R*0.10); c.fill(); c.stroke();
+  const dom=sectorDominante(rosa);
+  c.fillStyle="#0A1D30"; c.font="700 "+g.fTit+"px "+MONO; c.textAlign="center";
+  c.fillText("Viento dominante "+(dom?dom.rumbo:"—"), cx, y0+g.yTit);
+  // rejilla: radios cada 22,5° y anillos de la escala
+  c.strokeStyle="rgba(10,29,48,.10)"; c.lineWidth=Math.max(1,R/130);
+  for(let i=0;i<S16;i++){ const a=i*2*Math.PI/S16-Math.PI/2;
+    c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R); c.stroke(); }
+  c.strokeStyle="rgba(10,29,48,.18)"; c.lineWidth=Math.max(1,R/110);
+  for(let k=1;k<=nAn;k++){ c.beginPath(); c.arc(cx,cy,rr(k*paso),0,7); c.stroke(); }
+  // pétalos: cada anillo del pétalo es una banda de velocidad, y el radio es % de horas
+  const pas=2*Math.PI/S16, anc=pas*0.84;
+  sec.forEach((bandas,i)=>{
+    const ce=i*pas-Math.PI/2, a0=ce-anc/2, a1=ce+anc/2; let acc=0;
+    bandas.forEach((h,b)=>{ if(h<=0)return;
+      const r0=rr(100*acc/horas), r1=rr(100*(acc+h)/horas); acc+=h;
+      c.beginPath(); c.arc(cx,cy,r1,a0,a1,false); c.arc(cx,cy,r0,a1,a0,true); c.closePath();
+      c.fillStyle=WROSA_COL[b]||"#2a3a50"; c.fill(); });
+  });
+  /* Los % se rotulan sobre el rumbo MENOS ocupado: es el único radio donde el número no cae
+     encima de un pétalo. Con halo blanco, que alguno roza igual. */
+  let iL=0; tot.forEach((v,i)=>{ if(v<tot[iL]) iL=i; });
+  const aL=iL*pas-Math.PI/2;
+  c.font="500 "+g.fPct+"px "+MONO; c.textAlign="center";
+  c.lineJoin="round"; c.strokeStyle="rgba(255,255,255,.92)"; c.lineWidth=Math.max(2,R*0.045);
+  for(let k=1;k<=nAn;k++){ const t=pct(k*paso), tx=cx+Math.cos(aL)*rr(k*paso), ty=cy+Math.sin(aL)*rr(k*paso);
+    c.strokeText(t,tx,ty); c.fillStyle="#5c7189"; c.fillText(t,tx,ty); }
+  // rumbos: marca en los 16, nombre en los 8 principales
+  c.strokeStyle="rgba(10,29,48,.35)"; c.lineWidth=Math.max(1,R/110);
+  for(let i=0;i<S16;i++){ const a=i*pas-Math.PI/2, ca=Math.cos(a), sa=Math.sin(a);
+    c.beginPath(); c.moveTo(cx+ca*R,cy+sa*R); c.lineTo(cx+ca*(R+g.mg*(i%2?0.13:0.22)),cy+sa*(R+g.mg*(i%2?0.13:0.22))); c.stroke(); }
+  c.font="600 "+g.fRum+"px "+MONO; c.fillStyle="#3d4f61";
+  for(let i=0;i<S16;i+=2){ const a=i*pas-Math.PI/2;
+    c.fillText(VIENTO_RUMBOS[i], cx+Math.cos(a)*(R+g.mg*0.62), cy+Math.sin(a)*(R+g.mg*0.62)); }
+  // leyenda: cada color es una banda de velocidad, con su rango en km/h
+  c.textAlign="left"; c.font="500 "+g.fLeg+"px "+MONO; c.fillStyle="#7b8b9c";
+  c.fillText("velocidad (km/h)", x0+g.pad, y0+g.yLegT);
+  const anchoCol=(g.Wc-2*g.pad)/2, lado=g.fLeg*0.85;
+  (rosa.bandas||[]).forEach((bd,i)=>{
+    const lx=x0+g.pad+(i%2)*anchoCol, ly=y0+g.yLeg+((i/2)|0)*g.chLeg;
+    c.fillStyle=WROSA_COL[i]||"#2a3a50"; marco(lx,ly-lado/2,lado,lado,lado*0.25); c.fill();
+    c.fillStyle="#3d4f61";
+    c.fillText(bd.max_kmh==null?"> "+bd.min_kmh:bd.min_kmh+"–"+bd.max_kmh, lx+lado*1.5, ly); });
+  c.textAlign="center"; c.font="500 "+g.fPie+"px "+MONO; c.fillStyle="#5c7189";
+  c.fillText("media "+(rosa.media_kmh||0)+" · máx "+(rosa.max_kmh||0)+" km/h", cx, y0+g.yPie);
+  c.restore();
+}
+/* En el plano va arriba a la derecha, bajo la botonera. En el informe NO: allí se apaga (_rosaOff)
+   y la portada la pinta en su propia franja, grande y sin taparle el mapa. */
 function rosaEnLienzo(){
-  const V=S.viento; if(!V||!V.rosa||!V.rosa.horas||!S.motors.length) return;
-  const sec=V.rosa.sectores, S16=sec.length;
-  const tot=sec.map(a=>a.reduce((p,q)=>p+q,0)), max=Math.max.apply(null,tot)||1;
-  /* TAMAÑO. Antes era cv.width*0.055 con tope 58 px y en un monitor grande el tope saltaba
-     siempre: la rosa salía del tamaño de un botón en un lienzo de 1.300 px de alto. Ahora se ata
-     al lado CORTO además de al ancho —así no se desmadra en un lienzo apaisado ni se encoge en el
-     mapa del informe (1.674x510)— y SIN tope: un tope en px de lienzo vuelve a encoger la rosa en
-     cuanto la pantalla es retina (px de dispositivo = 2 de CSS). En fracción pura mide lo mismo en
-     pantalla con DPR 1 y con DPR 2, un cuarto del alto. Tipos y huecos van en fracción de R. */
-  const R=Math.max(44,Math.min(cv.width*0.05, cv.height*0.11)), pad=R*0.16;
+  const V=S.viento; if(S._rosaOff||!V||!V.rosa||!V.rosa.horas||!S.motors.length) return;
+  const R=rosaR(cv.width,cv.height), g=rosaCaja(R);
   /* La botonera está en px de CSS y el lienzo en px de dispositivo: en una pantalla retina hay que
-     bajar el doble. cv.clientWidth da la escala real; en el informe el lienzo es más pequeño que su
-     estilo, la razón queda <1 y el max(1,·) la deja en la altura de una botonera normal. */
+     bajar el doble. cv.clientWidth da la escala real del lienzo. */
   const esc=Math.max(1,Math.min(3, cv.width/(cv.clientWidth||cv.width)));
   const barra=(cv.width<560)?0:Math.min(44*esc, cv.height*0.08);
-  const cxp=cv.width-R-pad-4, cyp=barra+R+pad+4;
-  ctx.save();
-  ctx.fillStyle="rgba(255,255,255,.82)"; ctx.strokeStyle="rgba(10,29,48,.16)"; ctx.lineWidth=Math.max(1,R/58);
-  ctx.beginPath(); ctx.arc(cxp,cyp,R+pad,0,7); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle="rgba(10,29,48,.14)";
-  [0.5,1].forEach(f=>{ ctx.beginPath(); ctx.arc(cxp,cyp,R*f,0,7); ctx.stroke(); });
-  const paso=2*Math.PI/S16, ancho=paso*0.86, MEDIO=-Math.PI/2;
-  sec.forEach((bandas,i)=>{
-    const c=i*paso+MEDIO, a0=c-ancho/2, a1=c+ancho/2; let acc=0;
-    bandas.forEach((h,b)=>{ if(h<=0)return;
-      const r0=R*acc/max, r1=R*(acc+h)/max; acc+=h;
-      ctx.beginPath(); ctx.arc(cxp,cyp,r1,a0,a1,false); ctx.arc(cxp,cyp,r0,a1,a0,true); ctx.closePath();
-      ctx.fillStyle=WROSA_COL[b]||"#2a3a50"; ctx.fill(); });
-  });
-  const FC=Math.max(9,Math.round(R*0.19)), FD=Math.max(10,Math.round(R*0.21));
-  ctx.fillStyle="#5c7189"; ctx.font="600 "+FC+"px 'IBM Plex Mono',monospace"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  ["N","E","S","O"].forEach((t,i)=>{ const a2=i*Math.PI/2;
-    ctx.fillText(t, cxp+Math.sin(a2)*(R+pad*0.6), cyp-Math.cos(a2)*(R+pad*0.6)); });
-  const dom=sectorDominante(V.rosa);
-  if(dom){ ctx.fillStyle="#0A1D30"; ctx.font="700 "+FD+"px 'IBM Plex Mono',monospace";
-    ctx.fillText("viento "+dom.rumbo, cxp, cyp+R+pad+FD*0.9); }
-  ctx.restore();
+  pintaRosa(ctx, cv.width-g.Wc-8, barra+8, R, V);
 }
 function draw(){
   const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
@@ -3212,6 +3273,9 @@ function bboxDe(pts,margen){
 }
 function paginasInforme(){
   const PW=1754, PH=1240;                               // A4 apaisado a 150 dpi
+  /* La rosa se apaga DENTRO del lienzo mientras se compone el informe: en el mapa saldría con 40
+     px de radio y letra de 8, ilegible impresa. La portada la pinta aparte, en su propia franja. */
+  const rosaAntes=S._rosaOff; S._rosaOff=true;
   const D=equipmentData();
   const titulo=S.projName||S.sc||"siting";
   const fm=v=>v==null?"\u2014":Math.round(v);
@@ -3278,9 +3342,16 @@ function paginasInforme(){
         `   |   ${S.viento.fuente||"Open-Meteo"} ${S.viento.anos||""}`, 40, 128+24);
     }
     const todos=S.motors.concat(S.ncus,S.rsus,S.reps||[]);
-    const vista=renderVista(PW-80, MAP_H-HV, bboxDe(todos,40), null);
+    /* La rosa no se pinta ENCIMA del plano: se le despeja una franja a la derecha y se dibuja al
+       tamaño que se lee impresa (dentro del mapa saldría a 40 px de radio). El mapa cede ese
+       ancho; el resto de páginas van sin rosa, con la portada basta. */
+    const kH=rosaCaja(100).Hc/100;
+    const MH=MAP_H-HV, Rr=HV?Math.min(320/3.4,(MH-24)/kH):0, gr=Rr?rosaCaja(Rr):null;
+    const MW=(PW-80)-(gr?Math.round(gr.Wc)+22:0);
+    const vista=renderVista(MW, MH, bboxDe(todos,40), null);
     c.drawImage(vista.out, 40, 150+HV);
-    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5+HV,PW-80,MAP_H-HV);
+    c.strokeStyle="#c9d4de"; c.strokeRect(40.5,150.5+HV,MW,MH);
+    if(gr) pintaRosa(c, 40+MW+22, 150+HV+(MH-gr.Hc)/2, Rr, S.viento);
     c.fillStyle="#0A1D30"; c.font="700 22px 'IBM Plex Mono',monospace";
     c.fillText("Resumen por NCU"+(nCont?` (1\u2013${Math.min(filasPortada,nN)} de ${nN})`:""), 40, 150+MAP_H+42);
     cabTabla(c, TABLA_Y0);
@@ -3327,6 +3398,7 @@ function paginasInforme(){
     });
     paginas.push(pg);
   }
+  S._rosaOff=rosaAntes;
   return paginas;
 }
 /* PDF mínimo: catálogo + páginas, cada página un JPEG /DCTDecode a sangre en A4 apaisado.

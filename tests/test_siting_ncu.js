@@ -1060,46 +1060,95 @@ for (const K of ['FUV1', 'FUV2']) {
     String(conV[0]._expV));
 }
 
-// ── 9n) LA ROSA SALE EN EL PLANO Y EN EL INFORME (cableado en el fuente) ──
-// Se pinta sobre el propio lienzo en coordenadas de pantalla: así entra sola
-// en el PNG exportado y en las páginas del informe, que renderizan ese mismo
-// canvas. En la portada, además, el viento va DICHO (rumbo, media y máxima),
-// y el mapa baja lo justo para no comerse la línea.
+// ── 9n) LA ROSA ES UN GRÁFICO, NO UN ADORNO ───────────────────────────────
+// La primera versión pintaba pétalos y cuatro letras: "no se ven velocidades,
+// sectores". Aquí no se mira el dibujo, se LEE: se corre pintaRosa() contra un
+// lienzo falso que apunta cada texto y cada relleno, y se exige escala en % con
+// anillos rotulados, los ocho rumbos, la leyenda de bandas en km/h y el pie con
+// media y máxima. Y se mide la caja: la misma en pantalla con DPR 1 y 2, y con
+// su sitio en la portada del informe (allí la rosa va en franja aparte, no
+// encima del plano).
 {
   check('la rosa se dibuja en el lienzo y draw() la llama',
     html.includes('function rosaEnLienzo()') && /rosaEnLienzo\(\);[\s\S]{0,400}function draw\(\)|function draw\(\)[\s\S]*?rosaEnLienzo\(\);/.test(html));
-  check('y el informe lleva la línea de viento con el mapa desplazado (sin solaparse)',
+  check('el informe dice el viento en la portada',
     html.includes('viento dominante ${dm?dm.rumbo') &&
-    html.includes('const HV=(S.viento&&S.viento.rosa&&S.viento.rosa.horas)?30:0;') &&
-    html.includes('renderVista(PW-80, MAP_H-HV,') && html.includes('c.drawImage(vista.out, 40, 150+HV);'));
+    html.includes('const HV=(S.viento&&S.viento.rosa&&S.viento.rosa.horas)?30:0;'));
+  check('y la rosa del informe va en su franja: el mapa se estrecha, no se tapa',
+    html.includes('const rosaAntes=S._rosaOff; S._rosaOff=true;') &&
+    html.includes('S._rosaOff=rosaAntes;') &&
+    /const MW=\(PW-80\)-\(gr\?Math\.round\(gr\.Wc\)\+22:0\);/.test(html) &&
+    html.includes('renderVista(MW, MH,') &&
+    /if\(gr\) pintaRosa\(c, 40\+MW\+22,/.test(html) &&
+    /function rosaEnLienzo\(\)\{[\s\S]{0,200}S\._rosaOff/.test(html));
 
-  /* TAMAÑO DE LA ROSA. Con el tope de 58 px, en un monitor grande (lienzo 3230x1293) el disco
-     salía de 136 px: el tamaño de un botón. Y un tope en px de LIENZO se vuelve a quedar corto en
-     una pantalla retina, donde 1 px de CSS son 2 de dispositivo. Se mide la fórmula real. */
-  const srcR = (html.match(/function rosaEnLienzo\(\)\{[\s\S]*?\n\}/) || [''])[0];
-  check('se localiza rosaEnLienzo', srcR.length > 0);
-  const lR = (srcR.match(/const R=Math\.max[^;]+;/) || [''])[0];
-  const lE = (srcR.match(/const esc=[^;]+;/) || [''])[0];
-  const lB = (srcR.match(/const barra=[^;]+;/) || [''])[0];
-  const tam = (w,h,cssW)=>Function('cv','"use strict";'+lR+lE+lB+'return {R:R,pad:pad,barra:barra};')
-    ({width:w,height:h,clientWidth:cssW||w});
-  const disco = t => 2*(t.R+t.pad);
-  const monitor = tam(3230,1293);                        // el caso de la captura, DPR 1
-  check('en un monitor grande la rosa ocupa ~1/4 del alto, no 136 px',
-    disco(monitor) > 1293*0.20 && disco(monitor) < 1293*0.32, Math.round(disco(monitor))+' px de 1293');
-  const portatil = tam(1400,760);
+  // el gráfico, corrido de verdad contra un lienzo de mentira
+  const srcRosa = (html.match(/function rosaR\(w,h\)[\s\S]*?\n\}\n(?=\/\* En el plano)/) || [''])[0];
+  check('se localiza el bloque de la rosa (rosaR/rosaCaja/pintaRosa)',
+    srcRosa.includes('function rosaCaja') && srcRosa.includes('function pintaRosa'));
+  ctx.WROSA_COL = ['#2f5d8a','#3f8fbf','#e0a83a','#c0392b'];
+  vm.runInContext(srcRosa, ctx);
+  // serie de 3 años: dominante del ONO, con temporales sueltos que llegan a >72
+  const ws = [], wd = [];
+  for (let i = 0; i < 3 * 8760; i++) {
+    const fuerte = i % 97 === 0;
+    ws.push(fuerte ? 15 + 8 * (i % 3) : 1 + 6 * ((i % 5) / 5));
+    wd.push(i % 5 === 0 ? (i * 37) % 360 : 292.5 + ((i % 7) - 3) * 11);
+  }
+  const rosa = ctx.rosaViento(ws, wd, 1);
+  const lienzo = {
+    txt: [], col: [], arcos: 0, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1,
+    font: '', textAlign: '', textBaseline: '', lineJoin: '',
+    save(){}, restore(){}, beginPath(){}, moveTo(){}, lineTo(){}, closePath(){},
+    stroke(){}, arcTo(){}, strokeText(){},
+    arc(){ this.arcos++; },
+    fill(){ this.col.push(this.fillStyle); },
+    fillText(t){ this.txt.push(String(t)); },
+    measureText(t){ return { width: String(t).length * 6 }; }
+  };
+  ctx.pintaRosa(lienzo, 0, 0, 100, { rosa });
+  const dice = t => lienzo.txt.some(x => x.indexOf(t) >= 0);
+  check('dice el rumbo dominante', dice('Viento dominante ONO'), lienzo.txt[0]);
+  check('rotula los ocho rumbos, no solo N/E/S/O',
+    ['N','NE','E','SE','S','SO','O','NO'].every(r => lienzo.txt.includes(r)));
+  const pcts = lienzo.txt.filter(t => /%$/.test(t));
+  check('los anillos llevan su % de horas (escala legible, 2-4 aros)',
+    pcts.length >= 2 && pcts.length <= 4, pcts.join(' '));
+  check('y la escala no desperdicia radio: el pétalo mayor pasa del 65% del aro',
+    (function(){
+      const tot = rosa.sectores.map(a => a.reduce((p,q) => p+q, 0));
+      const pmax = 100 * Math.max.apply(null, tot) / rosa.horas;
+      const ult = parseFloat(pcts[pcts.length-1].replace(',','.'));
+      return pmax / ult > 0.65 && pmax <= ult + 1e-9;
+    })(), pcts.join(' '));
+  check('la leyenda dice que los colores son VELOCIDAD, con sus rangos en km/h',
+    dice('velocidad (km/h)') && dice('0–25') && dice('25–50') && dice('50–72') && dice('> 72'));
+  check('el pie da media y máxima', dice('media ') && dice('km/h') &&
+    lienzo.txt.some(t => t.indexOf('máx ' + rosa.max_kmh) >= 0));
+  check('los pétalos se pintan con los cuatro colores de banda (hay temporal en la serie)',
+    ctx.WROSA_COL.every(c => lienzo.col.includes(c)));
+
+  /* LA CAJA. Con el tope de 58 px de la primera versión, en un monitor grande
+     (lienzo 3230x1293) la rosa salía de 136 px: el tamaño de un botón. Y un tope
+     en px de LIENZO se vuelve a quedar corto en retina, donde 1 px de CSS son 2
+     de dispositivo. Se mide la fórmula real. */
+  const caja = (w,h) => { const R = ctx.rosaR(w,h); const g = ctx.rosaCaja(R); return {R, W:g.Wc, H:g.Hc}; };
+  const monitor = caja(3230,1293);
+  check('en un monitor grande la tarjeta ocupa ~1/3 del alto, no 136 px',
+    monitor.H > 1293*0.28 && monitor.H < 1293*0.42, Math.round(monitor.W)+'x'+Math.round(monitor.H)+' de 1293');
+  const portatil = caja(1400,760);
   check('en un portátil queda igual de proporcionada',
-    disco(portatil) > 760*0.20 && disco(portatil) < 760*0.32);
-  const retina = tam(2800,1520,1400);                    // el mismo portátil con DPR 2
+    portatil.H > 760*0.28 && portatil.H < 760*0.42 && portatil.W < 1400*0.20);
+  const retina = caja(2800,1520);                        // el mismo portátil con DPR 2
   check('con DPR 2 mide lo mismo EN PANTALLA (nada de topes en px de lienzo)',
-    Math.abs(retina.R/2 - portatil.R) < 0.6 && Math.abs(retina.barra - 2*portatil.barra) < 0.6);
-  const informe = tam(1674,510,3230);                    // el mapa de la portada del informe
-  check('en el mapa del informe se ve pero no se come el plano',
-    informe.R >= 44 && disco(informe) < 510*0.35 && informe.barra <= 510*0.08,
-    Math.round(disco(informe))+' px de 510');
-  check('los tipos crecen con el radio (no quedan 9 px en una rosa de 140)',
-    /const FC=Math\.max\(9,Math\.round\(R\*0\.19\)\), FD=Math\.max\(10,Math\.round\(R\*0\.21\)\);/.test(srcR) &&
-    srcR.includes('"600 "+FC+"px') && srcR.includes('"700 "+FD+"px'));
+    Math.abs(retina.R/2 - portatil.R) < 0.6);
+  // la franja de la portada: 320 px de ancho y el alto del mapa (540-30 de la línea de viento)
+  const Rinf = Math.min(320/3.4, (510-24)/(ctx.rosaCaja(100).Hc/100)), gInf = ctx.rosaCaja(Rinf);
+  check('en la portada del informe cabe en su franja y se lee impresa',
+    gInf.Wc <= 320.5 && gInf.Hc <= 510 && gInf.fLeg >= 14 && gInf.fTit >= 18,
+    Math.round(gInf.Wc)+'x'+Math.round(gInf.Hc)+' leg '+gInf.fLeg);
+  check('los tipos crecen con el radio (nada de 9 px en una rosa de 140)',
+    ctx.rosaCaja(140).fLeg > ctx.rosaCaja(60).fLeg && ctx.rosaCaja(140).fTit > ctx.rosaCaja(60).fTit);
 }
 
 // ── 10) SUGERENCIA DE RADIO: ¿cuánto subirlo para ahorrar una NCU? ─────────
