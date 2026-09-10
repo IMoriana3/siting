@@ -348,7 +348,7 @@ for (const K of ['FUV1', 'FUV2']) {
 
 // ── 6a2) LAS COTAS DE AYORA SON EL DATO DEL DWG, y nadie las pisa ──────────
 // Lección aprendida a base de error propio: el preset de Ayora SIEMPRE trajo
-// sus cotas medidas (74,76/56,31/37,85 x 8,384, bífilo 2,384) — lo único roto
+// sus cotas medidas (74,76/56,31/37,85 x 8,384, bífila 2,384) — lo único roto
 // era el DISPLAY del panel, que enseñaba el 64x4 de fábrica. Una "mejora"
 // llegó a pisar el dato con una derivación equivocada (paso de módulo de El
 // Burgo en vez del módulo ancho de Ayora: 2x28x1,3346=74,76; y el gcr da el
@@ -362,9 +362,9 @@ for (const K of ['FUV1', 'FUV2']) {
   check('el preset de Ayora trae el dato del DWG en los 751 TCU as-built (envolvente 8,384)',
     P.tcus.length === 751 && conCotas === P.tcus.length, conCotas + ' de ' + P.tcus.length);
   const largos = [...new Set(P.tcus.map(t => Math.round(t[6] * 100) / 100))].sort((a, b) => a - b);
-  check('con los tres largos del DWG (37,85 · 56,31 · 74,76) y bífilo 2,384',
+  check('con los tres largos del DWG (37,85 · 56,31 · 74,76) y bífila 2,384',
     largos.length === 3 && Math.abs(largos[0] - 37.85) < 0.01 && Math.abs(largos[2] - 74.76) < 0.01 &&
-    P.bifilo && Math.abs(P.bifilo.cuerda - 2.384) < 0.001, largos.join(' '));
+    P.bifila && Math.abs(P.bifila.cuerda - 2.384) < 0.001, largos.join(' '));
   // coherencia geométrica del dato: ninguna mesa pisa a su vecina de columna
   const cols = {};
   P.tcus.forEach(t => { (cols[Math.round(t[0] / 3) * 3] = cols[Math.round(t[0] / 3) * 3] || []).push(t); });
@@ -635,7 +635,7 @@ for (const K of ['FUV1', 'FUV2']) {
   vm.createContext(c2);
   vm.runInContext(src2, c2);
   c2.S = {
-    bifilo: null, projOX: null, p: { twid: 4, tlen: 64 },
+    bifila: null, projOX: null, p: { twid: 4, tlen: 64 },
     motors: [
       { x: 30, y: 0, id: 'M1', tcu: 'NCU-01·GW1·T001' },
       { x: 0, y: -40, id: 'M2', tcu: 'NCU-01·GW1·T002' },

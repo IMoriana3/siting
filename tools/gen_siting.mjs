@@ -186,7 +186,7 @@ const P = { ox: +cE.toFixed(1) + minx, oy: +cN.toFixed(1) + minn, sc: SC[planta]
 if (PREVIO && PREVIO.alt) P.alt = PREVIO.alt;
 if (PREVIO && PREVIO.tables != null) P.tables = PREVIO.tables;
 if (!tieneCotas) { /* sin cotas en el layout no se declara nada de la mesa */ }
-else if (filaZ > 0.05) P.bifilo = { cuerda: cuerda };       // dos filas: el siting deduce el pasillo = ancho − cuerda
+else if (filaZ > 0.05) P.bifila = { cuerda: cuerda };       // dos filas: el siting deduce el pasillo = ancho − cuerda
 else P.monofila = true;                                     // filaZ 0: una sola banda
 P.ox = +P.ox.toFixed(1); P.oy = +P.oy.toFixed(1);
 

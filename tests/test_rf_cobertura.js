@@ -28,7 +28,7 @@ const ZigbeePV = require(path.join(RAIZ, 'zigbee_pv_model.js'));
 const ctx = {
   console, ZigbeePV, window: { ZigbeePV },
   document: { getElementById: () => ({ value: '30' }) },
-  S: { motors: [], p: { twid: 12, tlen: 64 }, bifilo: null, _rfRows: null },
+  S: { motors: [], p: { twid: 12, tlen: 64 }, bifila: null, _rfRows: null },
 };
 vm.createContext(ctx);
 try { vm.runInContext(m[0], ctx); } catch (e) { check('el bloque RF compila', false, e.message); }
@@ -39,7 +39,7 @@ const S = ctx.S;
 // ── utilidades de escenario ──
 function plantaGirada(azDeg, n = 6, len = 64, wid = 12, pitch = 12) {
   const a = azDeg * Math.PI / 180, ux = Math.cos(a), uy = -Math.sin(a);
-  S.bifilo = null; S.p = { twid: wid, tlen: len }; S.motors = [];
+  S.bifila = null; S.p = { twid: wid, tlen: len }; S.motors = [];
   for (let k = -n; k <= n; k++)
     S.motors.push({ x: k * pitch * ux, y: k * pitch * uy, len, wid, az: azDeg });
   S._rfRows = null; ctx.rfRows();
@@ -101,7 +101,7 @@ const margenLimpio = ZigbeePV.predictLink(
 // Antes contaba 6 filas donde el enlace cruza 3: los dos bloques comparten
 // coordenadas X, y con filas infinitas eso basta para contarlos todos.
 {
-  S.bifilo = null; S.p = { twid: 12, tlen: 64 }; S.motors = [];
+  S.bifila = null; S.p = { twid: 12, tlen: 64 }; S.motors = [];
   for (let k = -3; k <= -1; k++) S.motors.push({ x: k * 12, y: 0, len: 64, wid: 12, az: 0 });
   for (let k = 1; k <= 3; k++) S.motors.push({ x: k * 12, y: 80, len: 64, wid: 12, az: 0 });
   S._rfRows = null; ctx.rfRows();
@@ -118,7 +118,7 @@ const margenLimpio = ZigbeePV.predictLink(
 // esta corrección no puede cambiarles ni un decimal. Congelado con lo MEDIDO
 // contra el código anterior (obstáculos y margen por seguidor).
 {
-  S.p = { twid: 12, tlen: 64 }; S.bifilo = { cuerda: 2.38 }; S.motors = [];
+  S.p = { twid: 12, tlen: 64 }; S.bifila = { cuerda: 2.38 }; S.motors = [];
   for (let k = -8; k <= 8; k++) S.motors.push({ x: k * 12, y: 0, len: 64, wid: 12, az: 0 });
   S._rfRows = null; ctx.rfRows();
   const ncu = { x: -100, y: 0 }, obtenido = [];
@@ -144,7 +144,7 @@ const margenLimpio = ZigbeePV.predictLink(
 
 // ── 5) la distancia sobre el enlace es la ACUMULADA, no la coordenada ──────
 {
-  S.bifilo = null; S.p = { twid: 12, tlen: 64 }; S.motors = [];
+  S.bifila = null; S.p = { twid: 12, tlen: 64 }; S.motors = [];
   S.motors.push({ x: 0, y: 0, len: 64, wid: 12, az: 0 });    // fila en x=0, y∈[-32,32]
   S._rfRows = null; ctx.rfRows();
   // Enlace a 45°, de (-30,-30) a (30,30): corta la fila en (0,0), o sea a la
