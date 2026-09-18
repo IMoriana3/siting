@@ -323,6 +323,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <button class="btn" id="del-ncu">Borrar</button>
         <button class="btn" id="assign-mode">Asignar TCUs</button>
         <button class="btn" id="measure-mode">Regla</button>
+        <button class="btn" id="scada-mode" title="Sondea la API del SCADA y colorea cada seguidor con su estado real. El índice Modbus es una convención (1..N por NCU, por GW y número): si en esta planta difiere, los estados salen cruzados.">SCADA en vivo</button>
+        <button class="btn" id="cov-mode" title="Mapa de calor del margen de enlace desde un punto Tx que se coloca con un clic. Usa la misma física que la capa de cobertura RF.">Mapa de calor</button>
       </div>
       <div class="legend" id="legend"></div>
       <div class="resumen" id="resumen"></div>
@@ -2233,6 +2235,11 @@ const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
   v:{circles:false,gw:false,blocks:true,grid:true,tables:false,rf:false},
   T:{scale:1,ox:0,oy:0}, sel:null, hover:null, assignMode:false, placeMode:false, numMode:"rows", preset:false, fromAyora:false, measureMode:false, measure:{a:null,b:null}, projOX:null, projOY:null, ncuColor:{}, pbColor:{},
   tablesUser:null, hasDims:false,
+  /* SCADA EN VIVO y MAPA DE CALOR: rescatados el 18-09 de `siting/demo-siting.html`, una copia de
+     esta misma aplicación que se quedó en la rama vieja de SolarGPTfull (21-08) y nunca llegó a
+     main. Eran las dos únicas cosas que esa copia tenía y ésta no. */
+  scada:{on:false, url:null, interval:20, data:{}, last:null, err:null, timer:null},
+  cov:{on:false, tx:null, placing:false},
   geo:null, viento:null};   // geo: lat/lon de la planta · viento: {rosa,pesos,fuente,anos}   // tablesUser: null hasta que el usuario elige formato (mesas/marcas); luego manda él
 const PB_PALETTE=["#215E99","#1f9d57","#d98300","#8e44ad","#16a0a0","#c0392b"];
 function hueColor(i,light){ const h=(i*137.508)%360; return `hsl(${h.toFixed(0)} 62% ${light?64:46}%)`; }
@@ -2241,9 +2248,94 @@ function assignColors(){
   S.pbColor={}; const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))]; pbs.forEach((p,i)=>S.pbColor[p]=PB_PALETTE[i%PB_PALETTE.length]);
 }
 function motorColor(m){
+  /* El SCADA manda sobre el color de reparto: cuando está en vivo, lo que interesa ver en el plano
+     es el estado real de cada seguidor, no de qué NCU cuelga. Gris claro = esa TCU no vino en el
+     último sondeo, que NO es lo mismo que «offline» (eso lo dice el propio SCADA). */
+  if(S.scada.on){ const d=scadaOf(m); if(!d) return "#c4ccd4";
+    return d.health==="ok"?"#1f9d57":d.health==="warn"?"#F2A900":d.health==="alarm"?"#e0322c":"#9aa6b2"; }
   if(m.ncu==null) return "#9aa6b2";
   const idx=S.ncuColor[m.ncu]??0;
   return hueColor(idx, S.v.gw && m.gw===2);
+}
+
+/* ── SCADA EN VIVO ───────────────────────────────────────────────────────────
+   Sondea la API del SCADA y pinta cada seguidor con su estado real. Rescatado de
+   `demo-siting.html` (SolarGPTfull, 21-08), que se quedó fuera de main.
+
+   EL ÍNDICE MODBUS ES UNA CONVENCIÓN, NO UN DATO. `buildScadaIndex` numera 1..N dentro de cada
+   NCU ordenando por (GW, nº en GW), que es como se suele direccionar, pero la asignación REAL se
+   fija en comisionado. Si en una planta no coincide, lo que se ve son estados cruzados entre
+   seguidores — así que el aviso va aquí y en la etiqueta: esto es orientativo hasta que se careé
+   con el mapeo de la planta. No se inventa nada más allá de eso. */
+function buildScadaIndex(){
+  const byNcu={};
+  S.motors.forEach(m=>{ if(!m.ncu)return; (byNcu[m.ncu]=byNcu[m.ncu]||[]).push(m); });
+  Object.values(byNcu).forEach(arr=>{
+    arr.sort((a,b)=>(a.gw||1)-(b.gw||1) || (a.tn||0)-(b.tn||0));
+    arr.forEach((m,i)=>{ m.scadaIdx=i+1; });
+  });
+  return byNcu;
+}
+function scadaOf(m){ if(!m.ncu||!m.scadaIdx) return null; return S.scada.data[m.ncu+"|"+m.scadaIdx]||null; }
+function fmtAge(s){ return s<120?Math.round(s)+" s":s<7200?Math.round(s/60)+" min":(s/3600).toFixed(1)+" h"; }
+function scadaTip(m){
+  if(!S.scada.on) return "";
+  const d=scadaOf(m);
+  if(!d) return `<br><span style="opacity:.6">sin datos SCADA</span>`;
+  const H={ok:"#7be0a8",warn:"#ffd35c",alarm:"#ff8a80",offline:"#aab6c2"};
+  let h=`<br><span style="color:${H[d.health]||'#fff'};font-weight:600">● ${String(d.health||"").toUpperCase()}</span>`;
+  /* Una TCU offline no tiene ángulo ni batería que enseñar: lo último que se sabe de ella es
+     CUÁNTO lleva callada, y eso es lo único que se pinta. */
+  if(d.health==="offline") return h+(d.comms_age_s!=null?` · sin comms ${fmtAge(d.comms_age_s)}`:"");
+  if(d.tilt_angle!=null) h+=`<br>ángulo ${(+d.tilt_angle).toFixed(1)}° / obj ${(+d.target_angle).toFixed(1)}°`;
+  if(d.soc!=null) h+=`<br>SoC ${Math.round(d.soc)}%${d.battery_voltage!=null?' · '+(d.battery_voltage/1000).toFixed(2)+' V':''}${d.temp_battery!=null?' · '+d.temp_battery+' °C':''}`;
+  if(d.alarms) h+=`<br><span style="color:#ff8a80">⚠ ${d.alarms}</span>`;
+  return h;
+}
+function scadaChip(){
+  let c=document.getElementById("scada-chip");
+  if(!c){ c=document.createElement("div"); c.id="scada-chip";
+    c.style.cssText="position:absolute;left:10px;top:10px;z-index:8;background:rgba(10,29,48,.92);color:#fff;padding:7px 11px;border-radius:8px;font:600 11px var(--mono),monospace;box-shadow:0 4px 14px rgba(0,0,0,.25);pointer-events:none";
+    const t=document.getElementById("tooltip"); if(t&&t.parentNode) t.parentNode.appendChild(c); else return {innerHTML:"",remove(){}}; }
+  return c;
+}
+async function scadaPoll(){
+  const sc=S.scada;
+  try{
+    const r=await fetch(sc.url.replace(/\/$/,"")+"/live",{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    sc.data={};
+    const cnt={ok:0,warn:0,alarm:0,offline:0};
+    for(const t of (j.trackers||[])){ sc.data[t.ncu+"|"+t.tcu]=t; if(cnt[t.health]!=null)cnt[t.health]++; }
+    sc.last=new Date(); sc.err=null;
+    scadaChip().innerHTML=`SCADA · ${j.count} TCU · <span style="color:#7be0a8">${cnt.ok}</span> / <span style="color:#ffd35c">${cnt.warn}</span> / <span style="color:#ff8a80">${cnt.alarm}</span> / <span style="color:#aab6c2">${cnt.offline} off</span> · ${sc.last.toLocaleTimeString().slice(0,8)}`;
+  }catch(e){
+    /* EL ERROR SE ENSEÑA Y LOS DATOS VIEJOS SE QUEDAN. Vaciarlos dejaría el plano en gris como si
+       toda la planta se hubiera caído, cuando lo que se ha caído es la red hasta el SCADA. Por eso
+       el chip dice desde cuándo son los últimos datos buenos. */
+    sc.err=String(e&&e.message||e);
+    scadaChip().innerHTML=`SCADA · <span style="color:#ff8a80">error: ${sc.err}</span>${sc.last?` · último dato ${sc.last.toLocaleTimeString().slice(0,8)}`:""}`;
+  }
+  draw();
+}
+function scadaStart(url){
+  const sc=S.scada;
+  let u=url!==undefined?url:prompt("URL de la API del SCADA (FastAPI):", sc.url||localStorage.getItem("scadaApiUrl")||"http://localhost:8000");
+  if(!u) return false;
+  sc.url=String(u).trim();
+  try{ localStorage.setItem("scadaApiUrl",sc.url); }catch(e){}
+  buildScadaIndex();
+  sc.on=true;
+  scadaPoll();
+  sc.timer=setInterval(scadaPoll,sc.interval*1000);
+  return true;
+}
+function scadaStop(){
+  const sc=S.scada;
+  sc.on=false; if(sc.timer){clearInterval(sc.timer);sc.timer=null;}
+  const c=document.getElementById("scada-chip"); if(c&&c.remove)c.remove();
+  draw();
 }
 
 /* ── Capa de cobertura RF (orientativa) ──────────────────────────────────────
@@ -2339,6 +2431,53 @@ function rfMargin(n,m,rows){
   return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m,rows)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
+
+/* ── MAPA DE CALOR DEL MARGEN, desde un Tx que se coloca con un clic ──────────
+   Rescatado de `demo-siting.html` (SolarGPTfull, 21-08). La capa RF de arriba ya contesta «¿llega
+   esta TCU a SU NCU?»; esto contesta la otra mitad: «si pongo el concentrador AQUÍ, hasta dónde
+   llego» — y eso es lo que se mira para decidir dónde va, que es el trabajo de esta página.
+
+   SE PORTA EL PINTADO, NO LA FÍSICA, Y ESA ES LA DECISIÓN QUE IMPORTA. La copia vieja traía su
+   propio `covObstacles`, que modelaba las filas como rectas verticales infinitas en x = k·pitch.
+   Eso es EXACTAMENTE el defecto RF-01 que este repo ya corrigió y que `tests/test_rf_cobertura.js`
+   vigila: con la planta girada contaba un obstáculo por cada coordenada X barrida y se equivocaba
+   en 27 dB, justo en los enlaces MÁS despejados. Copiarlo tal cual habría reintroducido el fallo
+   por la puerta de atrás, con otro nombre y sin banco que lo mirara. Así que el margen sale de
+   `rfMargin`/`rfObstacles`, que usan las filas REALES del layout. El banco lo comprueba. */
+function covRaster(){
+  const tx=S.cov.tx;
+  /* La firma incluye el tilt porque el mapa cambia entero con él: las filas tapan más o menos
+     según cómo estén giradas. Sin el tilt dentro, mover el deslizador no repintaba nada. */
+  const sig=(tx?tx.x.toFixed(1)+","+tx.y.toFixed(1):"-")+"|"+rfTilt()+"|"+S.motors.length+"|"+(S.bifila&&S.bifila.cuerda||"");
+  if(sig===S._covSig && S._covRaster!==undefined) return S._covRaster;
+  S._covSig=sig;
+  if(!tx||!S.motors.length||!rfParams()){ S._covRaster=null; return null; }
+  const rows=rfRows();
+  const {a,b}=bounds(), pad=30, wx0=a.x-pad, wy0=a.y-pad, wW=(b.x-a.x)+2*pad, wH=(b.y-a.y)+2*pad;
+  /* Celda entre 4 y 10 m: por debajo el coste se dispara (cada celda es un predictLink con su
+     barrido de filas) y por encima se ven los escalones. El divisor 110 la ata al tamaño de la
+     planta, no al del zoom: el raster se calcula UNA vez y luego solo se escala al dibujar. */
+  const cell=Math.max(4,Math.min(10,Math.max(wW,wH)/110)), nx=Math.max(1,Math.round(wW/cell)), ny=Math.max(1,Math.round(wH/cell));
+  const oc=document.createElement("canvas"); oc.width=nx; oc.height=ny;
+  const octx=oc.getContext("2d"), img=octx.createImageData(nx,ny);
+  for(let iy=0;iy<ny;iy++){ const wy=wy0+wH-(iy+0.5)*(wH/ny);
+    for(let ix=0;ix<nx;ix++){ const wx=wx0+(ix+0.5)*(wW/nx);
+      const c=_covRgb(rfColor(rfMargin(tx,{x:wx,y:wy},rows))), o=(iy*nx+ix)*4;
+      img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=205; } }
+  octx.putImageData(img,0,0);
+  S._covRaster={cv:oc,wx0,wy0,wW,wH,nx,ny,cell};
+  return S._covRaster;
+}
+function _covRgb(h){ return [1,3,5].map(i=>parseInt(h.substr(i,2),16)); }
+function drawCovHeatmap(){
+  const R=S._covRaster;
+  if(R){ const tl=w2s({x:R.wx0,y:R.wy0+R.wH}); ctx.globalAlpha=0.5; ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(R.cv,tl.x,tl.y,R.wW*S.T.scale,R.wH*S.T.scale); ctx.globalAlpha=1; }
+  if(S.cov.tx){ const s=w2s(S.cov.tx); ctx.beginPath(); ctx.arc(s.x,s.y,7*DPR,0,2*Math.PI);
+    ctx.fillStyle="#fff"; ctx.strokeStyle="#185FA5"; ctx.lineWidth=3*DPR; ctx.fill(); ctx.stroke();
+    ctx.fillStyle="#185FA5"; ctx.font=`700 ${11*DPR}px var(--mono),monospace`; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillText("Tx", s.x+11*DPR, s.y); }
+}
 /* PUNTO DE LA TCU. La coordenada que guarda cada seguidor es la del EJE del tracker: es lo que dan
    el DWG y el listado del cliente, y es donde va la biela. Pero la TCU no está ahí. Va atornillada a
    la viga del MOTOR, en el extremo de la biela — la fila OESTE, como en el 3D (terreno.html: "TCU,
@@ -2825,6 +2964,10 @@ function rosaEnLienzo(){
 function draw(){
   const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
   ctx.fillStyle="#fafbfc"; ctx.fillRect(0,0,W,H);
+  /* El mapa de calor va ABAJO DEL TODO, debajo hasta de la cuadrícula: es un fondo, y encima suyo
+     tienen que seguir leyéndose los seguidores y las NCUs. El raster se recalcula solo cuando
+     cambia su firma (Tx, tilt, nº de seguidores), no en cada pan ni en cada zoom. */
+  if(S.cov.on){ covRaster(); drawCovHeatmap(); }
   // cuadrícula 100 m
   if(S.v.grid && S.motors.length){
     const {a,b}=bounds(); const step=100*S.T.scale;
@@ -3094,6 +3237,10 @@ function zoomBy(f){ if(!S.motors.length)return; const cx=cv.width/2,cy=cv.height
 cv.addEventListener("pointerdown",e=>{
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size>=2){ startPinch(); try{cv.setPointerCapture(e.pointerId);}catch(_){ } return; }
+  /* Colocar el Tx del mapa de calor: un solo clic y se sale del modo. Va ANTES de la regla porque
+     los dos usan el mismo clic sobre el lienzo y no pueden estar activos a la vez. */
+  if(S.cov.placing){ const rc=cv.getBoundingClientRect(); S.cov.tx={x:((e.clientX-rc.left)*DPR-S.T.ox)/S.T.scale, y:(S.T.oy-(e.clientY-rc.top)*DPR)/S.T.scale};
+    S.cov.placing=false; S._covSig=null; cv.style.cursor=""; const cb=document.getElementById("cov-mode"); if(cb)cb.textContent="Mapa de calor"; draw(); return; }
   if(S.measureMode){ const rc=cv.getBoundingClientRect(); const wx=((e.clientX-rc.left)*DPR-S.T.ox)/S.T.scale, wy=(S.T.oy-(e.clientY-rc.top)*DPR)/S.T.scale; const M=S.measure; if(!M.a||M.b){ M.a={x:wx,y:wy}; M.b=null; } else { M.b={x:wx,y:wy}; } draw(); return; }
   if(S.placeMode){ const rect=cv.getBoundingClientRect(); const mx=(e.clientX-rect.left)*DPR,my=(e.clientY-rect.top)*DPR; placeNCUat((mx-S.T.ox)/S.T.scale,(S.T.oy-my)/S.T.scale); return; }
   if(S.assignMode){ drag={mode:"rect",x0:e.clientX,y0:e.clientY,x1:e.clientX,y1:e.clientY,moved:false}; cv.setPointerCapture(e.pointerId); return; }
@@ -3135,7 +3282,10 @@ cv.addEventListener("pointermove",e=>{
     tip.innerHTML=`<span class="t-id">${best.id}</span>${best.gz?' · '+(S.altLabel||'GZ')+' '+best.gz:(best.pb?' · '+best.pb:'')}<br>${best.count} TCU · GW ${best.gw[0].length}/${best.gw[1].length}${best.tipo?' · '+best.tipo:''}${utmTip(best.x,best.y)}`; draw(); }
   else {
     let bm=null,bdm=10*DPR; for(let i=0;i<S.motors.length;i++){ const s=w2s(tcuPt(S.motors[i])); const d=Math.hypot(s.x-mx,s.y-my); if(d<bdm){bdm=d;bm=i;} }
-    if(bm!=null && S.motors[bm].tcu){ const mm=S.motors[bm]; if(S.hover){S.hover=null;draw();} tip.style.opacity=1; tip.style.left=(e.clientX-rect.left+12)+"px"; tip.style.top=(e.clientY-rect.top+12)+"px"; tip.innerHTML=`<span class="t-id">${mm.tcu}</span><br>${mm.pb?mm.pb+' \u00b7 ':''}${mm.ncu} \u00b7 GW${mm.gw}${utmTip(mm.x,mm.y)}`; }
+    /* Con el SCADA en vivo el globo sale TAMBI\u00c9N en seguidores sin nombre de TCU: ah\u00ed el dato que
+       se busca es el estado, y sin esto las plantas cuyo listado no trae `tcu` se quedaban mudas.
+       El r\u00f3tulo cae entonces al \u00edndice Modbus, que es por lo que se le pregunta al SCADA. */
+    if(bm!=null && (S.motors[bm].tcu || S.scada.on)){ const mm=S.motors[bm]; if(S.hover){S.hover=null;draw();} tip.style.opacity=1; tip.style.left=(e.clientX-rect.left+12)+"px"; tip.style.top=(e.clientY-rect.top+12)+"px"; tip.innerHTML=`<span class="t-id">${mm.tcu||("TCU "+(mm.scadaIdx||"?"))}</span><br>${mm.pb?mm.pb+' \u00b7 ':''}${mm.ncu||''}${mm.gw?' \u00b7 GW'+mm.gw:''}${utmTip(mm.x,mm.y)}${scadaTip(mm)}`; }
     else if(S.hover){ S.hover=null; tip.style.opacity=0; draw(); }
     else { tip.style.opacity=0; }
   }
@@ -3585,6 +3735,20 @@ document.getElementById("add-ncu").onclick=function(){ S.measureMode=false; cons
 document.getElementById("del-ncu").onclick=delNCU;
 document.getElementById("measure-mode").onclick=function(){ S.measureMode=!S.measureMode; if(S.measureMode){ S.assignMode=false; S.placeMode=false; ["assign-mode","add-ncu"].forEach(id=>{const b=document.getElementById(id); if(b)b.classList.remove("on");}); } else { S.measure={a:null,b:null}; } this.classList.toggle("on",S.measureMode); cv.style.cursor=S.measureMode?"crosshair":""; const tt=document.getElementById("tooltip"); if(tt&&S.measureMode)tt.style.opacity=0; draw(); };
 document.getElementById("assign-mode").onclick=function(){ if(S.measureMode){ S.measureMode=false; this.parentNode.querySelector("#measure-mode").classList.remove("on"); } S.assignMode=!S.assignMode; if(S.assignMode){ S.placeMode=false; const b=document.getElementById("add-ncu"); if(b)b.classList.remove("on"); } this.classList.toggle("on",S.assignMode); cv.style.cursor=(S.assignMode||S.placeMode)?"crosshair":""; const t=document.getElementById("tooltip"); if(t&&S.assignMode)t.style.opacity=0; draw(); };
+/* Los dos modos rescatados. Apagan la regla al entrar porque comparten el clic sobre el lienzo. */
+document.getElementById("scada-mode").onclick=function(){
+  if(S.scada.on){ scadaStop(); this.classList.remove("on"); }
+  else if(scadaStart()){ this.classList.add("on"); }
+};
+document.getElementById("cov-mode").onclick=function(){
+  if(S.cov.on){ S.cov.on=false; S.cov.placing=false; this.classList.remove("on"); this.textContent="Mapa de calor"; cv.style.cursor=""; draw(); return; }
+  if(S.measureMode){ S.measureMode=false; const me=document.getElementById("measure-mode"); if(me)me.classList.remove("on"); }
+  S.cov.on=true; this.classList.add("on");
+  /* Sin Tx no hay nada que pintar, así que el primer encendido pide el punto en vez de dejar la
+     capa encendida y vacía —que parecería que está rota—. */
+  if(!S.cov.tx){ S.cov.placing=true; this.textContent="Pon el Tx…"; cv.style.cursor="crosshair"; }
+  draw();
+};
 document.getElementById("eq-open").onclick=openEquip;
 document.getElementById("eq-close").onclick=closeEquip;
 document.getElementById("eq-modal").onclick=e=>{ if(e.target.id==="eq-modal") closeEquip(); };
