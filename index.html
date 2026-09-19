@@ -3216,7 +3216,12 @@ function draw(){
          real de cada fila es 2,382 m (un módulo en vertical). Se pintan las dos bandas a ±sep/2 con
          sep = envolvente − cuerda, así ocupan exactamente la envolvente y el pasillo queda vacío,
          que es justo lo que hay que ver en un siting. Sin 'bifila' se pinta una sola banda, como
-         antes: las plantas de una fila (Ayora, San José, Páramo) no cambian. */
+         antes: las plantas de una fila no cambian.
+         OJO, ESTA LISTA ESTABA MAL (19-09). Decía «Ayora, San José, Páramo» y de esas tres solo
+         Páramo es de una fila: AYORA declara cuerda 2,384 y SANJOSE 2,382, igual que El Burgo
+         (2,382), Fayón (2,411) y Bagnarelli (2,382). Comprobado cargando los presets: en Ayora
+         `tcuPt` sí desplaza el punto respecto al eje y en Páramo no. La única de una fila entre
+         los presets es Páramo. */
       const cu=(S.bifila&&S.bifila.cuerda)||0, sep=cu>0?(Wm-cu):0;
       const bandas=(sep>0.05)?[[-sep/2,cu/2],[sep/2,cu/2]]:[[0,Wm/2]];
       for(const [o,hw] of bandas){
