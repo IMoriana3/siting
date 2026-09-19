@@ -112,11 +112,18 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .legend{position:absolute;left:14px;bottom:14px;max-height:min(52vh,360px);overflow-y:auto;background:rgba(13,19,26,.92);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)}
 .legend .li{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .legend .li:last-child{margin-bottom:0}
-.legend .sw{width:13px;height:13px;flex:none}
+.legend .sw{width:13px;height:13px;flex:none;border-radius:2px}
+.legend .tit{display:block;margin:9px 0 5px;padding-top:8px;border-top:1px solid var(--line);font-weight:700;color:var(--amber)}
+.legend .sub{color:var(--muted)}
 .stage-actions{position:absolute;right:14px;top:14px;display:flex;gap:7px}
 .stage-actions .btn{background:rgba(13,19,26,.9);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.3);backdrop-filter:blur(4px);font-size:12px;padding:8px 11px;border-radius:7px;font-weight:600;color:var(--text)}
 .stage-actions .btn:hover{color:var(--blue);border-color:var(--blue)}
 .stage-actions .btn.on{background:var(--blue);color:var(--void);border-color:var(--blue);box-shadow:0 2px 10px rgba(54,211,153,.3)}
+.stage-actions .seg{display:inline-flex;background:rgba(13,19,26,.9);border:1px solid var(--line);border-radius:7px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.3);backdrop-filter:blur(4px)}
+.stage-actions .seg[hidden]{display:none}
+.stage-actions .seg .sb{padding:8px 11px;font-size:12px;font-weight:600;color:var(--muted);background:transparent;border:0;cursor:pointer;transition:.13s}
+.stage-actions .seg .sb:hover{color:var(--blue)}
+.stage-actions .seg .sb.on{background:var(--blue);color:var(--void)}
 .zoomctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;z-index:8}
 .zoomctl button{width:40px;height:40px;border-radius:9px;background:rgba(13,19,26,.92);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:21px;font-weight:600;color:var(--text);line-height:1;cursor:pointer;backdrop-filter:blur(4px)}
 .zoomctl button:hover{color:var(--blue);border-color:var(--blue)}
@@ -324,7 +331,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <button class="btn" id="assign-mode">Asignar TCUs</button>
         <button class="btn" id="measure-mode">Regla</button>
         <button class="btn" id="scada-mode" title="Sondea la API del SCADA y colorea cada seguidor con su estado real. El índice Modbus es una convención (1..N por NCU, por GW y número): si en esta planta difiere, los estados salen cruzados.">SCADA en vivo</button>
-        <button class="btn" id="cov-mode" title="Mapa de calor del margen de enlace desde un punto Tx que se coloca con un clic. Usa la misma física que la capa de cobertura RF.">Mapa de calor</button>
+        <button class="btn" id="cov-mode" title="Mapa de calor desde un punto Tx que se coloca con un clic: hasta dónde llegarías si pusieras ahí el concentrador.">Mapa de calor</button>
+        <span class="seg" id="cov-seg" hidden>
+          <button class="sb on" data-m="margen" title="Margen del enlace DIRECTO Tx↔punto, con la misma física que la capa de cobertura RF (rfMargin). Contesta «¿se oirían estos dos?».">Margen</button>
+          <button class="sb" data-m="saltos" title="Cuántos saltos de malla hacen falta para llegar al punto desde el Tx. Usa la elipse de alcance E-W/N-S de los Parámetros, la misma que reparte las NCUs: es geometría, NO mira obstáculos.">Saltos</button>
+        </span>
       </div>
       <div class="legend" id="legend"></div>
       <div class="resumen" id="resumen"></div>
@@ -2239,7 +2250,7 @@ const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
      esta misma aplicación que se quedó en la rama vieja de SolarGPTfull (21-08) y nunca llegó a
      main. Eran las dos únicas cosas que esa copia tenía y ésta no. */
   scada:{on:false, url:null, interval:20, data:{}, last:null, err:null, timer:null},
-  cov:{on:false, tx:null, placing:false},
+  cov:{on:false, tx:null, placing:false, modo:"margen"},
   geo:null, viento:null};   // geo: lat/lon de la planta · viento: {rosa,pesos,fuente,anos}   // tablesUser: null hasta que el usuario elige formato (mesas/marcas); luego manda él
 const PB_PALETTE=["#215E99","#1f9d57","#d98300","#8e44ad","#16a0a0","#c0392b"];
 function hueColor(i,light){ const h=(i*137.508)%360; return `hsl(${h.toFixed(0)} 62% ${light?64:46}%)`; }
@@ -2443,35 +2454,136 @@ function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if
    vigila: con la planta girada contaba un obstáculo por cada coordenada X barrida y se equivocaba
    en 27 dB, justo en los enlaces MÁS despejados. Copiarlo tal cual habría reintroducido el fallo
    por la puerta de atrás, con otro nombre y sin banco que lo mirara. Así que el margen sale de
-   `rfMargin`/`rfObstacles`, que usan las filas REALES del layout. El banco lo comprueba. */
+   `rfMargin`/`rfObstacles`, que usan las filas REALES del layout. El banco lo comprueba.
+
+   DOS MODOS, porque son DOS PREGUNTAS y confundirlas dejaba la capa inservible en una planta
+   grande (19-09):
+
+     · MARGEN — el enlace DIRECTO Tx↔punto. Contesta «¿se oirían estos dos?».
+     · SALTOS — cuántos saltos de malla hacen falta para llegar al punto desde el Tx. Ésa es la
+       pregunta con la que de verdad se decide dónde va el concentrador.
+
+   POR QUÉ HIZO FALTA EL SEGUNDO, con el número delante: en El Burgo I, con el Tx en la posición
+   REAL de la NCU-01, el modo Margen deja el 96 % de la planta por debajo de 0 dB. No es un fallo
+   del pintado —la capa RF de esta misma página, que usa la misma llamada, da 197 de 215 TCU en
+   la banda peor—: es que la red NO habla en directo con el concentrador. La mediana TCU→NCU allí
+   es de 158 m (máxima 341) cruzando del orden de trece filas, mientras los alcances configurados
+   son 40 m E-O y 90 m N-S. O sea que va de vecino en vecino, y a esas distancias el mismo modelo
+   da de +17 a +27 dB. El mapa del margen contestaba bien a una pregunta que en El Burgo no es la
+   que se hace.
+
+   EL CRITERIO DE VECINDAD DE «SALTOS» ES GEOMÉTRICO, NO FÍSICO, Y HAY QUE DECIRLO: es la misma
+   elipse de alcance E-W/N-S de los Parámetros que usa `buildAdjacency` para repartir las NCUs.
+   No mira obstáculos. Se reutiliza A PROPÓSITO —con otro criterio el mapa podría contradecir al
+   reparto que la propia página acaba de calcular—, pero «llega en 3 saltos» NO quiere decir «el
+   enlace aguanta»: eso lo contesta el modo Margen. Son complementarios, no intercambiables. */
+
+/* PALETA DE LA CAPA — y NO es `rfColor`. `rfColor` vale para los puntos de las TCU, que se pintan
+   OPACOS. La capa va translúcida sobre el lienzo (#fafbfc de `draw()`), y con la mezcla la escala
+   se aplastaba: medido en pantalla, «sin enlace» (#7a1d1d) salía #c6a1a1 y «justo justo»
+   (#e0322c) salía #efaaa7 — dos rosas casi iguales, con el PEOR color de la escala viéndose como
+   el más claro del dibujo. De ahí el «no entiendo esos gráficos» del 19-09. Aquí los colores se
+   eligen por lo que se ve DESPUÉS de mezclar, y `tests/test_cov_heatmap.js` mide la distancia
+   entre bandas contiguas y no deja que vuelvan a juntarse. */
+const COV_ALPHA=0.72, COV_LIENZO=[250,251,252], COV_NEUTRO="#39424d";
+const COV_MARGEN=[
+  {lim:0,        src:"#520f0f", txt:"sin enlace",  sub:"&lt; 0 dB"},
+  {lim:8,        src:"#c0392b", txt:"justo justo", sub:"0 a 8 dB"},
+  {lim:16,       src:"#e3a21f", txt:"ajustado",    sub:"8 a 16 dB"},
+  {lim:25,       src:"#7fbf4f", txt:"bien",        sub:"16 a 25 dB"},
+  {lim:Infinity, src:"#1f7a46", txt:"de sobra",    sub:"más de 25 dB"}];
+/* LOS ESCALONES SE ENSANCHAN A PROPÓSITO. Con bandas de un salto (1,2,3,4,5+) en El Burgo se
+   medían saltos hasta 12, así que 4.674 de las 11.880 celdas caían en el mismo color y la mitad
+   del mapa quedaba plana. Con 1 · 2-3 · 4-6 · 7-10 · 11+ el reparto allí es 340 / 1.807 / 2.772 /
+   2.753 / 203, y «pegado al Tx» sigue teniendo color propio. Fijos, no adaptativos: así dos
+   plantas se pueden comparar a ojo. */
+const COV_SALTOS=[
+  {max:1,        src:"#1f7a46", txt:"1 salto"},
+  {max:3,        src:"#7fbf4f", txt:"2 o 3 saltos"},
+  {max:6,        src:"#e3a21f", txt:"4 a 6 saltos"},
+  {max:10,       src:"#c2571a", txt:"7 a 10 saltos"},
+  {max:Infinity, src:"#8e1f2f", txt:"11 o más"}];
+const COV_LEJOS="#6f7b87";   // no llega: ni el Tx ni ninguna TCU de la malla alcanzan el punto
+function covModo(){ return S.cov.modo==="saltos"?"saltos":"margen"; }
+function covColorMargen(mg){ if(mg==null)return COV_LEJOS;
+  for(const b of COV_MARGEN) if(mg<b.lim) return b.src;
+  return COV_MARGEN[COV_MARGEN.length-1].src; }
+function covColorSaltos(h){ if(!h)return COV_LEJOS;
+  for(const b of COV_SALTOS) if(h<=b.max) return b.src;
+  return COV_SALTOS[COV_SALTOS.length-1].src; }
+/* Lo que se acaba VIENDO. La leyenda tiene que enseñar ESTE color y no el de la tabla: enseñar el
+   de la tabla es lo que hacía que la leyenda no cuadrara con el dibujo. */
+function covEnPantalla(src){ return "#"+_covRgb(src)
+  .map((v,i)=>Math.round(COV_ALPHA*v+(1-COV_ALPHA)*COV_LIENZO[i]).toString(16).padStart(2,"0")).join(""); }
+
+/* SALTOS DE MALLA desde el Tx, por anchura. Semilla: las TCU que el propio Tx alcanza (1 salto).
+   La adyacencia TCU↔TCU sale de `buildAdjacency`, la MISMA del reparto — no una copia. */
+function covSaltos(tx){
+  const pts=S.motors.map(m=>tcuPt(m)), n=pts.length;
+  const adj=buildAdjacency(pts, pts.map((_,i)=>i), S.p.reachX, S.p.reachY);
+  const rx2=S.p.reachX*S.p.reachX, ry2=S.p.reachY*S.p.reachY;
+  const hop=new Int32Array(n), cola=[];          // 0 = todavía sin alcanzar; nadie llega en 0 saltos
+  for(let i=0;i<n;i++){ const dx=pts[i].x-tx.x, dy=pts[i].y-tx.y;
+    if(dx*dx/rx2+dy*dy/ry2<=1){ hop[i]=1; cola.push(i); } }
+  for(let q=0;q<cola.length;q++){ const u=cola[q];
+    for(const v of adj.get(u)) if(!hop[v]){ hop[v]=hop[u]+1; cola.push(v); } }
+  return {pts,hop};
+}
+/* El campo sobre la rejilla. Se SIEMBRA desde cada nodo (el Tx a 1, cada TCU a su salto + 1) en
+   vez de preguntar celda por celda: la elipse de un nodo toca unas pocas celdas, así que esto es
+   lineal en nodos y no nodos × celdas. El mínimo por celda es, por definición, el nº de saltos. */
+function covCampoSaltos(tx,g){
+  const {wx0,wy0,wW,wH,nx,ny}=g, sx=wW/nx, sy=wH/ny;
+  const H=new Int32Array(nx*ny);
+  const rx=S.p.reachX, ry=S.p.reachY, rx2=rx*rx, ry2=ry*ry;
+  const siembra=(p,val)=>{
+    const ix0=Math.max(0,Math.ceil((p.x-rx-wx0)/sx-0.5)), ix1=Math.min(nx-1,Math.floor((p.x+rx-wx0)/sx-0.5));
+    const iy0=Math.max(0,Math.ceil((wy0+wH-(p.y+ry))/sy-0.5)), iy1=Math.min(ny-1,Math.floor((wy0+wH-(p.y-ry))/sy-0.5));
+    for(let iy=iy0;iy<=iy1;iy++){ const dy=(wy0+wH-(iy+0.5)*sy)-p.y, ty=dy*dy/ry2; if(ty>1)continue;
+      for(let ix=ix0;ix<=ix1;ix++){ const dx=(wx0+(ix+0.5)*sx)-p.x; if(dx*dx/rx2+ty>1)continue;
+        const o=iy*nx+ix; if(!H[o]||val<H[o])H[o]=val; } }
+  };
+  siembra(tx,1);
+  const M=covSaltos(tx);
+  for(let i=0;i<M.pts.length;i++) if(M.hop[i]) siembra(M.pts[i], M.hop[i]+1);
+  return H;
+}
 function covRaster(){
-  const tx=S.cov.tx;
-  /* La firma incluye el tilt porque el mapa cambia entero con él: las filas tapan más o menos
-     según cómo estén giradas. Sin el tilt dentro, mover el deslizador no repintaba nada. */
-  const sig=(tx?tx.x.toFixed(1)+","+tx.y.toFixed(1):"-")+"|"+rfTilt()+"|"+S.motors.length+"|"+(S.bifila&&S.bifila.cuerda||"");
+  const tx=S.cov.tx, modo=covModo();
+  /* La firma incluye el tilt porque el mapa del margen cambia entero con él: las filas tapan más
+     o menos según cómo estén giradas. Y el modo y los alcances, porque el de saltos cambia entero
+     con ellos. Sin eso dentro, tocar el mando no repintaba nada. */
+  const sig=(tx?tx.x.toFixed(1)+","+tx.y.toFixed(1):"-")+"|"+modo+"|"+rfTilt()+"|"+S.motors.length
+    +"|"+(S.bifila&&S.bifila.cuerda||"")+"|"+S.p.reachX+","+S.p.reachY;
   if(sig===S._covSig && S._covRaster!==undefined) return S._covRaster;
   S._covSig=sig;
-  if(!tx||!S.motors.length||!rfParams()){ S._covRaster=null; return null; }
-  const rows=rfRows();
+  if(!tx||!S.motors.length||(modo==="margen"&&!rfParams())){ S._covRaster=null; return null; }
   const {a,b}=bounds(), pad=30, wx0=a.x-pad, wy0=a.y-pad, wW=(b.x-a.x)+2*pad, wH=(b.y-a.y)+2*pad;
-  /* Celda entre 4 y 10 m: por debajo el coste se dispara (cada celda es un predictLink con su
-     barrido de filas) y por encima se ven los escalones. El divisor 110 la ata al tamaño de la
-     planta, no al del zoom: el raster se calcula UNA vez y luego solo se escala al dibujar. */
+  /* Celda entre 4 y 10 m: por debajo el coste se dispara (en Margen cada celda es un predictLink
+     con su barrido de filas) y por encima se ven los escalones. El divisor 110 la ata al tamaño de
+     la planta, no al del zoom: el raster se calcula UNA vez y luego solo se escala al dibujar. */
   const cell=Math.max(4,Math.min(10,Math.max(wW,wH)/110)), nx=Math.max(1,Math.round(wW/cell)), ny=Math.max(1,Math.round(wH/cell));
   const oc=document.createElement("canvas"); oc.width=nx; oc.height=ny;
   const octx=oc.getContext("2d"), img=octx.createImageData(nx,ny);
-  for(let iy=0;iy<ny;iy++){ const wy=wy0+wH-(iy+0.5)*(wH/ny);
-    for(let ix=0;ix<nx;ix++){ const wx=wx0+(ix+0.5)*(wW/nx);
-      const c=_covRgb(rfColor(rfMargin(tx,{x:wx,y:wy},rows))), o=(iy*nx+ix)*4;
-      img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=205; } }
+  if(modo==="saltos"){
+    const H=covCampoSaltos(tx,{wx0,wy0,wW,wH,nx,ny});
+    for(let k=0;k<nx*ny;k++){ const c=_covRgb(covColorSaltos(H[k])), o=k*4;
+      img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255; }
+  }else{
+    const rows=rfRows();
+    for(let iy=0;iy<ny;iy++){ const wy=wy0+wH-(iy+0.5)*(wH/ny);
+      for(let ix=0;ix<nx;ix++){ const wx=wx0+(ix+0.5)*(wW/nx);
+        const c=_covRgb(covColorMargen(rfMargin(tx,{x:wx,y:wy},rows))), o=(iy*nx+ix)*4;
+        img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255; } }
+  }
   octx.putImageData(img,0,0);
-  S._covRaster={cv:oc,wx0,wy0,wW,wH,nx,ny,cell};
+  S._covRaster={cv:oc,wx0,wy0,wW,wH,nx,ny,cell,modo};
   return S._covRaster;
 }
 function _covRgb(h){ return [1,3,5].map(i=>parseInt(h.substr(i,2),16)); }
 function drawCovHeatmap(){
   const R=S._covRaster;
-  if(R){ const tl=w2s({x:R.wx0,y:R.wy0+R.wH}); ctx.globalAlpha=0.5; ctx.imageSmoothingEnabled=true;
+  if(R){ const tl=w2s({x:R.wx0,y:R.wy0+R.wH}); ctx.globalAlpha=COV_ALPHA; ctx.imageSmoothingEnabled=true;
     ctx.drawImage(R.cv,tl.x,tl.y,R.wW*S.T.scale,R.wH*S.T.scale); ctx.globalAlpha=1; }
   if(S.cov.tx){ const s=w2s(S.cov.tx); ctx.beginPath(); ctx.arc(s.x,s.y,7*DPR,0,2*Math.PI);
     ctx.fillStyle="#fff"; ctx.strokeStyle="#185FA5"; ctx.lineWidth=3*DPR; ctx.fill(); ctx.stroke();
@@ -2833,13 +2945,29 @@ function updatePanel(){
 function warnHtml(cls,ic,msg){ return `<div class="warnbox ${cls}"><span>${ic}</span><span>${msg}</span></div>`; }
 function renderLegend(){
   const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
-  let h=`<div class="li"><span class="sw" style="border-radius:50%;background:${hueColor(0,false)}"></span>Motor (color = NCU)</div>
-    <div class="li"><span class="sw" style="background:var(--navy);transform:rotate(45deg)"></span>NCU</div>
+  /* Con el mapa de calor puesto los seguidores van en gris y los power blocks no se pintan, así
+     que esas dos entradas se caen: una leyenda que promete colores que no están en el dibujo es
+     peor que no tener leyenda. La fila de los seguidores la pone abajo el bloque de la capa. */
+  let h = S.cov.on ? "" :
+    `<div class="li"><span class="sw" style="border-radius:50%;background:${hueColor(0,false)}"></span>Motor (color = NCU)</div>`;
+  h+=`<div class="li"><span class="sw" style="background:var(--navy);transform:rotate(45deg)"></span>NCU</div>
     <div class="li"><span class="sw" style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid var(--amber)"></span>HSU (meteo)</div>`;
   if(S.reps && S.reps.length) h+=`<div class="li"><span class="sw" style="border-radius:50%;background:#8e44ad"></span>Repetidor</div>`;
-  if(pbs.length && S.v.blocks){
+  if(pbs.length && S.v.blocks && !S.cov.on){
     if(pbs.length<=12) h+=pbs.map(p=>`<div class="li"><span class="sw" style="background:${S.pbColor[p]};opacity:.5"></span>${p}</div>`).join("");
     else h+=`<div class="li"><span class="sw" style="background:${S.pbColor[pbs[0]]};opacity:.5"></span>${pbs.length} power blocks (color por bloque)</div>`;
+  }
+  /* La leyenda del mapa de calor va AQUÍ y no en un comentario: sin ella el dibujo es una mancha
+     de colores que no significan nada (19-09). Los cuadritos llevan el color MEZCLADO, que es el
+     que se ve en el lienzo; con el color de la tabla la leyenda no cuadraba con el dibujo. */
+  if(S.cov.on){
+    const M=covModo();
+    h+=`<div class="li tit">Mapa de calor · ${M==="saltos"?"saltos de malla":"margen directo"}</div>`;
+    const filas = M==="saltos"
+      ? COV_SALTOS.map(b=>[b.src,b.txt,""]).concat([[COV_LEJOS,"no llega",""]])
+      : COV_MARGEN.map(b=>[b.src,b.txt,b.sub]);
+    h+=filas.map(f=>`<div class="li"><span class="sw" style="background:${covEnPantalla(f[0])}"></span>${f[1]}${f[2]?` <span class="sub">${f[2]}</span>`:""}</div>`).join("");
+    h+=`<div class="li"><span class="sw" style="background:${COV_NEUTRO}"></span>seguidores <span class="sub">(el color lo lleva el mapa)</span></div>`;
   }
   document.getElementById("legend").innerHTML=h;
 }
@@ -2981,8 +3109,12 @@ function draw(){
   }
   /* ZONA DE CADA BLOQUE. La geometría está en zonaBloque(); aquí solo se mide lo que esa función
      necesita —el paso entre seguidores y el hueco entre puntas, los dos MEDIDOS en la planta, no
-     supuestos— y se pinta: relleno y borde del mismo trazo, en el color del bloque. */
-  if(S.v.blocks){
+     supuestos— y se pinta: relleno y borde del mismo trazo, en el color del bloque.
+     CON EL MAPA DE CALOR PUESTO NO SE PINTAN. Van ENCIMA de la capa con un relleno al 14 % y un
+     borde al 50 %, así que tiñen el mapa: en El Burgo la mitad de arriba se iba a azul y la de
+     abajo a verde, y los colores dejaban de ser los que promete la leyenda. Se apaga la capa y
+     vuelven. */
+  if(S.v.blocks && !S.cov.on){
     const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
     /* Las dos medidas se toman en el EJE DEL SEGUIDOR, no en el de la pantalla: p a lo ancho (de
        mesa a mesa) y q a lo largo (de punta a punta). Así valen igual en una planta en retícula que
@@ -3071,6 +3203,11 @@ function draw(){
     let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
     if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m),_rfRows) : null; col = rfColor(m._rfMargin); }
     else { m._rfMargin = null; }
+    /* CON EL MAPA DE CALOR PUESTO, EL LAYOUT VA EN GRIS. El fondo ya habla en rojo/verde; si
+       además los seguidores van en rojo/verde —por NCU o, peor, por la capa RF, que usa la misma
+       escala— hay dos escalas del mismo color en el mismo dibujo y no se lee ninguna. Ése era el
+       «no entiendo esos gráficos» del 19-09. Se apaga la capa y vuelven sus colores. */
+    if(S.cov.on && !dim) col = COV_NEUTRO;
     if(TAB){
       const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid), a=((m.az||0))*Math.PI/180;
       const lx=Math.sin(a), ly=Math.cos(a), wx=Math.cos(a), wy=-Math.sin(a), hl=Lm/2;
@@ -3740,14 +3877,22 @@ document.getElementById("scada-mode").onclick=function(){
   if(S.scada.on){ scadaStop(); this.classList.remove("on"); }
   else if(scadaStart()){ this.classList.add("on"); }
 };
+/* El selector Margen/Saltos solo se ve con la capa puesta: fuera de ella no significa nada. */
+function covSeg(){ const s=document.getElementById("cov-seg"); if(!s)return;
+  s.hidden=!S.cov.on;
+  s.querySelectorAll(".sb").forEach(b=>b.classList.toggle("on", b.dataset.m===covModo())); }
+document.querySelectorAll("#cov-seg .sb").forEach(b=>b.onclick=function(){
+  if(covModo()===this.dataset.m)return;
+  S.cov.modo=this.dataset.m; S._covSig=null;   // el modo va en la firma, pero el raster viejo sigue cacheado
+  covSeg(); renderLegend(); draw(); });
 document.getElementById("cov-mode").onclick=function(){
-  if(S.cov.on){ S.cov.on=false; S.cov.placing=false; this.classList.remove("on"); this.textContent="Mapa de calor"; cv.style.cursor=""; draw(); return; }
+  if(S.cov.on){ S.cov.on=false; S.cov.placing=false; this.classList.remove("on"); this.textContent="Mapa de calor"; cv.style.cursor=""; covSeg(); renderLegend(); draw(); return; }
   if(S.measureMode){ S.measureMode=false; const me=document.getElementById("measure-mode"); if(me)me.classList.remove("on"); }
   S.cov.on=true; this.classList.add("on");
   /* Sin Tx no hay nada que pintar, así que el primer encendido pide el punto en vez de dejar la
      capa encendida y vacía —que parecería que está rota—. */
   if(!S.cov.tx){ S.cov.placing=true; this.textContent="Pon el Tx…"; cv.style.cursor="crosshair"; }
-  draw();
+  covSeg(); renderLegend(); draw();
 };
 document.getElementById("eq-open").onclick=openEquip;
 document.getElementById("eq-close").onclick=closeEquip;
