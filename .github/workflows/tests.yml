@@ -22,3 +22,31 @@ jobs:
             node "$f" || rc=1
           done
           exit $rc
+
+      # LAS MUTACIONES SE CORREN AQUÍ, no a mano. Un banco que nadie ha visto
+      # fallar no es un banco, y comprobarlo una vez el día que se escribe no
+      # sirve: basta que alguien afloje una comprobación para que se quede verde
+      # para siempre sin que nadie se entere.
+      #
+      # Se exige rc = 1 EXACTAMENTE, no «distinto de cero»: rc = 2 es «la
+      # mutación ya no casa con el código», y contarlo como cazada sería el
+      # falso verde que esto viene a evitar.
+      - name: y las mutaciones, en rojo
+        run: |
+          log=$(mktemp)
+          rojo () {
+            banco="$1"; shift
+            for m in "$@"; do
+              set +e
+              MUTA="$m" node "$banco" > "$log" 2>&1
+              rc=$?
+              set -e
+              if [ "$rc" -ne 1 ]; then
+                echo "::error::$banco con la mutación «$m» salió rc=$rc; se esperaba 1 (banco en rojo)"
+                tail -30 "$log"
+                exit 1
+              fi
+              echo "  $banco · $m: roja, bien"
+            done
+          }
+          rojo tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza
