@@ -1,0 +1,113 @@
+{
+  "_lee_esto_primero": [
+    "Parámetros del motor de radio (radio_pv_model.js). Versionado A PROPÓSITO:",
+    "una predicción sin saber con qué números se hizo no se puede repetir ni",
+    "discutir, y este repo ya se ha comido una vez el problema de un valor que",
+    "envejeció en silencio.",
+    "",
+    "REGLA DE ESTE FICHERO: ningún número de potencia, sensibilidad o regulación",
+    "entra sin PROCEDENCIA. Cada uno lleva su `_fuente`, y las tres únicas",
+    "procedencias válidas son: norma, datasheet del modelo exacto, o código de",
+    "este repo citado por fichero y línea. Un número sin `_fuente` es un error,",
+    "y el banco lo exige.",
+    "",
+    "NO HAY SESGO GLOBAL. El modelo antiguo (zigbee_pv_model.js, CONGELADO)",
+    "llevaba EL_BURGO_BIAS_DB para recentrar la predicción sobre lo medido. Aquí",
+    "no se traslada: ver la nota de TRASPASO sobre las dos cifras que llegaron a",
+    "convivir (−33,6 en el canon de Siting y −16,58 en cobertura-rf-fv) y por qué",
+    "ninguna de las dos es una calibración de propagación."
+  ],
+  "version": "1.0.0",
+  "generado": "2026-09-20",
+
+  "geometria": {
+    "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
+    "ant_h_m": {
+      "valor": 1.5,
+      "_fuente": "código: Siting/index.html:2357 `RF_ANT_H=1.5` (modelo antiguo)",
+      "_ojo": "altura de la antena. NO medida en campo; heredada del modelo antiguo y pendiente de confirmar contra el montaje real de la TCU."
+    },
+    "cuerda_m_defecto": {
+      "valor": 2.38,
+      "_fuente": "código: Siting/index.html:2357 `RF_CHORD_M=2.38`",
+      "_ojo": "solo se usa si el layout de la planta no declara `bifila.cuerda`, que manda sobre esto."
+    },
+    "pitch_m_defecto": {
+      "valor": 12.0,
+      "_fuente": "código: Siting/index.html:2357 `RF_PITCH_M=12.0`",
+      "_ojo": "ídem: el layout manda."
+    },
+    "tracker_slew_deg_s": {
+      "valor": 0.17,
+      "_fuente": "código: Cobertura-Zigbee/backtracking.html:3134 `const TRACKER_SLEW=0.17` — «spec del actuador», Sunner. Corroborado aparte en SCADA/tools/tcu-toolbox/README.md:2374 (`tol/velocidad = 2/0,17 = 12 s`).",
+      "_para_que": "tiempo de giro en la latencia de stow (fase 3). Con límite ±55°: 55/0,17 = 323 s hasta el plano; 110/0,17 = 647 s de extremo a extremo."
+    },
+    "stow": {
+      "angulo_deg": null,
+      "_fuente": "PENDIENTE — no está en el repo. `Cobertura-Zigbee/ANATOMIA_BT.md:990`: «Stow: NO ENCONTRADO en la cadena de policyAngles».",
+      "_ojo": [
+        "El toolbox documenta DOS criterios de planta y hay que saber cuál aplica:",
+        "posición de seguridad en 0 (sin lado), o abanderamiento AL LÍMITE con lado",
+        "este/oeste y un límite de mediodía (SCADA/tools/tcu-toolbox/README.md:2324-2363).",
+        "La diferencia entre los dos es 323 s frente a 647 s de giro, así que no se",
+        "supone: se pregunta. `null` aquí hace que la fase 3 no pueda emitir veredicto."
+      ]
+    }
+  },
+
+  "tecnologias": {
+    "_que_es": "Lo que SÍ depende de la radio: balance, banda, protocolo y regulación.",
+
+    "zigbee_pro_24": {
+      "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee-PRO",
+      "f_hz": 2.45e9,
+      "ptx_dbm": 19.0,
+      "gtx_dbi": 3.0,
+      "grx_dbi": 3.0,
+      "rx_sens_dbm": -103.0,
+      "_fuente": "código: zigbee_pv_model.js `defaultParams()` (modelo CONGELADO), cuyo comentario dice: «ptxDbm: XBee-PRO RR. Estándar +8. Canal 26: máx +3. Antena Jinchang 3 dBi».",
+      "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada."
+    },
+
+    "zigbee_std_24": {
+      "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee estándar (no PRO)",
+      "f_hz": 2.45e9,
+      "ptx_dbm": 8.0,
+      "gtx_dbi": 3.0,
+      "grx_dbi": 3.0,
+      "rx_sens_dbm": null,
+      "_fuente": "código: el mismo comentario de `defaultParams()` dice «Estándar +8» para la potencia.",
+      "_pendiente_fase_2": "La SENSIBILIDAD del estándar NO aparece en el código y no se inventa: `null` hasta leerla del datasheet. Con `null` esta variante no emite margen."
+    }
+  },
+
+  "propagacion": {
+    "_que_es": "Parámetros del medio. Pocos, y con significado físico.",
+    "eps_r_suelo": {
+      "valor": 15.0,
+      "_fuente": "código: zigbee_pv_model.js `defaultParams()` `epsR: 15.0`"
+    },
+    "sigma_suelo_s_m": {
+      "valor": 5e-3,
+      "_fuente": "código: zigbee_pv_model.js `defaultParams()` `sigmaGround: 5e-3`"
+    },
+    "polarizacion": {
+      "valor": "v",
+      "_fuente": "código: zigbee_pv_model.js `defaultParams()` `pol: \"v\"`"
+    },
+    "sigma_db": {
+      "valor": null,
+      "_fuente": "PENDIENTE — sale del JSON que publique `calibra_barrido.py` (fase 2), con su campaña de origen.",
+      "_ojo": "Sin campaña calibrada, el motor va en modo TEÓRICO y lo rotula. NO se hereda el sigma del modelo antiguo: el 6,0 de `defaultParams()` es un valor de partida, no una medida, y el 10,99 de cobertura-rf-fv sale de un ajuste cuya correlación con la distancia es r = +0,16."
+    }
+  },
+
+  "vegetacion": {
+    "_que_es": "Follaje atravesado por el enlace. Depende de la frecuencia, así que NO es geometría.",
+    "modelo": {
+      "valor": null,
+      "_fuente": "PENDIENTE — el encargo pide «modelo de follaje estándar citado y dependiente de la frecuencia». Candidato: ITU-R P.833. No se escribe el coeficiente hasta tener la recomendación delante y la versión que se cita.",
+      "_ojo": "Con `null`, el motor trata la vegetación como NO MODELADA y lo dice en la salida, en vez de dar 0 dB callando."
+    }
+  }
+}
