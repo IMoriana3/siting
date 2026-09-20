@@ -70,6 +70,9 @@ jobs:
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
           # verde, que es exactamente la avería que esto vigila.
+          rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
+                                              noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+
           rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
                                                    py_csqrt_rama js_semi_cuerda js_borde_top \
                                                    js_tol_regimen js_fase_signo
