@@ -80,6 +80,9 @@ jobs:
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
 
+          rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
+                                            detalleOtroTope sinOrdenT
+
           rojo node tests/test_rf_indice.js sinIndice ddaSinY sinDedupe selloFijo celdaEnorme
 
           rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \

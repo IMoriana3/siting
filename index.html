@@ -8,7 +8,10 @@
 <link rel="icon" href="favicon.svg">
 <!-- sin fuentes de Google: offline (fuentes del sistema) -->
 <script src="lib/xlsx.full.min.js"></script><!-- SheetJS LOCAL (sin CDN): offline -->
-<script src="zigbee_pv_model.js"></script><!-- núcleo RF (paridad con factiun_core.rf): capa de cobertura -->
+<script src="zigbee_pv_model.js"></script><!-- modelo ANTIGUO (A), congelado: se conserva en el selector para comparar -->
+<script src="radio_pv_model.js"></script><!-- motor NUEVO: geometría de banda + física por frecuencia -->
+<script src="radio_zigbee.js"></script><!-- la capa Zigbee: balance, variantes, lo que no se sabe apagado -->
+<script src="radio_malla.js"></script><!-- vecinos viables, saltos, articulaciones -->
 <style>
 :root{
   /* Tokens de la casa Factiun */
@@ -2251,6 +2254,11 @@ const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
      main. Eran las dos únicas cosas que esa copia tenía y ésta no. */
   scada:{on:false, url:null, interval:20, data:{}, last:null, err:null, timer:null},
   cov:{on:false, tx:null, placing:false, modo:"margen"},
+  /* MOTOR: "nuevo" por defecto, "antiguo" conserva zigbee_pv_model.js con su
+     sesgo de El Burgo dentro. Los dos van ROTULADOS en pantalla: quien mire un
+     mapa tiene que saber cual esta viendo. */
+  rf:{motor:"nuevo", variante:"zigbee_pro_24"},
+  perfil:null,
   geo:null, viento:null};   // geo: lat/lon de la planta · viento: {rosa,pesos,fuente,anos}   // tablesUser: null hasta que el usuario elige formato (mesas/marcas); luego manda él
 const PB_PALETTE=["#215E99","#1f9d57","#d98300","#8e44ad","#16a0a0","#c0392b"];
 function hueColor(i,light){ const h=(i*137.508)%360; return `hsl(${h.toFixed(0)} 62% ${light?64:46}%)`; }
@@ -2396,7 +2404,8 @@ function rfTilt(){ const el=document.getElementById("rf-tilt"); return el?(+el.v
    debajo de eso ningún segmento alcanza al enlace, así que el recorte es exacto, no heurístico. */
 function rfRows(){
   const cu=(S.bifila&&S.bifila.cuerda)||0, segs=[];
-  for(const m of S.motors){
+  for(let mi=0;mi<S.motors.length;mi++){
+    const m=S.motors[mi];
     const Lm=(m.len!=null?m.len:S.p.tlen), Wm=(m.wid!=null?m.wid:S.p.twid);
     const a=((m.az||0))*Math.PI/180;
     const ux=Math.cos(a), uy=-Math.sin(a);        // eje TRANSVERSAL (el del ancho)
@@ -2405,7 +2414,12 @@ function rfRows(){
     const offs=(sep>0.05)?[-sep/2,sep/2]:[0];
     for(const o of offs){
       const cx=m.x+o*ux, cy=m.y+o*uy, hl=Lm/2;
-      segs.push([cx-hl*lx,cy-hl*ly,cx+hl*lx,cy+hl*ly]);
+      /* el 5º hueco es el ÍNDICE DEL SEGUIDOR dueño del segmento. Va dentro de
+         la propia tupla, y no en un vector paralelo, porque el `sort` de abajo
+         reordena y un paralelo se desincronizaría en silencio. Sin esto no hay
+         ángulo POR SEGUIDOR, que es media fase 1. Los cuatro primeros huecos no
+         se mueven: quien lea `s[0..3]` sigue leyendo lo mismo. */
+      segs.push([cx-hl*lx,cy-hl*ly,cx+hl*lx,cy+hl*ly,mi]);
     }
   }
   segs.sort((p,q)=>Math.min(p[0],p[2])-Math.min(q[0],q[2]));
@@ -2433,7 +2447,7 @@ function rfRows(){
   const idx={cel:cel,g:g,marca:new Int32Array(segs.length).fill(-1),sello:0};
   return (S._rfRows={segs:segs,span:span,idx:idx});
 }
-function rfObstacles(n,m,rows){
+function rfObstacles(n,m,rows,conDuenyo){
   const D=Math.hypot(m.x-n.x,m.y-n.y); if(D<0.5)return [];
   const R=rows||S._rfRows||rfRows(), segs=R&&R.segs; if(!segs||!segs.length)return [];
   const top=ZigbeePV.rowTopElev(0,RF_ANT_H,(S.bifila&&S.bifila.cuerda)||RF_CHORD_M,rfTilt());
@@ -2476,11 +2490,86 @@ function rfObstacles(n,m,rows){
     const wx=s[0]-n.x, wy=s[1]-n.y;
     const t=(wx*fy-wy*fx)/den;                                         // dónde, sobre el ENLACE
     const u=(wx*ey-wy*ex)/den;                                         // dónde, sobre la FILA
-    if(t>0.001&&t<0.999&&u>=0&&u<=1)obs.push([t*D,top]);
+    if(t>0.001&&t<0.999&&u>=0&&u<=1)obs.push(conDuenyo?{s:t*D,duenyo:s[4]}:[t*D,top]);
   }
-  obs.sort((p,q)=>p[0]-q[0]);   // Deygout recorre por posición; el orden es parte del contrato
+  /* Deygout recorre por posición; el orden es parte del contrato, no una
+     casualidad del recorrido del índice. Con `conDuenyo` se ordena igual. */
+  obs.sort(conDuenyo?((p,q)=>p.s-q.s):((p,q)=>p[0]-q[0]));
   return obs;
 }
+/* ══ EL ÚNICO CAMINO DE CÁLCULO ═══════════════════════════════════════════════
+
+   `rfEnlace` es la ÚNICA función que decide qué le pasa a un enlace. El mapa de
+   calor se queda con `.margenDb`; el panel de perfil dibuja todo lo demás. No
+   hay una segunda versión «para el panel», y `tests/test_rf_panel.js` lo exige
+   bit a bit en cuatro plantas: dos caminos de cálculo para lo mismo es como se
+   separan las copias, y este repo ya se lo ha comido dos veces —la física del
+   mapa de calor viejo, y el recuento de filas con paso de 12 m—.
+
+   TODO EL CÁLCULO SALE DE LOS MÓDULOS. Aquí no hay física: se arma la geometría
+   (qué bandas cruza el enlace, a qué ángulo está cada seguidor) y se le pasa a
+   `RadioZigbee.presupuesto`. Si alguien añade una fórmula en este fichero, está
+   en el sitio equivocado.
+
+   EL ÁNGULO viene de `rfAngulo(indiceSeguidor)`. Hoy devuelve el del mando fijo
+   para todos; en el punto 2 pasará a ser el del instante, por seguidor, y esta
+   función no se entera. Ése es el objetivo de que sea un parámetro. */
+/* LOS PARÁMETROS SE CARGAN, NO SE INCRUSTAN. `radio_params.json` es la única
+   fuente: cada valor lleva su procedencia y lo que no se sabe va a `null`.
+   Duplicarlos aquí sería tener dos verdades, y la que se queda vieja es
+   siempre la copia. Mientras no llegue, la capa RF del motor nuevo no da
+   número: dice `parametros_no_cargados` y se ve en pantalla. */
+function rfCargaParams(){
+  if(S._radioParams||S._radioParamsPedidos)return;
+  S._radioParamsPedidos=true;
+  fetch("radio_params.json",{cache:"no-store"}).then(r=>r.json()).then(j=>{
+    S._radioParams=j; S._covSig=null; draw(); renderLegend();
+  }).catch(e=>{ S._radioParamsError=String(e&&e.message||e); draw(); });
+}
+function rfParamsNuevo(){ return S._radioParams||null; }
+function rfVariante(){ const p=rfParamsNuevo(); return p?p.tecnologias[S.rf&&S.rf.variante||"zigbee_pro_24"]:null; }
+function rfPropagacion(){ const p=rfParamsNuevo(); if(!p)return null;
+  return {eps_r_suelo:p.propagacion.eps_r_suelo.valor, sigma_suelo_s_m:p.propagacion.sigma_suelo_s_m.valor,
+          polarizacion:p.propagacion.polarizacion.valor, sigma_db:p.propagacion.sigma_db.valor,
+          vegetacion:{modelo:p.vegetacion.modelo.valor}}; }
+function rfAngulo(_i){ return rfTilt(); }          // punto 2: por seguidor y por hora
+function rfAlturaAntena(){ const p=rfParamsNuevo(); return p?p.geometria.ant_h_m.valor:RF_ANT_H; }
+
+/* Las BANDAS que cruza el enlace, cada una con el ángulo de SU seguidor.
+   Reutiliza `rfObstacles` para la búsqueda —el índice y su orden por t son
+   precondición de Deygout— y sólo cambia qué se construye en cada cruce. */
+function rfCruces(n,m,rows){
+  const R=rows||S._rfRows||rfRows();
+  const cu=(S.bifila&&S.bifila.cuerda)||RF_CHORD_M, hA=rfAlturaAntena();
+  return rfObstacles(n,m,R,true).map(o=>({s:o.s, banda:RadioPV.banda(hA,cu,rfAngulo(o.duenyo),0), duenyo:o.duenyo}));
+}
+
+function rfEnlace(n,m,rows){
+  const P=rfPropagacion(), V=rfVariante();
+  if(!P||!V) return {margenDb:null, motivos:["parametros_no_cargados"], cruces:[], D:0};
+  const D=Math.hypot(m.x-n.x,m.y-n.y);
+  const hA=rfAlturaAntena();
+  const cruces=rfCruces(n,m,rows);
+  const pr=RadioZigbee.presupuesto({D:D, zA:hA, zB:hA, cruces:cruces}, V, P, S._radioCalib||null);
+  /* el DETALLE de Deygout sale de la MISMA llamada que el total: `presupuesto`
+     usa `difraccionBandasDb`, que es la envoltura de `difraccionBandasDetalle`.
+     Pedirlo aparte no recalcula nada distinto, es la misma función. */
+  pr.detalle=RadioPV.difraccionBandasDetalle(D,hA,hA,cruces,V.f_hz);
+  pr.cruces=cruces; pr.D=D; pr.zA=hA; pr.zB=hA; pr.variante=V.nombre||null;
+  return pr;
+}
+
+/* El margen del MOTOR NUEVO. El mapa llama aquí, y el panel también. */
+function rfMarginNuevo(n,m,rows){ return rfEnlace(n,m,rows).margenDb; }
+
+/* LA PUERTA ÚNICA. Todo el que quiera un margen entra por aquí, y aquí se
+   decide el motor. Que el mapa llamase a uno y el panel a otro es exactamente
+   la avería que este PR viene a impedir. */
+function rfMotor(){ return (S.rf&&S.rf.motor)==="antiguo"?"antiguo":"nuevo"; }
+function rfMargenDe(n,m,rows){
+  return rfMotor()==="antiguo"?rfMargin(n,m,rows):rfMarginNuevo(n,m,rows);
+}
+
 function rfMargin(n,m,rows){
   const p=rfParams(); if(!p)return null;
   const D=Math.hypot(m.x-n.x,m.y-n.y);
@@ -2599,10 +2688,24 @@ function covRaster(){
      o menos según cómo estén giradas. Y el modo y los alcances, porque el de saltos cambia entero
      con ellos. Sin eso dentro, tocar el mando no repintaba nada. */
   const sig=(tx?tx.x.toFixed(1)+","+tx.y.toFixed(1):"-")+"|"+modo+"|"+rfTilt()+"|"+S.motors.length
-    +"|"+(S.bifila&&S.bifila.cuerda||"")+"|"+S.p.reachX+","+S.p.reachY;
+    +"|"+(S.bifila&&S.bifila.cuerda||"")+"|"+S.p.reachX+","+S.p.reachY
+    /* el MOTOR y la VARIANTE van en la firma: sin eso, cambiar de motor dejaba
+       el raster anterior en pantalla y nadie se enteraba. */
+    +"|"+rfMotor()+"|"+(S.rf&&S.rf.variante||"")+"|"+(S._radioParams?"p":"-");
   if(sig===S._covSig && S._covRaster!==undefined) return S._covRaster;
   S._covSig=sig;
-  if(!tx||!S.motors.length||(modo==="margen"&&!rfParams())){ S._covRaster=null; return null; }
+  /* POR QUÉ NO HAY MAPA, dicho y no callado. Un lienzo en blanco es
+     indistinguible de «no llega a ningún sitio», y con el motor nuevo hay un
+     motivo nuevo: que `radio_params.json` no haya cargado. */
+  S._covMotivo=null;
+  if(!tx) S._covMotivo="pon el Tx con un clic";
+  else if(!S.motors.length) S._covMotivo="la planta no tiene seguidores";
+  else if(modo==="margen"&&rfMotor()==="antiguo"&&!rfParams()) S._covMotivo="el modelo antiguo (A) no está cargado";
+  else if(modo==="margen"&&!rfParamsNuevo()) S._covMotivo=S._radioParamsError
+        ? ("no cargó radio_params.json: "+S._radioParamsError)
+        : "cargando radio_params.json…";
+  else if(modo==="margen"&&!rfVariante()) S._covMotivo="la variante «"+(S.rf&&S.rf.variante)+"» no está en radio_params.json";
+  if(S._covMotivo){ S._covRaster=null; return null; }
   const {a,b}=bounds(), pad=30, wx0=a.x-pad, wy0=a.y-pad, wW=(b.x-a.x)+2*pad, wH=(b.y-a.y)+2*pad;
   /* Celda entre 4 y 10 m: por debajo el coste se dispara (en Margen cada celda es un predictLink
      con su barrido de filas) y por encima se ven los escalones. El divisor 110 la ata al tamaño de
@@ -2618,7 +2721,7 @@ function covRaster(){
     const rows=rfRows();
     for(let iy=0;iy<ny;iy++){ const wy=wy0+wH-(iy+0.5)*(wH/ny);
       for(let ix=0;ix<nx;ix++){ const wx=wx0+(ix+0.5)*(wW/nx);
-        const c=_covRgb(covColorMargen(rfMargin(tx,{x:wx,y:wy},rows))), o=(iy*nx+ix)*4;
+        const c=_covRgb(covColorMargen(rfMargenDe(tx,{x:wx,y:wy},rows))), o=(iy*nx+ix)*4;
         img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255; } }
   }
   octx.putImageData(img,0,0);
@@ -3008,6 +3111,18 @@ function renderLegend(){
   if(S.cov.on){
     const M=covModo();
     h+=`<div class="li tit">Mapa de calor · ${M==="saltos"?"saltos de malla":"margen directo"}</div>`;
+    /* QUÉ MOTOR Y CON QUÉ PROCEDENCIA. Quien mire un mapa tiene que saber cuál
+       está viendo: el nuevo y el antiguo se diferencian 33,6 dB en el mismo
+       enlace, porque el antiguo lleva EL_BURGO_BIAS_DB dentro. */
+    if(M==="margen"){
+      const mot=rfMotor()==="antiguo"
+        ? `<b>modelo antiguo (A)</b> <span class="sub">congelado · con sesgo El Burgo −33,6 dB</span>`
+        : `<b>motor nuevo</b> <span class="sub">${S._radioCalib?("calibrado "+(S._radioCalib.campana||"")):"TEÓRICO, sin campaña"}</span>`;
+      h+=`<div class="li">${mot}</div>`;
+    }
+    /* Y SI NO HAY MAPA, POR QUÉ. Un lienzo en blanco es indistinguible de «no
+       llega a ningún sitio». */
+    if(S._covMotivo) h+=`<div class="li"><b style="color:var(--warn,#e0a72c)">sin mapa</b> <span class="sub">${S._covMotivo}</span></div>`;
     const filas = M==="saltos"
       ? COV_SALTOS.map(b=>[b.src,b.txt,""]).concat([[COV_LEJOS,"no llega",""]])
       : COV_MARGEN.map(b=>[b.src,b.txt,b.sub]);

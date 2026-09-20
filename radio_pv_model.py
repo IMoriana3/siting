@@ -218,16 +218,23 @@ def nu(h_tapa, d1, d2, f_hz):
     return h_tapa * math.sqrt((2 * (d1 + d2)) / (longitud_onda(f_hz) * d1 * d2))
 
 
-def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
-    """Deygout sobre BANDAS. Espejo de `difraccionBandasDb()`.
+def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    """Deygout sobre BANDAS, con el DETALLE. Espejo de `difraccionBandasDetalle()`.
 
-    `cruces` es una lista de dicts {"s": distancia desde A, "banda": banda()}.
-    El sub-tramo se relanza desde el BORDE del dominante que toca, que puede
-    ser el inferior: ahí está la diferencia con el modelo antiguo."""
+    HAY UNA SOLA IMPLEMENTACIÓN y `difraccion_bandas_db` es una envoltura que se
+    queda con el total: el panel de perfil del visor necesita saber cuál fue el
+    obstáculo dominante y cómo se partió el enlace, y calcularlo por un segundo
+    camino sería tener dos Deygout que se separan solos."""
     p = prof or 0
     tope = 3 if max_prof is None else max_prof
-    if not cruces or p >= tope or D <= 0:
-        return 0.0
+    vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
+             "derecha": None, "profundidad": p, "motivo": None}
+    if not cruces:
+        vacio["motivo"] = "sin cruces"; return vacio
+    if p >= tope:
+        vacio["motivo"] = "tope de recursion (%d)" % tope; return vacio
+    if D <= 0:
+        vacio["motivo"] = "tramo de longitud nula"; return vacio
     mejor_v, mejor, mejor_s = -1e9, -1, 0.0
     for i, cr in enumerate(cruces):
         s = cr["s"]
@@ -238,11 +245,15 @@ def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
         v = nu(-c["despeje"], s, D - s, f_hz)
         if v > mejor_v:
             mejor_v, mejor, mejor_s = v, i, s
-    if mejor < 0 or mejor_v <= -0.78:
-        return 0.0
+    if mejor < 0:
+        vacio["motivo"] = "ningun cruce cae dentro del tramo"; return vacio
+    if mejor_v <= -0.78:
+        vacio["motivo"] = "el dominante despeja (nu = %.3f <= -0,78)" % mejor_v
+        return vacio
     z_dom = altura_rayo(zA, zB, D, mejor_s)
-    borde_dom = corta(cruces[mejor]["banda"], z_dom)["borde"]
-    perdida = perdida_filo_db(mejor_v)
+    c_dom = corta(cruces[mejor]["banda"], z_dom)
+    borde_dom = c_dom["borde"]
+    perdida_dom = perdida_filo_db(mejor_v)
     izq, der = [], []
     for k, cr in enumerate(cruces):
         if k == mejor:
@@ -251,9 +262,21 @@ def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
             izq.append(cr)
         else:
             der.append({"s": cr["s"] - mejor_s, "banda": cr["banda"]})
-    perdida += difraccion_bandas_db(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
-    perdida += difraccion_bandas_db(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
-    return perdida
+    d_izq = difraccion_bandas_detalle(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
+    d_der = difraccion_bandas_detalle(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
+    return {
+        "totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
+        "dominante": {"indice": mejor, "s": mejor_s, "zRayo": z_dom, "nu": mejor_v,
+                      "perdidaDb": perdida_dom, "estado": c_dom["estado"],
+                      "despeje": c_dom["despeje"], "borde": borde_dom,
+                      "banda": cruces[mejor]["banda"]},
+        "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
+    }
+
+
+def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    """Espejo de `difraccionBandasDb()`: el total del detalle."""
+    return difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
 
 
 def vegetacion_db(espesor_m, f_hz, modelo=None):

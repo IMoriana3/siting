@@ -284,9 +284,21 @@
    * Deygout: se busca el obstáculo dominante (el de ν mayor), se cobra su
    * pérdida y se repite a los dos lados. `maxProf` acota la recursión igual que
    * en el modelo antiguo (3). */
-  function difraccionBandasDb(D, zA, zB, cruces, fHz, prof, maxProf) {
+  /* HAY UNA SOLA IMPLEMENTACIÓN, y devuelve el DETALLE. `difraccionBandasDb`
+   * es una envoltura que se queda con el total.
+   *
+   * El detalle no es un adorno: el panel de perfil tiene que poder señalar cuál
+   * fue el obstáculo dominante y cómo se partió el enlace, que es lo que hace
+   * entendible el número. Calcularlo por un segundo camino sería tener dos
+   * Deygout que se separan solos — el error que este repo ya se ha comido con
+   * la física y con el recuento de filas. */
+  function difraccionBandasDetalle(D, zA, zB, cruces, fHz, prof, maxProf) {
     var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
-    if (!cruces || !cruces.length || p >= tope || D <= 0) return 0.0;
+    var vacio = { totalDb: 0.0, dominante: null, izquierda: null, derecha: null,
+                  profundidad: p, motivo: null };
+    if (!cruces || !cruces.length) { vacio.motivo = "sin cruces"; return vacio; }
+    if (p >= tope) { vacio.motivo = "tope de recursion (" + tope + ")"; return vacio; }
+    if (D <= 0) { vacio.motivo = "tramo de longitud nula"; return vacio; }
     var mejorV = -1e9, mejor = -1, mejorS = 0;
     for (var i = 0; i < cruces.length; i++) {
       var s = cruces[i].s;
@@ -296,10 +308,15 @@
       var v = nu(-c.despeje, s, D - s, fHz);      // despeje positivo ⇒ ν negativo
       if (v > mejorV) { mejorV = v; mejor = i; mejorS = s; }
     }
-    if (mejor < 0 || mejorV <= -0.78) return 0.0;
+    if (mejor < 0) { vacio.motivo = "ningun cruce cae dentro del tramo"; return vacio; }
+    if (mejorV <= -0.78) {
+      vacio.motivo = "el dominante despeja (nu = " + mejorV.toFixed(3) + " <= -0,78)";
+      return vacio;
+    }
     var zDom = alturaRayo(zA, zB, D, mejorS);
-    var bordeDom = corta(cruces[mejor].banda, zDom).borde;
-    var perdida = perdidaFiloDb(mejorV);
+    var cDom = corta(cruces[mejor].banda, zDom);
+    var bordeDom = cDom.borde;
+    var perdidaDom = perdidaFiloDb(mejorV);
     var izq = [], der = [];
     for (var k = 0; k < cruces.length; k++) {
       if (k === mejor) continue;
@@ -308,9 +325,19 @@
     }
     /* los sub-tramos van del extremo al BORDE del dominante, que es donde se
        reconstruye el rayo. Igual que el Deygout del modelo antiguo. */
-    perdida += difraccionBandasDb(mejorS, zA, bordeDom, izq, fHz, p + 1, tope);
-    perdida += difraccionBandasDb(D - mejorS, bordeDom, zB, der, fHz, p + 1, tope);
-    return perdida;
+    var dIzq = difraccionBandasDetalle(mejorS, zA, bordeDom, izq, fHz, p + 1, tope);
+    var dDer = difraccionBandasDetalle(D - mejorS, bordeDom, zB, der, fHz, p + 1, tope);
+    return {
+      totalDb: perdidaDom + dIzq.totalDb + dDer.totalDb,
+      dominante: { indice: mejor, s: mejorS, zRayo: zDom, nu: mejorV,
+                   perdidaDb: perdidaDom, estado: cDom.estado,
+                   despeje: cDom.despeje, borde: bordeDom, banda: cruces[mejor].banda },
+      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null
+    };
+  }
+
+  function difraccionBandasDb(D, zA, zB, cruces, fHz, prof, maxProf) {
+    return difraccionBandasDetalle(D, zA, zB, cruces, fHz, prof, maxProf).totalDb;
   }
 
   /* VEGETACIÓN. Declarada y NO implementada, a propósito: el encargo pide un
@@ -343,6 +370,7 @@
     dosRayosDb: dosRayosDb,
     nu: nu,
     difraccionBandasDb: difraccionBandasDb,
+    difraccionBandasDetalle: difraccionBandasDetalle,
     vegetacionDb: vegetacionDb,
     _version: "fase1"
   };
