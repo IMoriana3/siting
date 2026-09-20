@@ -49,4 +49,5 @@ jobs:
               echo "  $banco · $m: roja, bien"
             done
           }
-          rojo tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza
+          rojo tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
+                                        sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba

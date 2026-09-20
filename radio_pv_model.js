@@ -150,14 +150,136 @@
     return peor;
   }
 
+  /* ═══ TECNOLOGÍA ══════════════════════════════════════════════════════════
+     Aquí SÍ manda la frecuencia, y por eso `fHz` es argumento OBLIGATORIO en
+     todo lo de abajo. El modelo antiguo lo lleva con valor por defecto
+     (`fHz = 2.45e9`), que es cómodo y es justo como una banda se cuela sin que
+     nadie la elija: basta olvidarse del parámetro. Sin defecto, olvidarlo es un
+     `NaN` ruidoso en vez de una predicción de 2,4 GHz disfrazada de LoRa.
+
+     LAS FÓRMULAS SON LAS QUE YA USA EL REPO, y se citan en vez de escribirse de
+     memoria: salen de `zigbee_pv_model.js`, que está pinchado a 0,000000 dB
+     contra `factiun_core.rf` por el banco de paridad de SolarGPTfull. Lo que
+     cambia aquí NO es la física del filo: es QUÉ se le da como obstáculo —una
+     banda con su hueco en vez de un filo que sube desde el suelo—. */
+
+  var C_LUZ = 299792458;
+
+  function exigeF(fHz) {
+    if (!(fHz > 0)) throw new Error("radio_pv_model: falta fHz. La frecuencia no tiene valor por defecto a propósito.");
+    return fHz;
+  }
+
+  /* λ = c/f. Cita: zigbee_pv_model.js `wavelength`. */
+  function longitudOnda(fHz) { return C_LUZ / exigeF(fHz); }
+
+  /* Espacio libre. Cita: zigbee_pv_model.js `fsplDb`, con la constante −147,55
+     que es la forma de la fórmula con f en Hz y d en metros. */
+  function fsplDb(dM, fHz) {
+    return 20 * Math.log10(Math.max(dM, 1e-3)) + 20 * Math.log10(exigeF(fHz)) - 147.55;
+  }
+
+  /* Radio de la n-ésima zona de Fresnel. Cita: zigbee_pv_model.js `fresnelRadius`.
+     Depende de λ, así que a 868 MHz es ~1,7 veces el de 2,45 GHz: la misma
+     geometría despeja MENOS en sub-GHz, y eso es exactamente lo que no se puede
+     trasladar de una banda a otra. */
+  function radioFresnel(d1, d2, fHz, n) {
+    var nn = n == null ? 1 : n;
+    return Math.sqrt((nn * longitudOnda(fHz) * d1 * d2) / (d1 + d2));
+  }
+
+  /* Punto de ruptura de dos rayos: 4·h1·h2/λ. Cita: zigbee_pv_model.js
+     `breakpointDistance`. */
+  function distanciaRuptura(ht, hr, fHz) {
+    return (4 * ht * hr) / longitudOnda(fHz);
+  }
+
+  /* Pérdida por filo de cuchillo, aproximación de ITU-R P.526. Cita:
+     zigbee_pv_model.js `knifeEdgeLossDb` — misma expresión, mismo corte en
+     ν = −0,78. */
+  function perdidaFiloDb(v) {
+    if (v <= -0.78) return 0.0;
+    return 6.9 + 20 * Math.log10(Math.sqrt(Math.pow(v - 0.1, 2) + 1) + v - 0.1);
+  }
+
+  /* El parámetro ν de difracción. `hTapa` es cuánto INVADE el obstáculo el rayo:
+     positivo si tapa, negativo si hay despeje. Cita: zigbee_pv_model.js `vParam`. */
+  function nu(hTapa, d1, d2, fHz) {
+    if (d1 <= 0 || d2 <= 0) return -1e9;
+    return hTapa * Math.sqrt((2 * (d1 + d2)) / (longitudOnda(fHz) * d1 * d2));
+  }
+
+  /* DIFRACCIÓN POR BANDAS, con Deygout. Aquí es donde el cambio de geometría se
+   * nota en el número.
+   *
+   * El modelo antiguo recibe `[[x, cotaSuperior]]` y mide la invasión contra esa
+   * cota, con el filo subiendo desde el suelo. Éste recibe BANDAS y le pregunta
+   * a `corta()` por el borde que toca: si el rayo va por el hueco, difracta en
+   * el borde INFERIOR del módulo; si va por encima, en el superior; y si va
+   * dentro, por el más próximo.
+   *
+   * Deygout: se busca el obstáculo dominante (el de ν mayor), se cobra su
+   * pérdida y se repite a los dos lados. `maxProf` acota la recursión igual que
+   * en el modelo antiguo (3). */
+  function difraccionBandasDb(D, zA, zB, cruces, fHz, prof, maxProf) {
+    var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
+    if (!cruces || !cruces.length || p >= tope || D <= 0) return 0.0;
+    var mejorV = -1e9, mejor = -1, mejorS = 0;
+    for (var i = 0; i < cruces.length; i++) {
+      var s = cruces[i].s;
+      if (s <= 0 || s >= D) continue;
+      var z = alturaRayo(zA, zB, D, s);
+      var c = corta(cruces[i].banda, z);
+      var v = nu(-c.despeje, s, D - s, fHz);      // despeje positivo ⇒ ν negativo
+      if (v > mejorV) { mejorV = v; mejor = i; mejorS = s; }
+    }
+    if (mejor < 0 || mejorV <= -0.78) return 0.0;
+    var zDom = alturaRayo(zA, zB, D, mejorS);
+    var bordeDom = corta(cruces[mejor].banda, zDom).borde;
+    var perdida = perdidaFiloDb(mejorV);
+    var izq = [], der = [];
+    for (var k = 0; k < cruces.length; k++) {
+      if (k === mejor) continue;
+      if (cruces[k].s < mejorS) izq.push(cruces[k]);
+      else der.push({ s: cruces[k].s - mejorS, banda: cruces[k].banda });
+    }
+    /* los sub-tramos van del extremo al BORDE del dominante, que es donde se
+       reconstruye el rayo. Igual que el Deygout del modelo antiguo. */
+    perdida += difraccionBandasDb(mejorS, zA, bordeDom, izq, fHz, p + 1, tope);
+    perdida += difraccionBandasDb(D - mejorS, bordeDom, zB, der, fHz, p + 1, tope);
+    return perdida;
+  }
+
+  /* VEGETACIÓN. Declarada y NO implementada, a propósito: el encargo pide un
+   * modelo de follaje estándar CITADO y dependiente de la frecuencia, y no se
+   * escribe un coeficiente sin tener la recomendación delante (candidata:
+   * ITU-R P.833). Con el parámetro a `null` en radio_params.json, esto devuelve
+   * `null` —no 0 dB— para que quien lo consuma tenga que decir «no modelada»
+   * en vez de dar por despejado lo que no se ha mirado. */
+  function vegetacionDb(espesorM, fHz, modelo) {
+    if (!modelo) return null;
+    throw new Error("radio_pv_model: modelo de vegetación «" + modelo + "» no implementado todavía");
+  }
+
   var RadioPV = {
     GRADO: GRADO,
+    // geometría
     banda: banda,
     alturaRayo: alturaRayo,
     corta: corta,
     regimen: regimen,
     relieveDominante: relieveDominante,
-    _version: "fase1-geometria"
+    // tecnología
+    C_LUZ: C_LUZ,
+    longitudOnda: longitudOnda,
+    fsplDb: fsplDb,
+    radioFresnel: radioFresnel,
+    distanciaRuptura: distanciaRuptura,
+    perdidaFiloDb: perdidaFiloDb,
+    nu: nu,
+    difraccionBandasDb: difraccionBandasDb,
+    vegetacionDb: vegetacionDb,
+    _version: "fase1"
   };
   raiz.RadioPV = RadioPV;
   /* misma salida doble que el modelo antiguo: la página lo carga con <script> y
