@@ -23,6 +23,20 @@ jobs:
           done
           exit $rc
 
+      # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
+      # Python; si los dos motores se separan, el ajuste calibra un modelo que
+      # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
+      # del repo, no una reimplementación de lo que se supone que hace.
+      - name: paridad entre los dos motores
+        run: |
+          set -o pipefail
+          rc=0
+          for f in tests/test_*.py; do
+            echo "── $f ──"
+            python3 "$f" || rc=1
+          done
+          exit $rc
+
       # LAS MUTACIONES SE CORREN AQUÍ, no a mano. Un banco que nadie ha visto
       # fallar no es un banco, y comprobarlo una vez el día que se escribe no
       # sirve: basta que alguien afloje una comprobación para que se quede verde
@@ -35,10 +49,10 @@ jobs:
         run: |
           log=$(mktemp)
           rojo () {
-            banco="$1"; shift
+            corredor="$1"; banco="$2"; shift 2
             for m in "$@"; do
               set +e
-              MUTA="$m" node "$banco" > "$log" 2>&1
+              MUTA="$m" "$corredor" "$banco" > "$log" 2>&1
               rc=$?
               set -e
               if [ "$rc" -ne 1 ]; then
@@ -49,5 +63,11 @@ jobs:
               echo "  $banco · $m: roja, bien"
             done
           }
-          rojo tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
-                                        sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba
+          rojo node tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
+                                             sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba
+
+          # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
+          # mutación que tocase los dos ficheros a la vez dejaría el banco
+          # verde, que es exactamente la avería que esto vigila.
+          rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 \
+                                                   js_semi_cuerda js_borde_top js_tol_regimen
