@@ -22,3 +22,64 @@ jobs:
             node "$f" || rc=1
           done
           exit $rc
+
+      # LA HERRAMIENTA DE INFORME, aunque no sea un banco. Extrae `rfRows` y
+      # `buildAdjacency` del HTML con una expresión regular, así que se rompe
+      # sola el día que alguien los renombre — y sin esto se rompería en
+      # silencio, el día que a alguien le hiciera falta.
+      - name: la herramienta de malla arranca sobre una planta real
+        run: node tools/malla_plantas.mjs --planta BURGO > /dev/null
+
+      # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
+      # Python; si los dos motores se separan, el ajuste calibra un modelo que
+      # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
+      # del repo, no una reimplementación de lo que se supone que hace.
+      - name: paridad entre los dos motores
+        run: |
+          set -o pipefail
+          rc=0
+          for f in tests/test_*.py; do
+            echo "── $f ──"
+            python3 "$f" || rc=1
+          done
+          exit $rc
+
+      # LAS MUTACIONES SE CORREN AQUÍ, no a mano. Un banco que nadie ha visto
+      # fallar no es un banco, y comprobarlo una vez el día que se escribe no
+      # sirve: basta que alguien afloje una comprobación para que se quede verde
+      # para siempre sin que nadie se entere.
+      #
+      # Se exige rc = 1 EXACTAMENTE, no «distinto de cero»: rc = 2 es «la
+      # mutación ya no casa con el código», y contarlo como cazada sería el
+      # falso verde que esto viene a evitar.
+      - name: y las mutaciones, en rojo
+        run: |
+          log=$(mktemp)
+          rojo () {
+            corredor="$1"; banco="$2"; shift 2
+            for m in "$@"; do
+              set +e
+              MUTA="$m" "$corredor" "$banco" > "$log" 2>&1
+              rc=$?
+              set -e
+              if [ "$rc" -ne 1 ]; then
+                echo "::error::$banco con la mutación «$m» salió rc=$rc; se esperaba 1 (banco en rojo)"
+                tail -30 "$log"
+                exit 1
+              fi
+              echo "  $banco · $m: roja, bien"
+            done
+          }
+          rojo node tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
+                                             sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba \
+                                             sinReflejado sueloSinPerdida anguloDirecto
+
+          # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
+          # mutación que tocase los dos ficheros a la vez dejaría el banco
+          # verde, que es exactamente la avería que esto vigila.
+          rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
+                                              noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+
+          rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
+                                                   py_csqrt_rama js_semi_cuerda js_borde_top \
+                                                   js_tol_regimen js_fase_signo
