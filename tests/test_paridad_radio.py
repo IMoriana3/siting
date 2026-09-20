@@ -48,6 +48,16 @@ MUTACIONES = {
     # la tolerancia del régimen cambia SOLO en JS
     "js_tol_regimen": ("js", r'var tol = tolGrados == null \? 10 : tolGrados;',
                               'var tol = tolGrados == null ? 20 : tolGrados;'),
+
+    # ── y de los DOS RAYOS, que es donde la aritmética compleja se la juega ──
+    # Python coge siempre la rama vertical: los casos con pol="h" se separan
+    "py_refl_pol":    ("py", r'if str\("v" if pol is None else pol\)\.lower\(\)\.find\("v"\) == 0:',
+                              'if True:'),
+    # el signo de la fase del reflejado, SOLO en JS
+    "js_fase_signo":  ("js", r'cExp\(cx\(0, -dphi\)\)', 'cExp(cx(0, dphi))'),
+    # la rama de la raíz compleja pierde el signo, SOLO en Python. `eps` tiene
+    # parte imaginaria negativa siempre (−60·λ·σ), así que esto actúa seguro
+    "py_csqrt_rama":  ("py", r'if z\[1\] < 0:\n        im = -im', 'if False:\n        im = -im'),
 }
 MUTA = os.environ.get("MUTA")
 
@@ -126,6 +136,23 @@ def casos_escalares():
                 out.append(["fresnel", d1, d2, f, n])
         for ht, hr in ((1.5, 1.5), (0.775, 3.15), (3.15, 3.15)):
             out.append(["ruptura", ht, hr, f])
+        # DOS RAYOS. Es el bloque donde la aritmética compleja se juega la
+        # paridad: cerca de los lóbulos el campo casi se cancela, así que una
+        # diferencia de un bit en `cSqrt` sale amplificada en el log.
+        #
+        # EL BARRIDO LLEGA A 400 m Y NO MÁS, y no es para esquivar un caso
+        # incómodo: es que más allá no hay problema que resolver. El enlace más
+        # largo medido en El Burgo son 157,7 m y un salto TCU-TCU son decenas de
+        # metros. A 4.321,7 m con las antenas a 0,775 m los dos motores se
+        # separan 2,8e-08 dB, y eso está medido y comprobado abajo, en «el suelo
+        # de la plataforma», con su causa. No se tapa: se acota y se explica.
+        for d in (0.5, 1, 5, 12.5, 30, 47.3, 100, 250, 400):
+            for ht, hr in ((1.5, 1.5), (0.775, 3.15), (3.15, 0.775), (0.775, 0.775)):
+                for pol in ("v", "h"):
+                    out.append(["dosrayos", d, ht, hr, f, 15.0, 5e-3, pol])
+        for th in (1e-6, 0.001, 0.03, 0.3, 1.0, 1.5707):
+            for pol in ("v", "h"):
+                out.append(["reflexion", th, 15.0, 5e-3, f, pol])
         for h in (-2.0, -0.5, -0.095, 0.0, 0.049, 0.595, 1.0, 3.7):
             for d1, d2 in ((60, 140), (50, 50), (5, 195)):
                 out.append(["nu", h, d1, d2, f])
@@ -202,6 +229,9 @@ out.escalares = casos.escalares.map(c => {
     case 'nu':      return R.nu(c[1], c[2], c[3], c[4]);
     case 'filo':    return R.perdidaFiloDb(c[1]);
     case 'lambda':  return R.longitudOnda(c[1]);
+    case 'dosrayos':  return R.dosRayosDb(c[1], c[2], c[3], c[4], c[5], c[6], c[7]);
+    case 'reflexion': { const g = R.coefReflexion(c[1], c[2], c[3], c[4], c[5]);
+                        return [g.re, g.im]; }
   }
   throw new Error('caso escalar desconocido: ' + c[0]);
 });
@@ -239,6 +269,11 @@ def corre_python(mod, casos):
         elif k == "nu":      out["escalares"].append(mod.nu(c[1], c[2], c[3], c[4]))
         elif k == "filo":    out["escalares"].append(mod.perdida_filo_db(c[1]))
         elif k == "lambda":  out["escalares"].append(mod.longitud_onda(c[1]))
+        elif k == "dosrayos":
+            out["escalares"].append(mod.dos_rayos_db(c[1], c[2], c[3], c[4], c[5], c[6], c[7]))
+        elif k == "reflexion":
+            g = mod.coef_reflexion(c[1], c[2], c[3], c[4], c[5])
+            out["escalares"].append([g[0], g[1]])
         else: raise SystemExit("caso escalar desconocido: %s" % k)
     out["difraccion"] = [
         mod.difraccion_bandas_db(D, zA, zB, [{"s": s, "banda": b(a)} for a, s in cr], f)
@@ -348,6 +383,73 @@ check("y por los dos regimenes, mas el degenerado",
 noCero = [x for x in JS["difraccion"] if x > 0]
 check("y hay difraccion que cobra de verdad, no todo ceros",
       len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["difraccion"])))
+
+# ── EL SUELO DE LA PLATAFORMA ──────────────────────────────────────────────
+# Por qué la tolerancia no es cero, dicho con números y no de palabra.
+#
+# V8 y CPython NO calculan igual `hypot` ni `atan2`: difieren en el último bit,
+# ~1,4e-16 relativo. `exp`, `cos`, `sin`, `log10` y `sqrt` sí son idénticos. Y
+# dos rayos amplifica justo esos dos, porque la fase sale de `dRef − dLos`, una
+# resta de números casi iguales: a 4.321,7 m esa resta vale décimas frente a
+# magnitudes de miles, y el error relativo se multiplica por ~10.000.
+#
+# ESTO SE COMPRUEBA AQUÍ, EN CI, y no se deja escrito en un comentario: si
+# mañana `log10` empezara a separarse, sería otra cosa y este banco lo diría.
+print("\n· el suelo de la plataforma: por que la tolerancia no es cero")
+_pruebaJs = r"""
+const c = [[100,0.725],[0.5,3.925],[1000,6.3],[250,3.0],[12.5,3.925],[4321.7,1.55]];
+process.stdout.write(JSON.stringify({
+  hypot: c.map(([a,b]) => Math.hypot(a,b)),
+  atan2: c.map(([a,b]) => Math.atan2(b,a)),
+  exp:   [0.5,1,-1,0].map(Math.exp),
+  cos:   [0.5,1.2,3.0,-2.2].map(Math.cos),
+  sin:   [0.5,1.2,3.0,-2.2].map(Math.sin),
+  log10: [1.5,2.0,138.36,1e-3].map(Math.log10),
+  sqrt:  [2,3,15.0001,0.5].map(Math.sqrt),
+}, (k,v) => typeof v === 'number' && !Number.isInteger(v) ? Number(v.toPrecision(17)) : v));
+"""
+_f = os.path.join(tmp, "plataforma.js"); open(_f, "w").write(_pruebaJs)
+_r = subprocess.run([os.environ.get("NODE", "node"), _f], capture_output=True, text=True)
+if _r.returncode != 0:
+    check("la sonda de plataforma corre", False, _r.stderr[-300:])
+else:
+    _j = json.loads(_r.stdout)
+    _c = [[100,0.725],[0.5,3.925],[1000,6.3],[250,3.0],[12.5,3.925],[4321.7,1.55]]
+    _py = {"hypot": [math.hypot(a,b) for a,b in _c],
+           "atan2": [math.atan2(b,a) for a,b in _c],
+           "exp":   [math.exp(x) for x in (0.5,1,-1,0)],
+           "cos":   [math.cos(x) for x in (0.5,1.2,3.0,-2.2)],
+           "sin":   [math.sin(x) for x in (0.5,1.2,3.0,-2.2)],
+           "log10": [math.log10(x) for x in (1.5,2.0,138.36,1e-3)],
+           "sqrt":  [math.sqrt(x) for x in (2,3,15.0001,0.5)]}
+    _identicas = {k: all(a == b for a, b in zip(_j[k], _py[k])) for k in _py}
+    for k in ("exp", "cos", "sin", "log10", "sqrt"):
+        check("%-5s es identica bit a bit en los dos" % k, _identicas[k])
+    check("hypot NO lo es, y de ahi sale el suelo", not _identicas["hypot"])
+    check("atan2 tampoco", not _identicas["atan2"])
+
+# Y el caso feo, con su cota medida. 4.321,7 m con las antenas a 0,775 m no es
+# un enlace de una fotovoltaica: es el peor condicionado que encontre barriendo,
+# y esta aqui para que la cota no sea una creencia.
+_feo_py = PY.dos_rayos_db(4321.7, 0.775, 0.775, 2.45e9, 15.0, 5e-3, "h")
+_fJs = os.path.join(tmp, "feo.js")
+open(_fJs, "w").write(
+    "const fs=require('fs'),vm=require('vm');const c={module:{exports:{}},globalThis:{}};"
+    "c.globalThis=c;vm.createContext(c);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),c);"
+    "process.stdout.write(String(c.module.exports.dosRayosDb(4321.7,0.775,0.775,2.45e9,15.0,5e-3,'h')));")
+_rf = subprocess.run([os.environ.get("NODE", "node"), _fJs, ruta_js],
+                     capture_output=True, text=True)
+if _rf.returncode != 0 or not _rf.stdout.strip():
+    check("el peor caso conocido se evalua en los dos motores", False,
+          (_rf.stderr or "salida vacia")[-300:])
+    sys.exit(1)
+_feo_js = float(_rf.stdout)
+_dFeo = abs(_feo_js - _feo_py)
+check("el peor caso conocido (4.321,7 m, antenas a 0,775 m) se separa MENOS de 1e-7 dB",
+      _dFeo < 1e-7, "%.4e" % _dFeo)
+check("...y MAS de 1e-9, o sea que el caso sigue siendo el feo de verdad",
+      _dFeo > 1e-9, "%.4e" % _dFeo)
+print("     (medido: %.4e dB sobre una perdida de %.1f dB)" % (_dFeo, _feo_js))
 
 # La frecuencia tampoco tiene defecto en Python.
 revento = False

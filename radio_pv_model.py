@@ -139,6 +139,70 @@ def distancia_ruptura(ht, hr, f_hz):
     return (4 * ht * hr) / longitud_onda(f_hz)
 
 
+# ── DOS RAYOS ──────────────────────────────────────────────────────────────
+# Directo más reflejado en el suelo, que es lo que domina un enlace casi
+# horizontal a metro y medio del suelo.
+#
+# LA ARITMÉTICA COMPLEJA VA A MANO, no con el tipo `complex` de Python ni con
+# `cmath`. No es purismo: `cmath.sqrt` no hace las mismas operaciones que el
+# `cSqrt` del JS, y la paridad se mide en dB. Con el tipo nativo el número
+# saldría «parecido», que es justo lo que este fichero existe para no aceptar.
+
+def _cx(re, im=0.0):     return (re, im)
+def _cadd(a, b):         return (a[0] + b[0], a[1] + b[1])
+def _csub(a, b):         return (a[0] - b[0], a[1] - b[1])
+def _cmul(a, b):         return (a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0])
+def _cscale(a, s):       return (a[0] * s, a[1] * s)
+def _cabs(a):            return math.hypot(a[0], a[1])
+
+
+def _cdiv(a, b):
+    d = b[0]*b[0] + b[1]*b[1]
+    return ((a[0]*b[0] + a[1]*b[1]) / d, (a[1]*b[0] - a[0]*b[1]) / d)
+
+
+def _csqrt(z):
+    r = math.hypot(z[0], z[1])
+    re = math.sqrt((r + z[0]) / 2)
+    im = math.sqrt((r - z[0]) / 2)
+    if z[1] < 0:
+        im = -im
+    return (re, im)
+
+
+def _cexp(z):
+    e = math.exp(z[0])
+    return (e * math.cos(z[1]), e * math.sin(z[1]))
+
+
+def coef_reflexion(theta, eps_r, sigma, f_hz, pol=None):
+    """Coeficiente de reflexión de Fresnel en el suelo. Espejo de `coefReflexion()`."""
+    lam = longitud_onda(f_hz)
+    eps = _cx(eps_r, -60.0 * lam * sigma)
+    s = math.sin(theta)
+    cos2 = math.pow(math.cos(theta), 2)
+    root = _csqrt(_csub(eps, _cx(cos2, 0)))
+    if str("v" if pol is None else pol).lower().find("v") == 0:
+        es = _cscale(eps, s)
+        return _cdiv(_csub(es, root), _cadd(es, root))
+    return _cdiv(_csub(_cx(s, 0), root), _cadd(_cx(s, 0), root))
+
+
+def dos_rayos_db(d_m, ht, hr, f_hz, eps_r, sigma, pol=None):
+    """Espejo de `dosRayosDb()`."""
+    exige_f(f_hz)
+    d = max(d_m, 1e-3)
+    lam = longitud_onda(f_hz)
+    d_los = math.hypot(d, ht - hr)
+    d_ref = math.hypot(d, ht + hr)
+    theta = math.atan2(ht + hr, d)
+    gamma = coef_reflexion(theta, eps_r, sigma, f_hz, pol)
+    dphi = (2 * math.pi * (d_ref - d_los)) / lam
+    refl = _cscale(_cmul(gamma, _cexp(_cx(0, -dphi))), 1 / d_ref)
+    campo = _cadd(_cx(1 / d_los, 0), refl)
+    return -20 * math.log10((lam / (4 * math.pi)) * _cabs(campo))
+
+
 def perdida_filo_db(v):
     """Filo de cuchillo, aproximación de ITU-R P.526. Mismo corte en ν = −0,78
     que el modelo congelado."""

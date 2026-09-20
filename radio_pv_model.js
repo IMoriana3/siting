@@ -194,6 +194,69 @@
     return (4 * ht * hr) / longitudOnda(fHz);
   }
 
+  /* ── DOS RAYOS ───────────────────────────────────────────────────────────
+   * Directo más reflejado en el suelo, que es lo que de verdad domina un enlace
+   * casi horizontal a metro y medio del suelo. Por debajo del punto de ruptura
+   * las dos contribuciones se suman y se restan con la distancia —de ahí los
+   * lóbulos—, y por encima el reflejado cancela y la pérdida crece con d⁴.
+   *
+   * Cita: zigbee_pv_model.js `twoRayPlDb` y `reflectionCoefficient`, con su
+   * aritmética compleja mínima copiada OPERACIÓN A OPERACIÓN. No se sustituye
+   * por la biblioteca compleja del lenguaje aunque sea más corta: el gemelo
+   * Python tiene que dar el mismo número, y `cSqrt` de aquí no es `cmath.sqrt`.
+   *
+   * Aquí SÍ se le exige `fHz`, a diferencia del original, que lo lleva con
+   * defecto 2.45e9 junto con epsR, sigma y pol. */
+  function cx(re, im) { return { re: re, im: im || 0 }; }
+  function cAdd(a, b) { return cx(a.re + b.re, a.im + b.im); }
+  function cSub(a, b) { return cx(a.re - b.re, a.im - b.im); }
+  function cMul(a, b) { return cx(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re); }
+  function cScale(a, s) { return cx(a.re * s, a.im * s); }
+  function cAbs(a) { return Math.hypot(a.re, a.im); }
+  function cDiv(a, b) {
+    var d = b.re * b.re + b.im * b.im;
+    return cx((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d);
+  }
+  function cSqrt(z) {
+    var r = Math.hypot(z.re, z.im);
+    var re = Math.sqrt((r + z.re) / 2);
+    var im = Math.sqrt((r - z.re) / 2);
+    if (z.im < 0) im = -im;
+    return cx(re, im);
+  }
+  function cExp(z) {
+    var e = Math.exp(z.re);
+    return cx(e * Math.cos(z.im), e * Math.sin(z.im));
+  }
+
+  /* Coeficiente de reflexión de Fresnel en el suelo. `pol` "v" o "h". */
+  function coefReflexion(theta, epsR, sigma, fHz, pol) {
+    var lam = longitudOnda(fHz);
+    var eps = cx(epsR, -60.0 * lam * sigma);
+    var s = Math.sin(theta);
+    var cos2 = Math.pow(Math.cos(theta), 2);
+    var root = cSqrt(cSub(eps, cx(cos2, 0)));
+    if (String(pol == null ? "v" : pol).toLowerCase().indexOf("v") === 0) {
+      var es = cScale(eps, s);
+      return cDiv(cSub(es, root), cAdd(es, root));
+    }
+    return cDiv(cSub(cx(s, 0), root), cAdd(cx(s, 0), root));
+  }
+
+  function dosRayosDb(dM, ht, hr, fHz, epsR, sigma, pol) {
+    exigeF(fHz);
+    var d = Math.max(dM, 1e-3);
+    var lam = longitudOnda(fHz);
+    var dLos = Math.hypot(d, ht - hr);
+    var dRef = Math.hypot(d, ht + hr);
+    var theta = Math.atan2(ht + hr, d);
+    var gamma = coefReflexion(theta, epsR, sigma, fHz, pol);
+    var dphi = (2 * Math.PI * (dRef - dLos)) / lam;
+    var refl = cScale(cMul(gamma, cExp(cx(0, -dphi))), 1 / dRef);
+    var campo = cAdd(cx(1 / dLos, 0), refl);
+    return -20 * Math.log10((lam / (4 * Math.PI)) * cAbs(campo));
+  }
+
   /* Pérdida por filo de cuchillo, aproximación de ITU-R P.526. Cita:
      zigbee_pv_model.js `knifeEdgeLossDb` — misma expresión, mismo corte en
      ν = −0,78. */
@@ -276,6 +339,8 @@
     radioFresnel: radioFresnel,
     distanciaRuptura: distanciaRuptura,
     perdidaFiloDb: perdidaFiloDb,
+    coefReflexion: coefReflexion,
+    dosRayosDb: dosRayosDb,
     nu: nu,
     difraccionBandasDb: difraccionBandasDb,
     vegetacionDb: vegetacionDb,

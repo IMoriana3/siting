@@ -53,6 +53,17 @@ const MUTACIONES = {
   // Deygout relanzado desde el borde SUPERIOR: el error del modelo antiguo,
   // metido esta vez en la reconstrucción y no en la banda
   bordeDeArriba:  [/var bordeDom = corta\(cruces\[mejor\]\.banda, zDom\)\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
+
+  // ── dos rayos ──
+  // se cae el rayo reflejado: queda espacio libre y se pierden los lóbulos,
+  // que es justo lo que este modelo añade sobre el FSPL
+  sinReflejado:   [/var campo = cAdd\(cx\(1 \/ dLos, 0\), refl\);/, 'var campo = cx(1 / dLos, 0);'],
+  // el suelo pasa a ser un conductor perfecto sin pérdidas: eps deja de tener
+  // parte imaginaria y el coeficiente de reflexión se vuelve real
+  sueloSinPerdida:[/var eps = cx\(epsR, -60\.0 \* lam \* sigma\);/, 'var eps = cx(epsR, 0);'],
+  // el ángulo de incidencia se mide con la DIFERENCIA de alturas en vez de la
+  // suma: deja de ser el rayo reflejado y pasa a ser el directo
+  anguloDirecto:  [/var theta = Math\.atan2\(ht \+ hr, d\);/, 'var theta = Math.atan2(ht - hr, d);'],
 };
 const MUTA = process.env.MUTA;
 let fuente = fs.readFileSync(path.join(RAIZ, 'radio_pv_model.js'), 'utf8');
@@ -170,6 +181,38 @@ for (const v of [-2, -0.78, -0.5, 0, 0.5, 1, 3, 10]) {
   if (!cerca(R.perdidaFiloDb(v), Z.knifeEdgeLossDb(v), 1e-12)) filoIgual = false;
 }
 check('pérdida por filo, en ocho valores de ν', filoIgual);
+
+// DOS RAYOS. El modelo congelado lo lleva con fHz, epsR, sigma y pol POR
+// DEFECTO; aquí son obligatorios. Se le pasan los mismos y tiene que salir el
+// mismo número, lóbulos incluidos — que es donde una aritmética compleja mal
+// copiada se delata, porque ahí el campo casi se cancela.
+let dosRayosIgual = true, peorDosRayos = 0;
+for (const d of [1, 5, 12.5, 30, 47.3, 100, 250, 1000]) {
+  for (const [ht, hr] of [[1.5, 1.5], [0.775, 3.15], [3.15, 0.775]]) {
+    const a = R.dosRayosDb(d, ht, hr, F24, 15.0, 5e-3, 'v');
+    const b = Z.twoRayPlDb(d, ht, hr, F24, 15.0, 5e-3, 'v');
+    peorDosRayos = Math.max(peorDosRayos, Math.abs(a - b));
+    if (!cerca(a, b, 1e-12)) dosRayosIgual = false;
+  }
+}
+check('dos rayos, en 24 combinaciones de distancia y alturas', dosRayosIgual,
+      'peor ' + peorDosRayos.toExponential(3));
+check('y en polarización horizontal también',
+      cerca(R.dosRayosDb(100, 1.5, 1.5, F24, 15, 5e-3, 'h'),
+            Z.twoRayPlDb(100, 1.5, 1.5, F24, 15, 5e-3, 'h'), 1e-12));
+// que el coeficiente de reflexión sea COMPLEJO de verdad, no un real disfrazado
+const g = R.coefReflexion(Math.atan2(3.0, 100), 15.0, 5e-3, F24, 'v');
+check('el coeficiente de reflexión tiene parte imaginaria no nula',
+      Math.abs(g.im) > 1e-9, g);
+// y que a rasante tienda a −1, que es el caso límite conocido
+const gRas = R.coefReflexion(1e-6, 15.0, 5e-3, F24, 'v');
+check('a incidencia rasante el coeficiente tiende a −1',
+      cerca(gRas.re, -1, 1e-4) && Math.abs(gRas.im) < 1e-3,
+      gRas.re.toFixed(6) + ' ' + gRas.im.toFixed(6));
+// dos rayos SIN frecuencia también lanza
+let revento3 = false;
+try { R.dosRayosDb(100, 1.5, 1.5, null, 15, 5e-3, 'v'); } catch (e) { revento3 = /fHz/.test(e.message); }
+check('dos rayos sin fHz LANZA (el congelado predice 2,45 GHz en silencio)', revento3);
 
 // ── TECNOLOGÍA: la frecuencia manda, y no tiene valor por defecto ────────────
 console.log('\n· la banda cambia los números, y olvidarla revienta');
