@@ -66,7 +66,27 @@
       "grx_dbi": 3.0,
       "rx_sens_dbm": -103.0,
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` (modelo CONGELADO), cuyo comentario dice: «ptxDbm: XBee-PRO RR. Estándar +8. Canal 26: máx +3. Antena Jinchang 3 dBi».",
-      "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada."
+      "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada.",
+      "canal": {
+        "valor": null,
+        "_ojo": [
+          "ESTE `null` PUEDE TUMBAR LA VARIANTE ENTERA, y por eso está aquí y no en un comentario.",
+          "",
+          "El propio comentario del modelo congelado dice «Canal 26: máx +3». El canal 26 es el",
+          "último de la banda de 2,4 GHz y cae en el borde superior, donde la máscara de emisión",
+          "obliga a bajar la potencia: el XBee-PRO que aquí se declara a +19 dBm quedaría en +3.",
+          "Son DIECISÉIS dB menos de margen en toda la planta — más que cualquier otra cosa que",
+          "este JSON discuta.",
+          "",
+          "En qué canal trabajan las plantas NO ESTÁ EN NINGÚN SITIO DE ESTOS REPOS. Sale del",
+          "volcado del inventario: `CH` (canal, en hexadecimal) e `ID` (PAN) de la respuesta a",
+          "`query_setting`, que recoge `Cobertura-Zigbee/zigbee_inventario.ps1`. Eso es el bloque",
+          "8a, y depende de que alguien en planta descargue un paquete NUEVO y lo corra.",
+          "",
+          "MIENTRAS SEA `null`, la variante PRO va rotulada como NO VERIFICADA y su margen es una",
+          "cota superior, no una predicción. No se supone el canal: se lee."
+        ]
+      }
     },
 
     "zigbee_std_24": {

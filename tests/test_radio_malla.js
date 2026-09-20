@@ -41,6 +41,9 @@ const MUTACIONES = {
   rozarEsTapar:  ['zigbee', /else if \(e === "hueco"\) roza\+\+;/, 'else if (e === "hueco") atraviesa++;'],
   // la vegetación no modelada deja de avisar
   vegCallada:    ['zigbee', /if \(veg === null\) motivos\.push\("vegetacion_no_modelada"\);/, ''],
+  // el canal desconocido deja de avisar: la Ptx de la PRO pasaria por buena
+  // cuando puede ser 16 dB menos si la planta va por el canal 26
+  canalCallado:  ['zigbee', /motivos\.push\("canal_desconocido_ptx_es_cota_superior"\);/, ''],
 
   // ── radio_malla ──
   // «no se sabe» pasa a contar como enlace bueno
@@ -141,6 +144,17 @@ check('sin sigma no hay probabilidad de enlace', pPro.pEnlace === null);
 check('y lo dice', pPro.motivos.indexOf('sin_sigma_no_hay_probabilidad') >= 0, pPro.motivos.join(','));
 check('la vegetación sale como NO MODELADA, no como 0 dB', pPro.vegetacionDb === null &&
       pPro.motivos.indexOf('vegetacion_no_modelada') >= 0);
+// EL CANAL. Entre el 26 y cualquier otro hay 16 dB de Ptx («Canal 26: máx +3»
+// dice el modelo congelado, frente a +19). Mientras no se lea del inventario,
+// el margen de la PRO es una COTA SUPERIOR y el motivo tiene que decirlo.
+check('sin canal leido, avisa de que la Ptx es una cota superior',
+      pPro.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') >= 0, pPro.motivos.join(','));
+check('el JSON declara el canal como pendiente, no lo supone',
+      PARAMS.tecnologias.zigbee_pro_24.canal.valor === null);
+const conCanal = Object.assign({}, PRO, { canal: { valor: 15 } });
+check('y con el canal leido, ese aviso desaparece',
+      ZB.presupuesto(enlace, conCanal, PROP, null)
+        .motivos.indexOf('canal_desconocido_ptx_es_cota_superior') < 0);
 console.log('     (medido: PRO ' + pPro.margenDb.toFixed(2) + ' dB de margen · pérdida total ' +
             pPro.perdidaTotalDb.toFixed(2) + ' dB, de los cuales ' +
             pPro.difraccionDb.toFixed(2) + ' de difracción)');

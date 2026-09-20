@@ -128,6 +128,16 @@
       motivos.push("balance_incompleto");
       return salida;
     }
+
+    /* EL CANAL. Si no se sabe en cuál trabaja la planta, la potencia declarada
+     * es una COTA SUPERIOR y no una predicción: el comentario del modelo
+     * congelado dice «Canal 26: máx +3», y el canal 26 está en el borde de la
+     * banda, donde la máscara de emisión obliga a bajar. Entre +19 y +3 hay
+     * DIECISÉIS dB en toda la planta, más que cualquier otro parámetro de aquí.
+     * Sale del `CH` del inventario; mientras no esté, se dice. */
+    if (variante.canal == null || variante.canal.valor == null) {
+      motivos.push("canal_desconocido_ptx_es_cota_superior");
+    }
     salida.prxDbm = variante.ptx_dbm + variante.gtx_dbi + variante.grx_dbi - perdida;
 
     /* SIN SENSIBILIDAD NO HAY MARGEN. Es el caso de la variante estándar hoy, y
