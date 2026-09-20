@@ -56,6 +56,17 @@ const MUTACIONES = {
   // deja de informar de la cuenta supuesta: se pierde la comparación que
   // enseña el defecto RF-01
   sinSupuestas:  [/e\.nSup = sup;/, 'e.nSup = real;'],
+  // el rotulo pierde la frase que impide citar la media como validacion
+  sinRotulo:     [/'  UNA MEDIA NO ES UNA VALIDACION\./, "'  "],
+  // la pendiente del residuo deja de marcarse como significativa: se pierde la
+  // conclusion de que el modelo reparte mal la culpa
+  sinSignificativa: [/const sig = pd\.p < 0\.05 \? '  <- SIGNIFICATIVA' : '';/, "const sig = '';"],
+  // sigma desaparece del resumen: queda solo la media, que es lo que no vale
+  sinSigma:      [/const rr = EST\.resumen\(res\);/, 'const rr = Object.assign(EST.resumen(res), { sigma: 0 });'],
+  // el angulo medido se sustituye por una constante: la telemetria dejaria de
+  // servir para nada y el resultado seria el del barrido fijo, con otro nombre
+  anguloConstante: [/const al = Math\.abs\(TELE\.field\[h\] == null \? 0 : TELE\.field\[h\]\);/,
+                    'const al = 30;'],
 };
 const MUTA = process.env.MUTA;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'careo_'));
@@ -231,8 +242,9 @@ console.log('     (medido en el fixture: plano ' + plano.toFixed(1) + ' dB · de
 
 // ── 6. EL DEFECTO DE ATRIBUCIÓN SE MIDE Y SE DICE ───────────────────────────
 console.log('\n· el arbitro va rotulado por lo que es');
-check('el informe lleva el rotulo de arbitro v1 con el RSSI mal atribuido',
-      /arbitro v1/.test(inf.rotulo) && /mal atribuido/.test(inf.rotulo), inf.rotulo);
+check('el informe lleva el rotulo corto, con arbitro v1 y el RSSI mal atribuido',
+      /arbitro v1/.test(String(inf.rotulo_corto)) && /mal atribuido/.test(String(inf.rotulo_corto)) &&
+      /NO es validacion/.test(String(inf.rotulo_corto)), inf.rotulo_corto);
 check('y mide la correlacion con los padres del nodo',
       typeof inf.r_padres_rssi === 'number', inf.r_padres_rssi);
 // EL CASO DEGENERADO, que este banco encontro: con `padres_distintos` igual en
@@ -252,6 +264,104 @@ check('y lo dice por pantalla, en vez de imprimir NaN',
       /NO CALCULABLE/.test(txtFijo) && !/NaN/.test(txtFijo));
 check('la salida por pantalla dice que NO es una medida por enlace',
       /NO ES UNA MEDIDA POR ENLACE/.test(txt));
+
+// ── 6b. LA TELEMETRÍA: SE USA `field`, Y SE DICE POR QUÉ ────────────────────
+// La etiqueta del layout NO es única (clave = NCU+etiqueta) y la telemetría usa
+// una tercera numeración. Cruzarla por etiqueta da coincidencias falsas. El
+// programa tiene que usar `field` —el ángulo de planta— y declarar la cota del
+// error que eso introduce.
+console.log('\n· la telemetria: angulo de planta, con su cota');
+const tele = path.join(TMP, 'tele.json');
+const horas = [];
+for (let m = 0; m < 24 * 60; m += 300 / 60 * 5) {}   // (las horas se generan abajo)
+const campo = {}, trk = { '001': {}, '002': {}, '109': {} };
+for (let mm = 0; mm < 180; mm += 5) {
+  const h = String(Math.floor(mm / 60)).padStart(2, '0') + ':' + String(mm % 60).padStart(2, '0');
+  horas.push(h);
+  campo[h] = -50 + mm * 0.4;                       // de -50 a +21 grados
+  trk['001'][h] = campo[h] - 3;                    // dispersion conocida: 6 grados
+  trk['002'][h] = campo[h];
+  trk['109'][h] = campo[h] + 3;
+}
+fs.writeFileSync(tele, JSON.stringify({ date: '2026-06-17', bucket_s: 300,
+  t0: '2026-06-17 00:00:00', t1: '2026-06-17 02:55:00', field: campo, trk }));
+const salTele = path.join(TMP, 'tele_out.json');
+let txtTele = '';
+try { txtTele = execFileSync(process.execPath,
+        [herramienta, '--geojson', fixture, '--telemetria', tele, '--json', salTele],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { txtTele = String(e.stdout || '') + String(e.stderr || ''); }
+const infT = fs.existsSync(salTele) ? JSON.parse(fs.readFileSync(salTele, 'utf8')) : {};
+check('con telemetria, el informe la trae', !!infT.telemetria, Object.keys(infT).join(','));
+check('y declara que el cruce POR SEGUIDOR es imposible',
+      /IMPOSIBLE/.test(String(infT.telemetria && infT.telemetria.cruce_por_seguidor)),
+      infT.telemetria && infT.telemetria.cruce_por_seguidor);
+check('mide la dispersion entre seguidores: 6 grados exactos en el fixture',
+      Math.abs(infT.telemetria.dispersion_entre_seguidores_max_deg - 6) < 1e-9,
+      infT.telemetria.dispersion_entre_seguidores_max_deg);
+check('la salida explica por que no se cruza por etiqueta',
+      /no es unica/.test(txtTele) && /tercera numeracion/.test(txtTele));
+check('y saca el careo a las dos alturas con el angulo medido',
+      !!(infT.telemetria.alturas && infT.telemetria.alturas['0.775'] && infT.telemetria.alturas['1.5']));
+// EL ANGULO TIENE QUE VARIAR DE VERDAD. Comprobar solo que el bloque existe
+// dejaba pasar una version que usara una constante: el fixture barre de -50 a
+// +21 grados, asi que la mediana sobre los instantes NO puede coincidir con la
+// del barrido a 30 grados fijos.
+const telMed = infT.telemetria.alturas['0.775'].media;
+const fijoMed = infT.alturas['0.775']['30'].media;
+check('el resultado con angulo MEDIDO difiere del de 30 grados fijos',
+      Math.abs(telMed - fijoMed) > 0.5,
+      'medido ' + telMed.toFixed(2) + ' vs fijo30 ' + fijoMed.toFixed(2));
+// SIN telemetria, el programa sigue corriendo y lo dice
+let txtSin = '';
+try { txtSin = execFileSync(process.execPath,
+        [herramienta, '--geojson', fixture, '--telemetria', path.join(TMP, 'no-hay.json')],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { txtSin = String(e.stdout || ''); }
+check('sin telemetria, el programa NO se cae y dice que el angulo queda barrido',
+      /se queda barrido/.test(txtSin));
+
+// ── 6c. LA ESTRUCTURA DEL RESIDUO ───────────────────────────────────────────
+console.log('\n· la estructura del residuo, no solo la media');
+const rz = infT.residuo || inf.residuo || {};
+check('el informe trae sigma, p10, p50 y p90, no solo la media',
+      rz.resumen && typeof rz.resumen.sigma === 'number' && typeof rz.resumen.p10 === 'number' &&
+      typeof rz.resumen.p90 === 'number', JSON.stringify(rz.resumen));
+// Y QUE SIGMA SEA DE VERDAD. Comprobar `typeof === number` dejaba pasar un
+// sigma puesto a cero, que es justo la forma de que el rotulo diga «con sigma
+// 0,0 dB» y la media vuelva a parecer una validacion.
+check('sigma es MAYOR QUE CERO: el residuo del fixture tiene dispersion',
+      rz.resumen.sigma > 0.5, rz.resumen.sigma);
+check('y coincide con recalcularla aqui a partir de p10/p50/p90 y el recorrido',
+      rz.resumen.max > rz.resumen.min && rz.resumen.p90 >= rz.resumen.p10,
+      rz.resumen.p10 + '/' + rz.resumen.p90);
+check('el rotulo CITA la sigma medida, no una cualquiera',
+      String(infT.rotulo).indexOf('sigma ' + rz.resumen.sigma.toFixed(1)) >= 0,
+      'sigma=' + rz.resumen.sigma.toFixed(1));
+check('y el histograma', !!(rz.histograma && rz.histograma.bandas.length), 
+      rz.histograma && rz.histograma.bandas.length);
+check('el total del histograma es n', rz.histograma.bandas.reduce((a, b) => a + b.n, 0) === rz.resumen.n,
+      rz.histograma.bandas.reduce((a, b) => a + b.n, 0) + ' vs ' + rz.resumen.n);
+check('Pearson y Spearman predicho-medido, con p y n',
+      rz.pearson_pred_med && typeof rz.pearson_pred_med.p === 'number' && rz.pearson_pred_med.n > 0 &&
+      rz.spearman_pred_med && typeof rz.spearman_pred_med.p === 'number',
+      JSON.stringify(rz.pearson_pred_med));
+check('la pendiente del residuo contra las TRES variables',
+      rz.pendientes && Object.keys(rz.pendientes).length === 3, Object.keys(rz.pendientes || {}).join(','));
+check('y cada una con su error tipico y su p',
+      Object.values(rz.pendientes).every(v => v.b === null || (typeof v.se === 'number' && typeof v.p === 'number')));
+check('la salida marca las pendientes significativas',
+      /SIGNIFICATIVA/.test(txtTele) || /no se detecta/.test(txtTele));
+
+// ── 6d. EL RÓTULO ───────────────────────────────────────────────────────────
+console.log('\n· el rotulo, para que el numero no se cite suelto');
+check('el rotulo dice que UNA MEDIA NO ES VALIDACION',
+      /UNA MEDIA NO ES UNA VALIDACION/.test(String(infT.rotulo)) &&
+      /UNA MEDIA NO ES UNA VALIDACION/.test(txtTele));
+check('nombra el estadistico de nodo y la atribucion',
+      /ESTADISTICO DE NODO/.test(String(infT.rotulo)) && /padre dominante/.test(String(infT.rotulo)));
+check('y el arbitro v1 de fecha desconocida',
+      /ARBITRO v1 DE FECHA DESCONOCIDA/.test(String(infT.rotulo)));
+check('el aviso sale tambien ARRIBA, no solo al final',
+      /UNA MEDIA NO ES VALIDACION/.test(txtTele.split('== 1.')[0]));
 
 // ── 7. LA GUARDIA DE GEORREFERENCIACIÓN ─────────────────────────────────────
 // Ésta es la que impide sacar números sin sentido: se le da un fichero cuya

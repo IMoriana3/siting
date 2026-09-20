@@ -80,7 +80,12 @@ jobs:
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
 
-          rojo node tests/test_careo_elburgo.js sinGuardiaGeo podaMala sinTramoFila sinPasillo sinSupuestas
+          rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \
+                                              sinInterpolar nanCallado
+
+          rojo node tests/test_careo_elburgo.js sinGuardiaGeo podaMala sinTramoFila sinPasillo \
+                                                sinSupuestas sinRotulo sinSignificativa sinSigma \
+                                                anguloConstante
 
           rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
                                                    py_csqrt_rama js_semi_cuerda js_borde_top \
