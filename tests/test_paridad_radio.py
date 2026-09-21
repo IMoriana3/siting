@@ -76,6 +76,8 @@ MUTACIONES = {
     "js_parte_eje":   ("js", r'var sB = cr\.s \+ c\.wBorde / sp;', 'var sB = cr.s;'),
     # el seno del angulo de cruce se pierde al volver del canto, SOLO en Python
     "py_sin_senphi":  ("py", r's_b = cr\["s"\] \+ c\["wBorde"\] / sp', 's_b = cr["s"] + c["wBorde"]'),
+    # la geometria bajo tierra se calla, SOLO en Python
+    "py_tierra_muda": ("py", r'"bajoTierra": z_bot < suelo,', '"bajoTierra": False,'),
     # el conductor perfecto vuelve a dar NaN SOLO en Python
     "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
@@ -257,7 +259,14 @@ def casos_antena():
     # LA ALTURA DEL EJE: declarada, medida, sin montaje, y el cero que NO cuela
     for m in [{"module_height": None}, {"module_height": 2.0}, {"module_height": 1.87},
               {"module_height": 0}, {"module_height": -1}, {}, None]:
-        out.append(["eje", m, 2.00])
+        out.append(["eje", m, 1.20])
+    for m in [{"eje_m": 1.35}, {"eje_m": 1.35, "module_height": 2.0},
+              {"eje_m": None, "module_height": 1.87}, {"eje_m": 0}]:
+        out.append(["eje", m, 1.20])
+    for cu in [2.380, 2.382, 2.384, 2.411]:
+        for al in [0, 30, 55, 84.5248, 90]:
+            for su in [0.0, 0.40, -0.3]:
+                out.append(["tierra", 1.20, cu, al, su])
     # CORTE EXACTO CON EL PANEL INCLINADO. Se barren las CINCO ramas, porque una
     # que solo exista en un lado es justo lo que esto vigila: paralelo, fuera de
     # la huella, atraviesa, roza por debajo y roza por encima.
@@ -349,6 +358,8 @@ out.antena = casos.antena.map(c => {
                       return [p.estado, p.despeje, p.borde, p.wBorde, p.motivo]; }
     case 'eje':     { const e = R.alturaEje(c[1], c[2]);
                       return [e.valor, e.medida, e.motivo]; }
+    case 'tierra':  { const g = R.bajoTierra(c[1], c[2], c[3], c[4]);
+                      return [g.zBot, g.bajoTierra, g.hundimientoM, g.alphaCorteDeg, g.motivo]; }
   }
   throw new Error('caso de antena desconocido: ' + c[0]);
 });
@@ -421,6 +432,10 @@ def corre_python(mod, casos):
         elif c[0] == "eje":
             e = mod.altura_eje(c[1], c[2])
             out["antena"].append([e["valor"], e["medida"], e["motivo"]])
+        elif c[0] == "tierra":
+            g = mod.bajo_tierra(c[1], c[2], c[3], c[4])
+            out["antena"].append([g["zBot"], g["bajoTierra"], g["hundimientoM"],
+                                  g["alphaCorteDeg"], g["motivo"]])
         else:
             raise ValueError("caso de antena desconocido: %s" % c[0])
     return out

@@ -62,6 +62,28 @@
    * `alphaDeg` es el ángulo DE ESE SEGUIDOR en ESE INSTANTE, no uno global:
    * el modelo A usaba un único `#rf-tilt` para toda la planta, y en una planta
    * con backtracking eso no existe ni un solo minuto del día. */
+  /* ¿SE METE LA GEOMETRIA BAJO TIERRA? Con el eje a 1,20 m el borde bajo del
+   * modulo se acerca al suelo: 1,20 − (c/2)·sen α. A 55° son 0,225 m con cuerda
+   * 2,380 y 0,213 con 2,411, o sea que NO toca en el rango de trabajo. Pero con
+   * cuerda 2,411 (Fayon) cruza el cero a 84,52°, y el barrido de los bancos
+   * llega a 90°. Con 2,380/2,382/2,384 no lo toca nunca: haria falta sen α > 1.
+   *
+   * Se devuelve el diagnostico, no se corrige: una geometria bajo tierra es un
+   * dato malo -o un eje mal declarado-, y taparlo subiendo el borde al suelo
+   * daria un numero plausible sobre una planta que no existe. */
+  function bajoTierra(ejeM, cuerdaM, alphaDeg, sueloM) {
+    var suelo = sueloM == null ? 0 : sueloM;
+    var zBot = ejeM - (cuerdaM / 2) * Math.abs(Math.sin(alphaDeg * GRADO));
+    var r = suelo === ejeM ? 2 : (ejeM - suelo) / (cuerdaM / 2);
+    return {
+      zBot: zBot,
+      bajoTierra: zBot < suelo,
+      hundimientoM: zBot < suelo ? suelo - zBot : 0,
+      alphaCorteDeg: r >= 1 ? null : Math.asin(r) / GRADO,
+      motivo: zBot < suelo ? "borde_del_modulo_bajo_el_suelo" : null
+    };
+  }
+
   function banda(eje, cuerdaM, alphaDeg, sueloM) {
     var semi = (cuerdaM / 2) * Math.abs(Math.sin(alphaDeg * GRADO));
     var suelo = sueloM == null ? 0 : sueloM;
@@ -129,7 +151,14 @@
    * 2,00 sobre las 49 de El Burgo. Lo que decide es el REBOTE EN EL SUELO:
    * 4,8–5,8 dB por enlace. Y eso la acopla al relieve, no al panel. */
   function alturaEje(montaje, defectoM) {
-    var v = montaje && montaje.module_height;
+    /* DOS NOMBRES PARA LA MISMA COTA, y eso hay que cerrarlo. `module_height`
+       es el hueco que ya existe en `plantas_indice.json` —generado por
+       `montaje_edm.mjs`, con su procedencia escrita— y `eje_m` es el nombre
+       pedido al fijar el estandar. Se aceptan los dos con `eje_m` mandando,
+       para no romper lo que hay mientras se decide; tener dos nombres para una
+       cota es justo el problema que esta consolidacion viene a cerrar, asi que
+       esto es un puente, no un destino. */
+    var v = montaje && (montaje.eje_m != null ? montaje.eje_m : montaje.module_height);
     if (typeof v === "number" && isFinite(v) && v > 0) {
       return { valor: v, medida: true, motivo: null };
     }
@@ -692,6 +721,7 @@
     GRADO: GRADO,
     // geometría
     banda: banda,
+    bajoTierra: bajoTierra,
     alturaRayo: alturaRayo,
     corta: corta,
     cortaPanel: cortaPanel,

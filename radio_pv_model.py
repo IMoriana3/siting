@@ -34,6 +34,25 @@ import math
 GRADO = math.pi / 180
 
 
+def bajo_tierra(eje_m, cuerda_m, alpha_deg, suelo_m=None):
+    """Espejo de `bajoTierra()`. Con el eje a 1,20 el borde bajo se acerca al
+    suelo: 1,20 − (c/2)·sen alfa. No toca en el rango de trabajo, pero con
+    cuerda 2,411 cruza el cero a 84,52 grados y el barrido llega a 90.
+
+    Se DEVUELVE el diagnostico, no se corrige: taparlo subiendo el borde al
+    suelo daria un numero plausible sobre una planta que no existe."""
+    suelo = 0.0 if suelo_m is None else suelo_m
+    z_bot = eje_m - (cuerda_m / 2.0) * abs(math.sin(alpha_deg * GRADO))
+    r = 2.0 if suelo == eje_m else (eje_m - suelo) / (cuerda_m / 2.0)
+    return {
+        "zBot": z_bot,
+        "bajoTierra": z_bot < suelo,
+        "hundimientoM": (suelo - z_bot) if z_bot < suelo else 0,
+        "alphaCorteDeg": None if r >= 1 else math.asin(r) / GRADO,
+        "motivo": "borde_del_modulo_bajo_el_suelo" if z_bot < suelo else None,
+    }
+
+
 def banda(eje, cuerda_m, alpha_deg, suelo_m=None):
     """Banda vertical que ocupa un seguidor inclinado `alpha_deg`.
 
@@ -91,7 +110,11 @@ def altura_eje(montaje, defecto_m):
     Y lo que decide esta cota, medido: NO donde cae el canto respecto a la
     antena -subir el eje sube la banda y la antena a la vez, difraccion
     invariante, 0,00e+0 dB- sino el REBOTE EN EL SUELO, 4,8-5,8 dB por enlace."""
-    v = (montaje or {}).get("module_height")
+    # DOS NOMBRES PARA LA MISMA COTA: `module_height` es el hueco que ya existe
+    # en plantas_indice.json y `eje_m` el nombre pedido al fijar el estandar.
+    # Mandan `eje_m`; es un puente mientras se decide, no un destino.
+    m = montaje or {}
+    v = m.get("eje_m") if m.get("eje_m") is not None else m.get("module_height")
     if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0:
         return {"valor": float(v), "medida": True, "motivo": None}
     if not (defecto_m and defecto_m > 0):

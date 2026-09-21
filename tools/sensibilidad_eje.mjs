@@ -68,7 +68,7 @@ const est = v => { const s = [...v].sort((p, q) => p - q), n = s.length;
 console.log('El Burgo · 49 medidas · antena DERIVADA del eje (eje − 0,225·cos α − 0,50)\n');
 console.log('   eje    alfa   antena    n    media   mediana     min      max');
 const res = {};
-for (const eje of [1.50, 2.00]) {
+for (const eje of [1.20, 1.50, 2.00]) {
   for (const tilt of [0, 30, 55]) {
     const ant = R.alturaAntenaTCU(eje, RA, CA, tilt);
     const dif = enlaces.map(e => ZB.presupuesto(
@@ -80,8 +80,27 @@ for (const eje of [1.50, 2.00]) {
   }
   console.log('');
 }
-console.log('CUANTO MUEVE MEDIO METRO DE EJE (2,00 frente a 1,50), en la media:');
-for (const tilt of [0, 30, 55])
-  console.log('   alfa ' + String(tilt).padStart(2) + '°: ' +
-    res['1.5_' + tilt].media.toFixed(2) + ' -> ' + res['2_' + tilt].media.toFixed(2) +
-    '  =  ' + (res['2_' + tilt].media - res['1.5_' + tilt].media).toFixed(2) + ' dB');
+console.log('ANTES Y DESPUES, en la media del careo:');
+console.log('   alfa    eje 2,00   eje 1,50   eje 1,20   1,20 vs 2,00   1,20 vs 1,50');
+for (const tilt of [0, 30, 55]) {
+  const a = res['2_' + tilt].media, b = res['1.5_' + tilt].media, c = res['1.2_' + tilt].media;
+  console.log('   ' + String(tilt).padStart(4) + '°' + a.toFixed(2).padStart(11) +
+    b.toFixed(2).padStart(11) + c.toFixed(2).padStart(11) +
+    (c - a).toFixed(2).padStart(15) + (c - b).toFixed(2).padStart(15) + '  dB');
+}
+/* VEGETACION. A 0,475 m del suelo deja de ser un detalle: la hierba y el
+   matorral de pasillo entran en la primera zona de Fresnel. El motor NO la
+   modela -`vegetacionDb` devuelve null sin modelo, a proposito- asi que lo que
+   se barre aqui es LA SENSIBILIDAD, no una prediccion: cuanta perdida extra
+   haria falta para mover el careo, por espesor atravesado. */
+console.log('\nBARRIDO DE VEGETACION, sobre el eje 1,20 y alfa 30.');
+console.log('Ojo: el motor NO modela vegetacion (vegetacionDb -> null sin modelo).');
+console.log('Esto es cuanto moveria el careo una perdida por metro de follaje.\n');
+console.log('   v (m)   0,5 dB/m   1,0 dB/m   2,0 dB/m   <- coeficientes de tanteo');
+const base = res['1.2_30'].media;
+for (const v of [0, 0.3, 0.6, 1.0]) {
+  const f = k => (base - v * k).toFixed(2).padStart(11);
+  console.log('   ' + v.toFixed(1).padStart(5) + f(0.5) + f(1.0) + f(2.0));
+}
+console.log('\n   El coeficiente NO esta medido ni citado: ITU-R P.833 es el candidato y');
+console.log('   `radio_params.json` lo deja en null a proposito. Estos tres son TANTEO.');

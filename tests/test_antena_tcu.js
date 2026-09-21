@@ -49,12 +49,18 @@ const MUTACIONES = {
   // la cota declarada se presenta como medida: el falso verde de siempre
   ejeMiente:      ['radio_pv_model.js', /return \{ valor: defectoM, medida: false,/, 'return { valor: defectoM, medida: true,'],
   // la altura del eje vuelve a ser una constante global, ignorando la planta
-  ejeGlobal:      ['radio_pv_model.js', /var v = montaje && montaje\.module_height;/, 'var v = null;'],
+  ejeGlobal:      ['radio_pv_model.js', /var v = montaje && \(montaje\.eje_m != null \? montaje\.eje_m : montaje\.module_height\);/, 'var v = null;'],
   // al tapar se pierde la PROFUNDIDAD: nu = 0 y 6,03 dB fijos tape lo que tape.
   // Es el fallo que tuvo la primera version de `cortaPanel`, puesto de mutacion
   // para que no pueda volver en silencio.
   tapaSinFondo:   ['radio_pv_model.js', /despeje: cruza \? -Math\.min\(Math\.abs\(hLo\), Math\.abs\(hHi\)\) : Math\.abs\(h\),/,
                                         'despeje: cruza ? 0 : Math.abs(h),'],
+  // la geometria bajo tierra se CORRIGE callando, subiendo el borde al suelo:
+  // un numero plausible sobre una planta que no existe
+  tierraCallada:  ['radio_pv_model.js', /bajoTierra: zBot < suelo,/, 'bajoTierra: false,'],
+  // `eje_m` deja de mandar sobre el nombre viejo
+  ejeNombreViejo: ['radio_pv_model.js', /var v = montaje && \(montaje\.eje_m != null \? montaje\.eje_m : montaje\.module_height\);/,
+                                        'var v = montaje && montaje.module_height;'],
 };
 const MUTA = process.env.MUTA;
 const fuentes = {};
@@ -305,10 +311,59 @@ check('un 0 o un negativo NO cuelan como medida',
 check('sin montaje y sin defecto, LANZA', (function () {
   try { R.alturaEje(null, 0); return false; } catch (e) { return /altura del eje/.test(e.message); }
 })());
-check('el defecto sale del JSON y se declara COMO defecto',
-      P.eje_tubo_m.valor === 2.00 && P.eje_tubo_m._es_defecto_declarado === true);
-check('y su _ojo avisa de que NINGUNA planta lo tiene medido',
-      /no se ha medido la altura del tubo en ninguna planta/.test(JSON.stringify(P.eje_tubo_m._ojo)));
+/* EL ESTANDAR FACTIUN SON 1,20 m, y los dos caminos tienen que estar. */
+check('el defecto son 1,20 m, declarados COMO defecto',
+      P.eje_tubo_m.valor === 1.20 && P.eje_tubo_m._es_defecto_declarado === true);
+check('con su fuente: estandar Factiun, no un plano ni una medida',
+      /estándar Factiun/i.test(P.eje_tubo_m._fuente) && /No sale de un plano/i.test(P.eje_tubo_m._fuente));
+check('y con el ROTULO que la salida tiene que llevar',
+      P.eje_tubo_m._rotulo === 'eje estándar 1,20 m, no específico de la planta');
+/* LOS DOS CAMINOS, que es lo que el encargo pide que no se pueda saltar. */
+check('planta SIN eje declarado -> 1,20 y rotulada como no especifica',
+      R.alturaEje({}, P.eje_tubo_m.valor).valor === 1.20 &&
+      R.alturaEje({}, P.eje_tubo_m.valor).medida === false);
+check('planta CON `eje_m` -> el suyo, y marcada como medida',
+      R.alturaEje({ eje_m: 1.35 }, P.eje_tubo_m.valor).valor === 1.35 &&
+      R.alturaEje({ eje_m: 1.35 }, P.eje_tubo_m.valor).medida === true);
+check('y `eje_m` MANDA sobre el `module_height` que ya existia',
+      R.alturaEje({ eje_m: 1.35, module_height: 2.00 }, 1.20).valor === 1.35);
+check('el `module_height` solo sigue valiendo, para no romper lo que hay',
+      R.alturaEje({ module_height: 1.87 }, 1.20).valor === 1.87);
+/* NINGUN TERCER CAMINO: sin planta y sin defecto no se inventa una cota. */
+check('sin declarar y SIN defecto, LANZA en vez de suponer', (function () {
+  try { R.alturaEje({}, null); return false; } catch (e) { return /altura del eje/.test(e.message); }
+})());
+
+/* ── LA GEOMETRIA NO SE METE BAJO TIERRA ──────────────────────────────────
+   Con el eje a 1,20 el borde bajo del modulo se acerca al suelo. Los numeros
+   de aqui estan CALCULADOS A MANO: zBot = 1,20 − (c/2)·sen α, y el angulo al
+   que cruza el cero es asin(1,20 / (c/2)) cuando ese cociente es < 1. */
+console.log('\n· la geometria no se mete bajo tierra');
+[[2.380, null], [2.382, null], [2.384, null], [2.411, 84.5248]].forEach(function (c) {
+  const cu = c[0], espCorte = c[1];
+  const g = R.bajoTierra(1.20, cu, 90, 0);
+  const manoCorte = (1.20 / (cu / 2)) >= 1 ? null : Math.asin(1.20 / (cu / 2)) / R.GRADO;
+  check('cuerda ' + cu.toFixed(3) + ': cruza el cero ' +
+        (espCorte === null ? 'NUNCA (haria falta sen a > 1)' : 'a ' + espCorte.toFixed(2) + '°'),
+        (espCorte === null ? g.alphaCorteDeg === null && manoCorte === null
+                           : cerca(g.alphaCorteDeg, espCorte, 1e-3) && cerca(manoCorte, espCorte, 1e-3)),
+        g.alphaCorteDeg);
+  /* a mano: zBot a 90° es 1,20 − c/2 */
+  check('cuerda ' + cu.toFixed(3) + ': a 90° el borde queda en ' + (1.20 - cu / 2).toFixed(4) + ' m',
+        cerca(g.zBot, 1.20 - cu / 2, 1e-9), g.zBot.toFixed(4));
+});
+check('SOLO la cuerda 2,411 se mete bajo tierra, y 5,5 mm a 90°',
+      R.bajoTierra(1.20, 2.411, 90, 0).bajoTierra === true &&
+      cerca(R.bajoTierra(1.20, 2.411, 90, 0).hundimientoM, 0.0055, 5e-5) &&
+      [2.380, 2.382, 2.384].every(cu => R.bajoTierra(1.20, cu, 90, 0).bajoTierra === false));
+check('en el RANGO DE TRABAJO (hasta 55°) no se mete ninguna',
+      [2.380, 2.382, 2.384, 2.411].every(cu =>
+        [0, 15, 30, 45, 55, 60].every(al => R.bajoTierra(1.20, cu, al, 0).bajoTierra === false)));
+check('y cuando se mete lo DICE con motivo, no lo corrige callando',
+      R.bajoTierra(1.20, 2.411, 90, 0).motivo === 'borde_del_modulo_bajo_el_suelo');
+check('el suelo no tiene por que ser 0: con terreno a 0,40 el corte se adelanta',
+      R.bajoTierra(1.20, 2.380, 90, 0.40).bajoTierra === true &&
+      R.bajoTierra(1.20, 2.380, 90, 0).bajoTierra === false);
 
 /* LO QUE LA COTA DEL EJE **NO** DECIDE, y es contraintuitivo: subir el eje sube
    la banda Y la antena a la vez, asi que la geometria relativa es INVARIANTE

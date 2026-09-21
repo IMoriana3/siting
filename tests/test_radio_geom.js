@@ -32,7 +32,14 @@ const MUTACIONES = {
   // media cuerda en vez de cuerda entera: la banda sale con la mitad de alto
   semiCuerda:     [/var semi = \(cuerdaM \/ 2\)/, 'var semi = (cuerdaM / 4)'],
   // coseno en vez de seno: el seguidor plano taparía lo máximo y el vertical nada
-  senoPorCoseno:  [/Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/, 'Math.abs(Math.cos(alphaDeg * GRADO))'],
+  /* EL ANCLA LLEVA `var semi =` A PROPOSITO. Sin el contexto casaba con la
+     PRIMERA aparicion de `Math.abs(Math.sin(alphaDeg * GRADO))`, y al insertar
+     `bajoTierra()` ENCIMA de `banda()` -con una expresion casi identica- la
+     mutacion paso a mutar la funcion nueva, que este banco no prueba: se quedo
+     DORMIDA en verde. Meter codigo parecido por encima de otro le roba sus
+     anclas, y eso no avisa solo. */
+  senoPorCoseno:  [/var semi = \(cuerdaM \/ 2\) \* Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/,
+                   'var semi = (cuerdaM / 2) * Math.abs(Math.cos(alphaDeg * GRADO))'],
   // el hueco deja de existir: cualquier rayo por debajo se da por tapado
   sinHueco:       [/if \(zRayo < b\.zBot\) \{/, 'if (false) {'],
   // el régimen siempre dice «cruza»: se pierde el caso del pasillo
