@@ -35,6 +35,41 @@
       ]
     },
 
+    "eje_tubo_m": {
+      "valor": 2.00,
+      "_es_defecto_declarado": true,
+      "_fuente": "código: Cobertura-Zigbee/seguidor.js:31 `postH: 2.0`. Lo corrobora `terreno.html:1242`, `HEJE = TC.postH + (TC.off||0)` = 2,14, que es la CARA DEL MÓDULO (0,14 por encima del eje) y se usa para convertir el levantamiento en cota de suelo en `prepCotas`. Y lo corrobora `makePost`, donde el poste mide `1.747 = 2 − 0,253`: los 2,00 son el EJE y el poste llega a 1,747 porque los 0,253 restantes son el apoyo.",
+      "_ojo": [
+        "DEFECTO DE MODELO, GLOBAL Y SIN MEDIR. No es una cota de planta: es el mismo número",
+        "para las once. El sitio POR PLANTA ya existe y está vacío — `montaje.module_height` en",
+        "`Cobertura-Zigbee/plantas_indice.json`, `null` en las once—, y su propio generador lo dice:",
+        "`tools/montaje_edm.mjs:133` → «null · no se ha medido la altura del tubo en ninguna planta».",
+        "",
+        "CUANDO SE MIDA, MANDA EL LAYOUT. Este valor es solo el respaldo, y quien lo use tiene que",
+        "rotular la salida como ALTURA DECLARADA, no medida.",
+        "",
+        "HAY TRES VALORES EN CIRCULACIÓN Y NINGUNO ESTÁ MEDIDO:",
+        "  2,00  aquí y en terreno.html/seguidor.js  — EJE",
+        "  1,50  cobertura-rf-fv `calibra_elburgo.py:42` `HTUBE` — EJE, etiquetado «catálogo» SIN CITA",
+        "  1,50  Siting `RF_ANT_H` — ANTENA, «heredada del modelo antiguo»",
+        "El 1,50 de rf-fv ES el 1,50 de Siting reetiquetado: tomó una altura de ANTENA y la usó como",
+        "altura de VIGA, restándole la caída de 0,725 para sacar los 0,775 m de su ajuste de El Burgo.",
+        "Su propio `calibra_elburgo.py:97` probó las dos lecturas y se quedó con la segunda.",
+        "",
+        "QUÉ MUEVE, MEDIDO SOBRE LAS 49 DE EL BURGO (eje 2,00 frente a 1,50):",
+        "  difracción   0,00e+0 dB    ← CERO EXACTO, y no es casualidad: subir el eje sube la banda",
+        "                               Y la antena a la vez, así que la geometría relativa es",
+        "                               invariante por traslación.",
+        "  dos rayos    4,8 a 5,8 dB por enlace  ← AQUÍ está toda la sensibilidad",
+        "  media del careo   −0,81 / −0,18 / +0,48 dB según alfa  ← los 5 dB por enlace son",
+        "                               desplazamientos de lóbulo que se compensan entre los 49.",
+        "",
+        "O sea que esta cota NO decide dónde cae el canto respecto a la antena: decide el REBOTE EN",
+        "EL SUELO. Y el rebote necesita la cota sobre el suelo LOCAL, así que esto queda acoplado al",
+        "relieve (A3), no a la geometría del panel."
+      ]
+    },
+
     "antena_tcu": {
       "_que_es": [
         "DÓNDE ESTÁ LA ANTENA DE LA TCU, que no es una cota fija. El conector cuelga del",

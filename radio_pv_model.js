@@ -113,6 +113,33 @@
     return { estado: "tapado", despeje: -Math.min(dTop, dBot), borde: borde };
   }
 
+  /* ── LA ALTURA DEL EJE DEL TUBO, POR PLANTA ──────────────────────────────
+   * NUNCA una constante global escondida. Se pide con el `montaje` de la planta
+   * delante, y si la planta no la declara se cae al defecto CON MOTIVO, para
+   * que la salida pueda rotularse «declarada» en vez de pasar por medida.
+   *
+   * El hueco por planta ya existe y está vacío: `montaje.module_height` en
+   * `Cobertura-Zigbee/plantas_indice.json` vale `null` en las once, y su
+   * generador lo dice — `montaje_edm.mjs:133`, «null · no se ha medido la
+   * altura del tubo en ninguna planta».
+   *
+   * QUÉ DECIDE ESTA COTA, medido y no supuesto: NO decide dónde cae el canto
+   * respecto a la antena. Subir el eje sube la banda y la antena a la vez, así
+   * que la difracción es invariante por traslación — 0,00e+0 dB entre 1,50 y
+   * 2,00 sobre las 49 de El Burgo. Lo que decide es el REBOTE EN EL SUELO:
+   * 4,8–5,8 dB por enlace. Y eso la acopla al relieve, no al panel. */
+  function alturaEje(montaje, defectoM) {
+    var v = montaje && montaje.module_height;
+    if (typeof v === "number" && isFinite(v) && v > 0) {
+      return { valor: v, medida: true, motivo: null };
+    }
+    if (!(defectoM > 0)) {
+      throw new Error("radio_pv_model: falta la altura del eje y no hay defecto declarado");
+    }
+    return { valor: defectoM, medida: false,
+             motivo: "altura_de_eje_declarada_no_medida_en_esta_planta" };
+  }
+
   /* ── DÓNDE ESTÁ LA ANTENA DE LA TCU ──────────────────────────────────────
    * NO es una cota fija. El conector cuelga del TUBO y GIRA CON ÉL; del
    * conector baja el coax, que cuelga en vertical por su peso. Así que la
@@ -588,6 +615,7 @@
     alturaRayo: alturaRayo,
     corta: corta,
     cortaPanel: cortaPanel,
+    alturaEje: alturaEje,
     regimen: regimen,
     relieveDominante: relieveDominante,
     anclaAntena: anclaAntena,

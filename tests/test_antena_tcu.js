@@ -46,6 +46,10 @@ const MUTACIONES = {
   // se ignora la huella: cualquier cruce del plano cuenta, aunque caiga fuera
   panelSinHuella: ['radio_pv_model.js', /var lo = Math\.max\(w0, -semiW\), hi = Math\.min\(w1, semiW\);/,
                                         'var lo = w0, hi = w1;'],
+  // la cota declarada se presenta como medida: el falso verde de siempre
+  ejeMiente:      ['radio_pv_model.js', /return \{ valor: defectoM, medida: false,/, 'return { valor: defectoM, medida: true,'],
+  // la altura del eje vuelve a ser una constante global, ignorando la planta
+  ejeGlobal:      ['radio_pv_model.js', /var v = montaje && montaje\.module_height;/, 'var v = null;'],
 };
 const MUTA = process.env.MUTA;
 const fuentes = {};
@@ -270,6 +274,43 @@ check('un enlace que no pisa la huella tampoco es un obstaculo',
       R.cortaPanel(0, CUE, 30, 5.0, 9.0, 0.8, 0.8).motivo === 'el_enlace_no_pisa_la_huella');
 check('y por encima del panel el estado es «libre», no «hueco»',
       R.cortaPanel(0, CUE, 30, 2.0, -2.0, 5.0, 5.0).estado === 'libre');
+
+/* ══ 3c. LA ALTURA DEL EJE: POR PLANTA, Y LO QUE DE VERDAD DECIDE ════════ */
+console.log('\n· la altura del eje, por planta y con motivo');
+check('una planta que NO la declara cae al defecto y lo DICE',
+      R.alturaEje({ module_height: null }, 2.00).medida === false &&
+      R.alturaEje({ module_height: null }, 2.00).motivo === 'altura_de_eje_declarada_no_medida_en_esta_planta');
+check('una planta que SI la declara manda sobre el defecto',
+      R.alturaEje({ module_height: 1.87 }, 2.00).valor === 1.87 &&
+      R.alturaEje({ module_height: 1.87 }, 2.00).medida === true);
+check('un 0 o un negativo NO cuelan como medida',
+      R.alturaEje({ module_height: 0 }, 2.00).medida === false &&
+      R.alturaEje({ module_height: -1 }, 2.00).medida === false);
+check('sin montaje y sin defecto, LANZA', (function () {
+  try { R.alturaEje(null, 0); return false; } catch (e) { return /altura del eje/.test(e.message); }
+})());
+check('el defecto sale del JSON y se declara COMO defecto',
+      P.eje_tubo_m.valor === 2.00 && P.eje_tubo_m._es_defecto_declarado === true);
+check('y su _ojo avisa de que NINGUNA planta lo tiene medido',
+      /no se ha medido la altura del tubo en ninguna planta/.test(JSON.stringify(P.eje_tubo_m._ojo)));
+
+/* LO QUE LA COTA DEL EJE **NO** DECIDE, y es contraintuitivo: subir el eje sube
+   la banda Y la antena a la vez, asi que la geometria relativa es INVARIANTE
+   POR TRASLACION. La difraccion no se entera. Lo que se mueve es el rebote en
+   el suelo, que si depende de la cota absoluta. Calculado aqui, no citado. */
+[0, 30, 55].forEach(function (al) {
+  const cr = eje => [0.25, 0.5, 0.75].map(f => ({ s: f * 100, banda: R.banda(eje, CUE, al, 0) }));
+  const dif = eje => { const a = R.alturaAntenaTCU(eje, RAD, CAI, al);
+    return R.difraccionBandasDb(100, a, a, cr(eje), F24); };
+  const dr = eje => { const a = R.alturaAntenaTCU(eje, RAD, CAI, al);
+    return R.dosRayosDb(100, a, a, F24, 15.0, 5e-3, 'v'); };
+  check('alfa ' + String(al).padStart(2) + '°: medio metro de eje NO mueve la difraccion (' +
+        Math.abs(dif(2.00) - dif(1.50)).toExponential(1) + ' dB)',
+        Math.abs(dif(2.00) - dif(1.50)) < 1e-12);
+  check('alfa ' + String(al).padStart(2) + '°: pero SI mueve el dos rayos (' +
+        Math.abs(dr(2.00) - dr(1.50)).toFixed(2) + ' dB)',
+        Math.abs(dr(2.00) - dr(1.50)) > 1.0);
+});
 
 /* ══ 4. EL CAMPO CERCANO ═════════════════════════════════════════════════ */
 console.log('\n· el campo cercano, donde el filo de cuchillo no vale');

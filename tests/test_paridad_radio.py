@@ -64,6 +64,11 @@ MUTACIONES = {
     "js_panel_eje":   ("js", r'borde: zEje \+ wB2 \* Math\.tan\(a\),', 'borde: zEje,'),
     # la huella del panel se ignora SOLO en Python: cualquier cruce vale
     "py_panel_huella":("py", r'lo, hi = max\(w0, -semi_w\), min\(w1, semi_w\)', 'lo, hi = w0, w1'),
+    # la altura del eje deja de decir que NO esta medida, SOLO en Python: una
+    # cota declarada que se presenta como medida es el falso verde de siempre
+    "py_eje_medida":  ("py", r'return \{"valor": defecto_m, "medida": False,', 'return {"valor": defecto_m, "medida": True,'),
+    # y SOLO en JS, un module_height a cero cuela como medida
+    "js_eje_cero":    ("js", r'if \(typeof v === "number" && isFinite\(v\) && v > 0\)', 'if (typeof v === "number")'),
     # el conductor perfecto vuelve a dar NaN SOLO en Python
     "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
@@ -242,6 +247,10 @@ def casos_antena():
     for th in [0.01, 0.25, 1.0]:
         out.append(["reflinf", th, 5e-3, 2.45e9, "v"])
         out.append(["reflinf", th, 5e-3, 868e6, "h"])
+    # LA ALTURA DEL EJE: declarada, medida, sin montaje, y el cero que NO cuela
+    for m in [{"module_height": None}, {"module_height": 2.0}, {"module_height": 1.87},
+              {"module_height": 0}, {"module_height": -1}, {}, None]:
+        out.append(["eje", m, 2.00])
     # CORTE EXACTO CON EL PANEL INCLINADO. Se barren las CINCO ramas, porque una
     # que solo exista en un lado es justo lo que esto vigila: paralelo, fuera de
     # la huella, atraviesa, roza por debajo y roza por encima.
@@ -308,6 +317,8 @@ out.antena = casos.antena.map(c => {
                       return [g.re, g.im]; }
     case 'panel':   { const p = R.cortaPanel(c[1], c[2], c[3], c[4], c[5], c[6], c[7]);
                       return [p.estado, p.despeje, p.borde, p.wBorde, p.motivo]; }
+    case 'eje':     { const e = R.alturaEje(c[1], c[2]);
+                      return [e.valor, e.medida, e.motivo]; }
   }
   throw new Error('caso de antena desconocido: ' + c[0]);
 });
@@ -371,6 +382,9 @@ def corre_python(mod, casos):
         elif c[0] == "panel":
             q = mod.corta_panel(c[1], c[2], c[3], c[4], c[5], c[6], c[7])
             out["antena"].append([q["estado"], q["despeje"], q["borde"], q["wBorde"], q["motivo"]])
+        elif c[0] == "eje":
+            e = mod.altura_eje(c[1], c[2])
+            out["antena"].append([e["valor"], e["medida"], e["motivo"]])
         else:
             raise ValueError("caso de antena desconocido: %s" % c[0])
     return out

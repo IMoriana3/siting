@@ -80,6 +80,26 @@ def corta(b, z_rayo):
     return {"estado": "tapado", "despeje": -min(d_top, d_bot), "borde": borde}
 
 
+def altura_eje(montaje, defecto_m):
+    """Espejo de `alturaEje()`. LA ALTURA DEL EJE ES POR PLANTA, nunca una
+    constante global escondida: si la planta no la declara se cae al defecto
+    CON MOTIVO, para poder rotular la salida como «declarada».
+
+    El hueco por planta ya existe y esta vacio: `montaje.module_height` en
+    plantas_indice.json vale null en las once, y su generador lo dice.
+
+    Y lo que decide esta cota, medido: NO donde cae el canto respecto a la
+    antena -subir el eje sube la banda y la antena a la vez, difraccion
+    invariante, 0,00e+0 dB- sino el REBOTE EN EL SUELO, 4,8-5,8 dB por enlace."""
+    v = (montaje or {}).get("module_height")
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0:
+        return {"valor": float(v), "medida": True, "motivo": None}
+    if not (defecto_m and defecto_m > 0):
+        raise ValueError("radio_pv_model: falta la altura del eje y no hay defecto declarado")
+    return {"valor": defecto_m, "medida": False,
+            "motivo": "altura_de_eje_declarada_no_medida_en_esta_planta"}
+
+
 def corta_panel(z_eje, cuerda_m, alpha_deg, wA, wB, zA, zB):
     """Espejo de `cortaPanel()`. EL PANEL DE VERDAD ES UN PLANO INCLINADO.
 
