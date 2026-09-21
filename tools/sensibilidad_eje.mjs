@@ -11,7 +11,18 @@ const require = createRequire(import.meta.url);
 const RAIZ = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const R = require(path.join(RAIZ, 'radio_pv_model.js'));
 const ZB = require(path.join(RAIZ, 'radio_zigbee.js'));
-const GEOJSON = path.join(RAIZ, '..', 'Cobertura-Zigbee', 'elburgo_real.geojson');
+/* `--geojson`, MISMA CONVENCION QUE `careo_elburgo.mjs`. Sin ella este util no
+   se podia correr sobre otro arbitro, o sea que tampoco en un banco: el unico
+   camino era tener el repo hermano al lado. Un util que solo arranca en una
+   maquina no lo vigila nadie, y este ya se subio roto una vez (c62242e). */
+const arg = (n, d) => { const i = process.argv.indexOf('--' + n);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
+const GEOJSON = arg('geojson', path.join(RAIZ, '..', 'Cobertura-Zigbee', 'elburgo_real.geojson'));
+if (!fs.existsSync(GEOJSON)) {
+  console.error('no encuentro el arbitro en ' + GEOJSON + '\n' +
+    'Vive en el repo cobertura-zigbee. Pasa su ruta con --geojson.');
+  process.exit(2);
+}
 const CUERDA = 2.382, RA = 0.225, CA = 0.50;
 
 const html = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');

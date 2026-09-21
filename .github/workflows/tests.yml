@@ -119,6 +119,15 @@ jobs:
                                                 sinSupuestas sinRotulo sinSignificativa sinSigma \
                                                 anguloConstante
 
+          # LOS DOS UTILES QUE NO VIGILABA NADIE. `careo_elburgo.mjs` si lo
+          # corre su banco de punta a punta; `sensibilidad_eje.mjs` y
+          # `sin_dato_horas.mjs` no los corria nada, y se notaba: el segundo
+          # llevaba `/home/user/Siting/...` a pelo, o sea que no arrancaba en
+          # ninguna otra maquina. Este banco los EJECUTA contra fixtures, con
+          # los numeros calculados a mano.
+          rojo node tests/test_utiles_rf.js ejeSinAntena vegPlana cantoAlEje \
+                                            corteFijo rotuloFijo sinSenPhi
+
           # LA PUERTA DE LA HOLGURA UNICA. No compara numeros: lee el fuente de
           # los dos motores y cuenta cuantas funciones dan el despeje de una
           # fila. Tiene que ser UNA. La banda vertical y el plano inclinado

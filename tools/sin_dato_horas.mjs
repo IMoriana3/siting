@@ -25,10 +25,30 @@
  */
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const RM = require('/home/user/Siting/radio_pv_model.js');
+/* LA RUTA DEL MOTOR ERA ABSOLUTA —`/home/user/Siting/radio_pv_model.js`— y con
+   eso este util NO ARRANCABA EN NINGUNA OTRA MAQUINA, ni en la CI. Es el mismo
+   defecto que el binario de Chromium clavado en Cobertura-Zigbee. Va relativa
+   al propio fichero, que es lo unico que se sabe cierto desde aqui. */
+const path = require('path');
+const RAIZ = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+const RM = require(path.join(RAIZ, 'radio_pv_model.js'));
 const fs = require('fs');
-const LAY = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const CSV = fs.readFileSync(process.argv[3], 'utf8').trim().split('\n');
+
+/* Y DECIR QUE FALTA, en vez de reventar con una traza de `node:fs`. Sin esto,
+   correrlo sin argumentos daba `getValidatedPath` y a ver quien deduce de ahi
+   que lo que falta es el CSV de consignas. */
+const LAYOUT = process.argv[2], CONSIGNAS = process.argv[3];
+for (const [q, v] of [['layout de la planta', LAYOUT], ['CSV de consignas', CONSIGNAS]]) {
+  if (!v || !fs.existsSync(v)) {
+    console.error('falta el ' + q + (v ? ': no existe ' + v : '') + '\n' +
+      'USO: node tools/sin_dato_horas.mjs <planta_layout.json> <consignas.csv>\n' +
+      'El layout vive en el repo cobertura-zigbee; el CSV lo saca su\n' +
+      '`tools/export_consignas.mjs` (ver la cabecera de este fichero).');
+    process.exit(2);
+  }
+}
+const LAY = JSON.parse(fs.readFileSync(LAYOUT, 'utf8'));
+const CSV = fs.readFileSync(CONSIGNAS, 'utf8').trim().split('\n');
 const cab = CSV[0].split(','), iH = cab.indexOf('hora_local'), iT = cab.indexOf('tracker'), iA = cab.indexOf('theta_tcu_deg');
 
 const F = 2.45e9, LAM = RM.longitudOnda(F), RAD = 0.225, UMBRAL = 2;
@@ -42,7 +62,13 @@ for (let i = 1; i < CSV.length; i++) {
   if (!ang.has(c[iH])) ang.set(c[iH], new Map());
   ang.get(c[iH]).set(c[iT], parseFloat(c[iA]));
 }
-console.log('Ayora · 2026-06-21 · 751 seguidores · lambda = ' + LAM.toFixed(4) + ' m · umbral ' + UMBRAL + ' lambdas\n');
+/* EL ROTULO SALE DEL LAYOUT, no de una cadena. Ponia «Ayora · 2026-06-21 · 751
+   seguidores» fijo, o sea que corrido sobre otra planta —o sobre seis
+   seguidores de banco— seguia diciendo Ayora y 751. Un rotulo que no depende
+   del dato no es un rotulo, es decoracion. */
+console.log((LAY.planta || path.basename(LAYOUT).replace(/_layout\.json$/, '')) +
+  ' · ' + LAY.trackers.length + ' seguidores · ' + (CSV.length - 1) + ' consignas' +
+  ' · lambda = ' + LAM.toFixed(4) + ' m · umbral ' + UMBRAL + ' lambdas\n');
 console.log('  hora   |alfa| p50   HOY: la fila propia     BANDA + corte en lambda   PLANO EXACTO');
 console.log('                       ni se evalua (t>0,001)     «sin dato»              «sin dato»');
 for (const h of ['09:00', '14:00', '18:00']) {

@@ -3,3 +3,4 @@ __pycache__/
 tools/.careo_mutado.mjs
 tools/.probe.mjs
 tools/.estadistica_mutada.mjs
+tools/.muta_*
