@@ -9,6 +9,12 @@
 > qué. **El ranking todavía no se puede hacer**, y la razón está en el §6: el
 > número que lo decide —el tiempo por salto— no lo mide nada en ningún
 > repositorio. Esto es lo que hay antes de inventarlo.
+>
+> **Lo más accionable no está en el ranking, está en el §4.1**: el stow autónomo
+> de la TCU por pérdida de comunicación existe y viene configurado en **10
+> minutos**. Eso son 600 s dominando una cadena cuyo siguiente término mayor son
+> 825 s de giro. Es el único punto donde un cambio de configuración —sin
+> tecnología nueva— mueve la aguja en centenares de segundos.
 
 Cada cifra lleva su estado, y no se mezclan:
 
@@ -204,13 +210,41 @@ margen**, y lo que no se sabe apaga lo que depende en vez de rellenarse.
 
 Ordenadas por lo que se puede decir de ellas hoy.
 
-1. **Stow autónomo en la TCU por pérdida de latido.** Es la única palanca que
-   **quita la radio del camino crítico** en vez de acelerarla: si la TCU se
-   pone en bandera sola cuando deja de oír a su NCU, el peor caso deja de ser
-   «la orden no llegó» y pasa a ser el tiempo de latido. Y es la que protege
-   contra el fallo que ninguna optimización de radio cubre: que la NCU esté
-   caída. **NO MEDIDO si las TCU de esta cartera lo tienen**; hay que buscarlo
-   en la TCU Toolbox.
+1. **Stow autónomo en la TCU por pérdida de latido — EXISTE, Y ESTÁ EN 10
+   MINUTOS.**
+
+   > **CORRECCIÓN.** La primera versión de este documento decía «NO MEDIDO si
+   > las TCU de esta cartera lo tienen». Lo tienen. Estaba en
+   > `Cobertura-Zigbee/tools/modbus_src/tcu_v6.json`, el mapa de la propia TCU,
+   > que yo no había mirado — sólo el de la NCU. El mecanismo entero:
+
+   | registro | qué es | defecto |
+   |---|---|---|
+   | `40022` | **NCU communication lost timeout** | **10 minutos** (rango 0..1092) |
+   | `30003` bit | «Set if the communication with the NCU is lost» | — |
+   | `30114` | «Source of internal safe position» | — |
+   | `30001` U3 | «Active safe position (1 to 7)» | — |
+   | `41044`..`41056` | ángulos de las 7 posiciones seguras | 25°, 10°, 20°, 30°, 40°, —, 60° |
+
+   Es la única palanca que **quita la radio del camino crítico** en vez de
+   acelerarla, y la única que cubre el fallo que ninguna optimización de radio
+   cubre: que la NCU esté caída.
+
+   **Y su defecto la deja inútil como stow rápido.** 10 minutos son **600 s**,
+   contra un giro de 324–825 s y una radio de segundos: si el camino autónomo
+   es el que actúa, domina la cadena entera él solo. Bajarlo es **puro cambio
+   de configuración**, sin tecnología nueva ni obra: de 10 min a 1 min quita
+   **540 s** del peor caso cuando la radio falla.
+
+   Lo que decide cuánto bajarlo **no es de radio**: es el compromiso entre
+   bandera falsa por un corte transitorio —producción perdida— y bandera tarde
+   —riesgo mecánico—. Con `ack_failures` como los medidos, los cortes
+   transitorios no son raros. **Ese compromiso es de Iñaki, no mío.**
+
+   **Y hay una asimetría que conviene mirar de paso**: el watchdog de red Zigbee
+   vale **2 minutos en la NCU** (`NetworkWatchdog`, 41215, «ATNW... in this
+   product, default value is 2») y **10 minutos en la TCU** (40029). Son el
+   mismo mecanismo con dos valores. **NO MEDIDO si es deliberado.**
 2. **Broadcast en vez de unicast.** Quita el escalado con 123 destinos. Coste:
    el tiempo de entrega de red del estándar. Medible en planta, §5.
 3. **Los diez grupos de `force_sp_1`.** Ya existen en el mapa de registros. Si
@@ -264,7 +298,10 @@ hoy, y es lo que este documento aporta:
   es configuración, no radio.
 * El giro vale entre **324 y 825 s** según a quién se le pregunte, con un
   factor 2,6 sin resolver entre la spec y dos lecturas del mismo día de campo.
-* **La palanca que más quita del camino crítico no es de radio**: es el stow
-  autónomo por pérdida de latido.
+* **La palanca que más quita del camino crítico no es de radio, ya existe, y
+  está configurada en 10 minutos**: el stow autónomo de la TCU por pérdida de
+  comunicación con la NCU (`40022`). 600 s dominan la cadena entera. Bajarlo es
+  configuración, no tecnología — pero cuánto bajarlo es un compromiso entre
+  bandera falsa y bandera tarde, y ése no es mío.
 
 El siguiente paso que produce el ranking, y no otro, es el §5.
