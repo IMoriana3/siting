@@ -145,7 +145,7 @@ check('hay al menos uno POR EL PASILLO (pocas filas) y uno que CRUZA (muchas)',
       Math.min(...PARES.map(p => p.cruces)) <= 2 && Math.max(...PARES.map(p => p.cruces)) >= 10,
       PARES.map(p => p.cruces).join(','));
 
-function escribeFixture(ruta, { distanciaMal, padresFijos } = {}) {
+function escribeFixture(ruta, { distanciaMal, padresFijos, conPendiente } = {}) {
   const feats = [];
   PARES.forEach((p, i) => {
     /* `padres_distintos` VARÍA con i a propósito: con un valor constante la
@@ -160,7 +160,13 @@ function escribeFixture(ruta, { distanciaMal, padresFijos } = {}) {
     feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [p.A, p.B] },
       properties: { origen: 'N' + i + 'a', destino: 'N' + i + 'b',
                     distancia_m: distanciaMal ? p.D + 50 : p.D,
-                    rssi_medido_dbm: -70 - i, freq: 1000, gw: 'X' } });
+                    /* `conPendiente` mete una dependencia FUERTE del RSSI con la
+                       distancia, para que el residuo tenga una pendiente que el
+                       programa TIENE que marcar como significativa. Sin ella el
+                       fixture no produce ninguna, y una guarda que solo se
+                       ejercita cuando hay marcas se cumple trivialmente. */
+                    rssi_medido_dbm: conPendiente ? -50 - 0.25 * p.D : -70 - i,
+                    freq: 1000, gw: 'X' } });
   });
   fs.writeFileSync(ruta, JSON.stringify({ type: 'FeatureCollection', crs_note: 'EPSG:4326', features: feats }));
 }
@@ -367,19 +373,27 @@ check('y cada una con su error tipico y su p',
      las hay -distancia p=0,0006 y filas cruzadas p=4,3e-8-, que es donde la
      marca tiene que aparecer. Juntando las dos, la guarda ve ambos casos: los
      que deben llevarla y los que no. */
-  /* CONTRA LA SALIDA REAL, no contra los fixtures. `txtFijo` y `txtTele` corren
-     sobre geojson SINTETICOS donde ninguna pendiente llega a p < 0,05, asi que
-     el «si y solo si» se cumplia trivialmente y la mutacion `sinSignificativa`
-     se quedaba DORMIDA: no habia ni una marca que quitar. Sobre el arbitro real
-     hay dos -distancia p=0,0006 y filas cruzadas p=4,3e-8-, o sea los dos casos
-     que la guarda necesita ver. */
-  let txtReal = '';
-  try { txtReal = execFileSync(process.execPath, [herramienta],
+  /* CON UN FIXTURE QUE TIENE PENDIENTE, no con el fichero del repo hermano.
+     La primera version de esta guarda corria el careo sobre el arbitro REAL
+     -`../Cobertura-Zigbee/elburgo_real.geojson`- porque los fixtures existentes
+     no producen ninguna pendiente significativa y el «si y solo si» se cumplia
+     trivialmente. Pero ESE FICHERO NO EXISTE EN LA CI DE ESTE REPO: el careo
+     salia con rc=2 y la guarda caia con «0 marcadas de 5». Un banco que depende
+     de un fichero de OTRO repositorio no es un banco, es una casualidad de esta
+     maquina.
+     Asi que el caso lo fabrica el propio banco: `conPendiente` hace el RSSI
+     fuertemente dependiente de la distancia, y entonces el programa TIENE que
+     marcar esa pendiente. Los dos casos -marcada y no marcada- quedan cubiertos
+     sin salir del repo. */
+  const conPend = path.join(TMP, 'pendiente.geojson');
+  escribeFixture(conPend, { conPendiente: true });
+  let txtPend = '';
+  try { txtPend = execFileSync(process.execPath, [herramienta, '--geojson', conPend],
           { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
-  catch (e) { txtReal = String(e.stdout || '') + String(e.stderr || ''); }
-  const lineas = (txtReal + '\n' + txtFijo + '\n' + txtTele).split('\n')
+  catch (e) { txtPend = String(e.stdout || '') + String(e.stderr || ''); }
+  const lineas = (txtPend + '\n' + txtFijo + '\n' + txtTele).split('\n')
     .filter(l => /\+-/.test(l) && /p=[-0-9.e]+/.test(l));
-  check('la salida real trae pendientes MARCADAS, que es lo que da valor a la guarda',
+  check('el fixture con pendiente produce alguna MARCADA, que es lo que da valor a la guarda',
         lineas.some(l => /SIGNIFICATIVA/.test(l)),
         lineas.filter(l => /SIGNIFICATIVA/.test(l)).length + ' marcadas de ' + lineas.length);
   let mal = [];
