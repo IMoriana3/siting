@@ -49,8 +49,15 @@ if (!rf || !bnd || !adyac || !tcupt) { console.log('\nFALLOS: ' + ko); process.e
    adyacencia, aquí se ve antes incluso de ejecutar nada. */
 check('el mapa de calor NO define su propia física de obstáculos',
   !/function covObstacles|function covMargin/.test(html));
-check('el modo Margen pide el margen a rfMargin, con las filas reales del layout',
-  /rfMargin\(tx,\{x:wx,y:wy\},rows\)/.test(rf[0]));
+/* El mapa entra por la PUERTA UNICA `rfMargenDe`, que es la misma por la que
+   entra el panel de perfil. Antes llamaba a `rfMargin` directamente; el intento
+   de esta comprobacion no cambia -que el mapa no tenga fisica propia- pero el
+   nombre si, y ahora ademas exige que la puerta sea compartida. */
+check('el modo Margen pide el margen a la puerta unica, con las filas reales del layout',
+  /rfMargenDe\(tx,\{x:wx,y:wy\},rows\)/.test(rf[0]));
+check('y esa puerta es la MISMA que usa el panel de perfil',
+  /function rfMargenDe\(n,m,rows\)\{[\s\S]*?rfMarginNuevo\(n,m,rows\)/.test(rf[0]) &&
+  /function rfMarginNuevo\(n,m,rows\)\{ return rfEnlace\(n,m,rows\)\.margenDb; \}/.test(rf[0]));
 check('el modo Saltos NO duplica la adyacencia: usa buildAdjacency',
   /buildAdjacency\(pts, *pts\.map\(\(_,i\)=>i\), *S\.p\.reachX, *S\.p\.reachY\)/.test(rf[0])
   && !/function covAdjacency|function covVecinos/.test(html));
@@ -76,9 +83,16 @@ check('y la única transparencia es COV_ALPHA, en el dibujado',
 
 // ── el entorno: se ejecuta el código real con lo mínimo alrededor ────────────
 const ZigbeePV = require(path.join(RAIZ, 'zigbee_pv_model.js'));
+/* El mapa de calor pasa por la puerta unica `rfMargenDe`, que con el motor
+   nuevo pide los tres modulos y los parametros. Antes le bastaba el modelo
+   congelado; esto es el cambio de motor, y el banco lo monta como la pagina. */
+const RadioPV = require(path.join(RAIZ, 'radio_pv_model.js'));
+const RadioZigbee = require(path.join(RAIZ, 'radio_zigbee.js'));
+const RadioMalla = require(path.join(RAIZ, 'radio_malla.js'));
+const RADIO_PARAMS = JSON.parse(fs.readFileSync(path.join(RAIZ, 'radio_params.json'), 'utf8'));
 let lienzos = 0, ultimaImg = null;
 const ctx = {
-  console, ZigbeePV, Math, parseInt, Map, Set, Int32Array, Infinity,
+  console, ZigbeePV, RadioPV, RadioZigbee, RadioMalla, Math, parseInt, Map, Set, Int32Array, Infinity, JSON,
   document: {
     getElementById: id => (id === 'rf-tilt' ? { value: String(ctx._tilt) } : null),
     createElement: () => { lienzos++; return { width: 0, height: 0,
@@ -91,7 +105,9 @@ const ctx = {
   _tilt: 30,
   S: null,
 };
-ctx.window = { ZigbeePV }; ctx.ZigbeePV = ZigbeePV;
+ctx.window = { ZigbeePV, RadioPV, RadioZigbee, RadioMalla };
+ctx.fetch = () => ({ then: () => ({ catch: () => {} }) });
+ctx.draw = () => {}; ctx.renderLegend = () => {};
 vm.createContext(ctx);
 try { vm.runInContext(adyac[0] + '\n' + rf[0] + '\n' + bnd[0] + '\n' + tcupt[0], ctx); }
 catch (e) { check('todo compila junto', false, e.message); console.log('\nFALLOS: ' + ko); process.exit(1); }
@@ -111,6 +127,8 @@ function planta(az = AZ, n = 8, len = 64, wid = 12, pitch = 12) {
   const S = { motors: [], ncus: [], hull: [], bifila: null,
     p: { twid: wid, tlen: len, reachX: 40, reachY: 90 },
     cov: { on: true, tx: null, placing: false, modo: 'margen' },
+    rf: { motor: 'nuevo', variante: 'zigbee_pro_24' },
+    _radioParams: RADIO_PARAMS,
     _rfRows: null, _covSig: undefined, _covRaster: undefined };
   for (let k = -n; k <= n; k++) S.motors.push({ x: k * pitch * ux, y: k * pitch * uy, len, wid, az });
   return S;
@@ -146,7 +164,7 @@ for (let iy = 0; iy < R.ny; iy++) {
   const wy = R.wy0 + R.wH - (iy + 0.5) * (R.wH / R.ny);
   for (let ix = 0; ix < R.nx; ix++) {
     const wx = R.wx0 + (ix + 0.5) * (R.wW / R.nx);
-    const e = ctx._covRgb(ctx.covColorMargen(ctx.rfMargin(ctx.S.cov.tx, { x: wx, y: wy }, rows)));
+    const e = ctx._covRgb(ctx.covColorMargen(ctx.rfMargenDe(ctx.S.cov.tx, { x: wx, y: wy }, rows)));
     const o = (iy * R.nx + ix) * 4;
     if (ultimaImg.data[o] !== e[0] || ultimaImg.data[o + 1] !== e[1] || ultimaImg.data[o + 2] !== e[2]) {
       if (!malas) primera = { ix, iy, esperado: e, salio: [ultimaImg.data[o], ultimaImg.data[o + 1], ultimaImg.data[o + 2]] };
@@ -154,14 +172,17 @@ for (let iy = 0; iy < R.ny; iy++) {
     }
   }
 }
-check('las ' + (R.nx * R.ny) + ' celdas son exactamente covColorMargen(rfMargin(...)) del repo',
+check('las ' + (R.nx * R.ny) + ' celdas son exactamente covColorMargen(rfMargenDe(...)) del repo',
   malas === 0, { celdasMal: malas, primera });
 
-const realMargin = ctx.rfMargin; let llamadas = 0;
-ctx.rfMargin = (...a) => { llamadas++; return realMargin(...a); };
+/* Se espia la PUERTA UNICA, que es por donde entran tambien el panel de perfil
+   y cualquier otro consumidor. Antes se espiaba `rfMargin` -el modelo antiguo-;
+   el intento no cambia: ni una celda se pinta por su cuenta. */
+const realMargen = ctx.rfMargenDe; let llamadas = 0;
+ctx.rfMargenDe = (...a) => { llamadas++; return realMargen(...a); };
 ctx.S._covSig = null; ctx.covRaster();
-check('todas las celdas pasan por rfMargin, ni una menos', llamadas === R.nx * R.ny, { llamadas, celdas: R.nx * R.ny });
-ctx.rfMargin = realMargin;
+check('todas las celdas pasan por la puerta unica, ni una menos', llamadas === R.nx * R.ny, { llamadas, celdas: R.nx * R.ny });
+ctx.rfMargenDe = realMargen;
 
 /* EL FONDO DEL ASUNTO, con la planta girada 23,7°: un enlace PARALELO a las filas no cruza
    ninguna, y uno PERPENDICULAR las cruza todas. Con el modelo viejo —rectas verticales en
@@ -243,12 +264,25 @@ ctx.S._covSig = null; ctx.S._covRaster = undefined;
 const RS = ctx.covRaster();
 check('en modo Saltos también sale raster, etiquetado', !!RS && RS.modo === 'saltos', RS && RS.modo);
 /* Saltos es geometría pura: tiene que salir aunque no haya núcleo físico cargado. Y Margen, sin
-   él, tiene que rendirse en vez de pintar cualquier cosa. */
-const nucleo = ctx.window.ZigbeePV;
-ctx.window.ZigbeePV = null; ctx.S._covSig = null;
-check('Saltos se pinta aunque no haya núcleo físico cargado', !!ctx.covRaster());
+   él, tiene que rendirse en vez de pintar cualquier cosa.
+   CON EL MOTOR NUEVO el «núcleo» del modo Margen son los PARÁMETROS: sin
+   `radio_params.json` no hay potencia, ni sensibilidad, ni frecuencia, y
+   pintar algo sería inventárselo. */
+const nucleo = ctx.window.ZigbeePV, paramsGuardados = ctx.S._radioParams;
+ctx.window.ZigbeePV = null; ctx.S._radioParams = null; ctx.S._covSig = null;
+check('Saltos se pinta aunque no haya núcleo físico ni parámetros', !!ctx.covRaster());
 ctx.S.cov.modo = 'margen'; ctx.S._covSig = null;
-check('y Margen, sin núcleo físico, se rinde en vez de inventarse un mapa', ctx.covRaster() === null);
+check('y Margen, sin parámetros, se rinde en vez de inventarse un mapa', ctx.covRaster() === null);
+/* Y DICE POR QUÉ. Un lienzo en blanco es indistinguible de «no llega a ningún
+   sitio»; con el motor nuevo hay un motivo nuevo y tiene que verse. */
+check('y deja dicho el motivo, que es lo que la leyenda enseña',
+  /radio_params\.json/.test(String(ctx.S._covMotivo)), ctx.S._covMotivo);
+ctx.S._radioParams = paramsGuardados;
+/* con el modelo ANTIGUO el núcleo sigue siendo ZigbeePV, y sin él también se rinde */
+ctx.S.rf.motor = 'antiguo'; ctx.S._covSig = null;
+check('con el modelo antiguo (A) y sin su núcleo, también se rinde', ctx.covRaster() === null);
+check('y lo dice', /antiguo/.test(String(ctx.S._covMotivo)), ctx.S._covMotivo);
+ctx.S.rf.motor = 'nuevo';
 ctx.window.ZigbeePV = nucleo; ctx.S.cov.modo = 'saltos'; ctx.S._covSig = null; ctx.covRaster();
 
 const ref = saltosRef(ctx.S, ctx.S.cov.tx);

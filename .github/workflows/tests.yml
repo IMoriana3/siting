@@ -52,9 +52,24 @@ jobs:
       # Se exige rc = 1 EXACTAMENTE, no «distinto de cero»: rc = 2 es «la
       # mutación ya no casa con el código», y contarlo como cazada sería el
       # falso verde que esto viene a evitar.
+      # NO SE PARA EN LA PRIMERA. Se recorren TODAS y se falla al final con la
+      # lista entera. El motivo es una avería real: al refactorizar
+      # `difraccionBandasDetalle` se movió una línea a la que anclaban DOS
+      # mutaciones —`bordeDeArriba` en test_radio_geom y `js_borde_top` en el de
+      # paridad—, y las dos dejaron de casar a la vez. Parando en la primera, la
+      # segunda no se ve hasta el viaje siguiente. Un refactor que mueva una
+      # línea con varias anclas es justo el caso normal, no el raro.
+      #
+      # NO SE LE PONE UNA TUBERÍA A `rojo`. Ni `| tee`, ni `| grep`: bash
+      # ejecuta el lado izquierdo de una tubería en un SUBSHELL, y ahí `rotas`
+      # se acumula en una copia que muere al acabar. El paso saldría verde con
+      # las anclas rotas — el falso verde exacto que este bloque viene a evitar.
+      # Cazado probándolo: la primera versión de esta prueba lo hizo y «no cazó
+      # nada» con dos anclas rotas a propósito.
       - name: y las mutaciones, en rojo
         run: |
           log=$(mktemp)
+          rotas=""
           rojo () {
             corredor="$1"; banco="$2"; shift 2
             for m in "$@"; do
@@ -65,7 +80,11 @@ jobs:
               if [ "$rc" -ne 1 ]; then
                 echo "::error::$banco con la mutación «$m» salió rc=$rc; se esperaba 1 (banco en rojo)"
                 tail -30 "$log"
-                exit 1
+                # Sin salto de línea embebido: dentro de un bloque `run: |` una
+                # continuación con menos sangría CIERRA el escalar y rompe el
+                # YAML entero. El separador es `;` y lo desdobla el `tr` final.
+                rotas="$rotas;$banco · $m (rc=$rc)"
+                continue
               fi
               echo "  $banco · $m: roja, bien"
             done
@@ -78,8 +97,28 @@ jobs:
           # mutación que tocase los dos ficheros a la vez dejaría el banco
           # verde, que es exactamente la avería que esto vigila.
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
-                                              noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+                                              canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+
+          rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
+                                            detalleOtroTope sinOrdenT
+
+          rojo node tests/test_rf_indice.js sinIndice ddaSinY sinDedupe selloFijo celdaEnorme
+
+          rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \
+                                              sinInterpolar nanCallado
+
+          rojo node tests/test_careo_elburgo.js sinGuardiaGeo podaMala sinTramoFila sinPasillo \
+                                                sinSupuestas sinRotulo sinSignificativa sinSigma \
+                                                anguloConstante
 
           rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
                                                    py_csqrt_rama js_semi_cuerda js_borde_top \
                                                    js_tol_regimen js_fase_signo
+
+          # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
+          # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.
+          if [ -n "$rotas" ]; then
+            echo "::error::mutaciones que NO salieron rc=1 (rc=2 = ancla que se quedo atras en un refactor; NO es «cazada»):"
+            echo "$rotas" | tr ';' '\n' | grep -v '^$'
+            exit 1
+          fi

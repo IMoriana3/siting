@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+tools/.careo_mutado.mjs
+tools/.probe.mjs
+tools/.estadistica_mutada.mjs
