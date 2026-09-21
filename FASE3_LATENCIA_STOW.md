@@ -337,8 +337,33 @@ Ordenadas por lo que se puede decir de ellas hoy.
 
    Lo que decide cuánto bajarlo **no es de radio**: es el compromiso entre
    bandera falsa por un corte transitorio —producción perdida— y bandera tarde
-   —riesgo mecánico—. Con `ack_failures` como los medidos, los cortes
-   transitorios no son raros. **Ese compromiso es de Iñaki, no mío.**
+   —riesgo mecánico—. **Ese compromiso es de Iñaki, no mío.**
+
+   **Y EL DATO QUE LO CONVERTIRÍA EN MEDIDA EXISTE, PERO NO ESTÁ AQUÍ.** Para
+   decidirlo con números hace falta una sola cosa: **la distribución de la
+   duración de los cortes**. Si los cortes transitorios duran segundos, bajar a
+   1 minuto es gratis; si duran minutos, no lo es.
+
+   Esa distribución sale del registro **`29500`** —«Unix Epoch timestamp of the
+   last successful read of this TCU», 200 unidades, bloque `TCUs Last
+   Comunication`—, que **el SCADA ya sondea cada 30 s**. Su histórico en
+   InfluxDB *es* la medida. Nadie lo ha exportado a estos repos, así que aquí no
+   se puede calcular; pero no hace falta instrumentar nada, sólo consultarlo.
+
+   Lo que sí se ha podido medir aquí, y no basta: los cortes **no son raros y se
+   concentran en pocos nodos**. `ack_failures` da un factor 86 entre el nodo
+   mediano y el peor. Y hay una segunda fuente que lo corrobora — el campo `off`
+   de `elburgo_zigbee_horario.json`, 24 valores por nodo —: su suma por nodo
+   correlaciona con `ack_failures` a **r = +0,71** (n = 52, p ≈ 2e-12), y son
+   ficheros distintos.
+
+   **Pero de `off` no se puede sacar una duración, porque no se sabe qué mide.**
+   Su generador no está en estos repos, nada lo consume y no está documentado.
+   Se probó la lectura evidente —«fracción de la hora caído»— y **es falsa**:
+   llega a 29,7, fuera de [0,1]. La lectura siguiente —porcentaje— encaja con el
+   rango y con la correlación, pero encajar no es estar establecido. Queda como
+   lo que es: un indicador ordinal de problemas de conexión por nodo, sin
+   unidad.
 
    **Y hay una asimetría que conviene mirar de paso**: el watchdog de red Zigbee
    vale **2 minutos en la NCU** (`NetworkWatchdog`, 41215, «ATNW... in this
