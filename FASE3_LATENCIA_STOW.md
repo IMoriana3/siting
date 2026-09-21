@@ -15,6 +15,11 @@
 > minutos**. Eso son 600 s dominando una cadena cuyo siguiente término mayor son
 > 825 s de giro. Es el único punto donde un cambio de configuración —sin
 > tecnología nueva— mueve la aguja en centenares de segundos.
+>
+> **Y la pregunta del giro tiene respuesta barata**: el registro `30010` de la
+> TCU da la velocidad de giro en grados/segundo, en vivo. El factor 2,6 entre
+> spec y campo se resuelve leyéndolo, sin cronómetro y sin tocar ningún script.
+> Ver §2.4.
 
 Cada cifra lleva su estado, y no se mezclan:
 
@@ -143,6 +148,68 @@ TCU, un día — y **dos lecturas independientes del mismo día no coinciden**:
 
 Factor **2,6** en el término dominante. El propio documento lo dice: «la
 validación no es reproducible sin escribir cómo se define la medida».
+
+**Y LA PROPIA TCU DECLARA UN CUARTO VALOR, que ordena los otros tres.**
+`tools/modbus_src/tcu_v6.json`, registro **`41067` «Motor speed at no load» =
+200 mdeg/sec**, o sea **0,200 °/s** → 55° en **275 s**.
+
+«At no load» es el calificador que lo explica todo: es el techo físico, sin
+panel, sin viento y sin rozamiento. Que las medidas de campo (0,1538, 0,100)
+queden POR DEBAJO de él es lo que la física pide. Los cuatro números dejan de
+contradecirse y pasan a ser una escala:
+
+```
+  0,200 °/s   275 s   techo declarado por la TCU, SIN CARGA
+  0,17  °/s   324 s   catalogo Sunner, el que usa el codigo
+  0,1538°/s   358 s   mediana medida en campo
+  0,100 °/s   550 s   p05 de esa misma medida
+  0,0667°/s   825 s   segunda lectura del mismo dia  <-- este sigue sin encajar
+```
+
+Los cuatro primeros forman una secuencia coherente. **El quinto no**: 0,0667
+está a un tercio del techo sin carga, y eso ya no lo explica la carga. O es
+otra definición de la medida, o es un hallazgo.
+
+**Y ESTO SE PUEDE ZANJAR SIN INSTRUMENTAR NADA.** El registro **`30010`
+«Tracker's rotation velocity»** está en **grados/segundo** y es de **lectura
+viva, por TCU**. No hace falta cronómetro ni tocar ningún script de campo para
+resolver el factor 2,6: basta leer 30010 durante un giro real. Es la respuesta
+más barata que hay en toda esta fase.
+
+Relacionados, para cuando se lea: `41039` «Motor velocity evaluation time» =
+5.000 ms, `41066` «Low speed motor fault detection time» = 15 s, y `30003` bit
+«Set if the motor moves at a speed lower than expected» — o sea que la TCU ya
+vigila su propia velocidad y sabe decir cuándo va lenta.
+
+**UNA COSA MÁS, QUE NO ES DE LATENCIA PERO SALE DE AQUÍ.** La banda muerta.
+`41061` «Deadband when backtracking is active and no low capacity alarm active»
+= **45 pulsos**. Para pasarlo a grados hace falta la conversión, y la única que
+hay es una INFERENCIA, no una cita: `41037` «Maximum west tilt angle» = 1.910
+pulsos, y la casa declara el ángulo máximo en **55°** para todas las plantas
+(`montaje_edm.mjs`, «declarado por la casa... coincide con la plantilla TCU de
+El Burgo, west_sw_limit 55»). Si eso es así:
+
+```
+  1.910 pulsos / 55°  =  34,73 pulsos/grado  =  0,0288° por pulso
+  41061  45 pulsos  =  1,296°     banda muerta en backtracking
+  41063  90 pulsos  =  2,592°     idem con baja capacidad de bateria
+  41080   4 pulsos  =  0,115°     resolucion de pulso
+```
+
+Y ahí hay un **cuarto valor** para la banda muerta, igual que con la velocidad:
+
+| origen | ° |
+|---|---:|
+| `CANONICAL_DEADBAND_DEG` del core | 1,00 |
+| medido, lectura del auditor | 0,50 |
+| medido, segunda lectura | 0,90 |
+| **registro 41061 de la propia TCU** | **1,30** |
+
+Ninguna de las dos medidas de campo llega al valor del registro, lo cual es
+raro: una banda muerta APARENTE debería salir mayor o igual que la
+configurada, no menor. **La inferencia de la conversión es lo primero que hay
+que comprobar** —leer 41037 y el recorrido real de la misma TCU—, y sólo
+después mirar si hay hallazgo. Se anota aquí y no se toca el core.
 
 ### 2.5 La cadena, junta
 
@@ -296,8 +363,12 @@ hoy, y es lo que este documento aporta:
   por NCU**.
 * La detección puede costar **1 s o 60 s** según el camino que dispare, y eso
   es configuración, no radio.
-* El giro vale entre **324 y 825 s** según a quién se le pregunte, con un
-  factor 2,6 sin resolver entre la spec y dos lecturas del mismo día de campo.
+* El giro vale entre **275 y 825 s** según a quién se le pregunte. La propia
+  TCU declara el techo —**0,200 °/s sin carga**, `41067`— y eso ordena los
+  demás valores en una escala coherente, salvo la segunda lectura de campo
+  (0,0667 °/s), que se queda a un tercio del techo y no lo explica la carga.
+  **Y se puede zanjar leyendo el registro `30010`**, que da la velocidad de
+  giro en grados/segundo por TCU: no hace falta cronómetro ni tocar nada.
 * **La palanca que más quita del camino crítico no es de radio, ya existe, y
   está configurada en 10 minutos**: el stow autónomo de la TCU por pérdida de
   comunicación con la NCU (`40022`). 600 s dominan la cadena entera. Bajarlo es
