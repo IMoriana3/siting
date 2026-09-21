@@ -171,6 +171,90 @@
     return zBot - zAnt;
   }
 
+  /* ── EL PANEL DE VERDAD: UN PLANO INCLINADO, NO UN SEGMENTO VERTICAL ──────
+   *
+   * `banda()` proyecta el panel como un segmento VERTICAL sobre el eje de la
+   * fila. Para una fila lejana da igual —el rayo la cruza casi en el eje y la
+   * huella de ±(c/2)·cos α es pequeña frente al vano—, pero para la fila PROPIA
+   * es falso: la antena está a 0,113 m del eje y el panel llega a ±1,19·cos α,
+   * o sea DIEZ VECES más lejos. Colapsar eso al eje pone el borde difractante
+   * donde no está.
+   *
+   * AQUÍ SE CORTA CON EL PLANO. En el plano perpendicular a la fila, con
+   *
+   *     w = distancia perpendicular CON SIGNO al eje, positiva hacia el borde ALTO
+   *
+   * el panel es el segmento
+   *
+   *     z(w) = zEje + w·tan α,     |w| ≤ semiW = (c/2)·cos α
+   *
+   * cuyos extremos están en (±semiW, zEje ± semiZ) con semiZ = (c/2)·sen α.
+   * Y el rayo, que también es una recta en (w, z) porque las dos coordenadas
+   * son afines en el parámetro del enlace:
+   *
+   *     zRayo(w) = zA + (zB − zA)·(w − wA)/(wB − wA)
+   *
+   * EL ÁNGULO DE CRUCE ENTRA SOLO: quien llama pasa `wA`/`wB` medidos con la
+   * perpendicular a ESA fila, y la distancia recorrida hasta un `w` es
+   * (w − wA)/sen φ. Así que la misma función vale para un enlace perpendicular
+   * a la fila y para uno que la corta de refilón.
+   *
+   * QUÉ DEVUELVE Y POR QUÉ NO ES LO MISMO QUE `corta()`:
+   *   · el VEREDICTO (tapado / pasa por debajo / pasa por encima) coincide con
+   *     el de la banda, comprobado; lo que NO coincide es
+   *   · `wBorde`, la posición del borde por el que difracta. La banda lo pone
+   *     en w = 0 y el panel lo pone en w = ±(c/2)·cos α. Para la fila propia
+   *     eso cambia d1 de 0,113 m a 1,14 m —de 0,9 λ a 9,3 λ—, y con ello ν y
+   *     el veredicto de campo cercano.
+   */
+  function cortaPanel(zEje, cuerdaM, alphaDeg, wA, wB, zA, zB) {
+    var a = alphaDeg * GRADO;
+    var semiW = (cuerdaM / 2) * Math.cos(a);
+    var semiZ = (cuerdaM / 2) * Math.sin(a);
+    var dw = wB - wA;
+    if (Math.abs(dw) < 1e-12) {
+      /* el enlace va paralelo a la fila: nunca la cruza. No es «libre», es que
+         esta fila no es un obstáculo de este enlace. */
+      return { estado: "paralelo", despeje: null, borde: null, wBorde: null, motivo: "enlace_paralelo_a_la_fila" };
+    }
+    /* tramo de `w` que el rayo comparte con la huella del panel */
+    var w0 = Math.min(wA, wB), w1 = Math.max(wA, wB);
+    var lo = Math.max(w0, -semiW), hi = Math.min(w1, semiW);
+    if (lo > hi) {
+      return { estado: "fuera", despeje: null, borde: null, wBorde: null, motivo: "el_enlace_no_pisa_la_huella" };
+    }
+    /* hueco = rayo − panel, afín en w, así que su mínimo está en un extremo */
+    function hueco(w) {
+      var zR = zA + (zB - zA) * ((w - wA) / dw);
+      return zR - (zEje + w * Math.tan(a));
+    }
+    var hLo = hueco(lo), hHi = hueco(hi);
+    /* EN LA TANGENCIA EXACTA LA ETIQUETA NO ESTÁ DETERMINADA, y se dice en vez
+       de fingir una convención. Justo en la transición de α el rayo roza el
+       canto: el despeje es 0 y el signo de `hueco()` en ese extremo depende del
+       último bit. Medido: con α = 35,091 sale «hueco» y con 35,0910 y 35,2
+       cambia. NO se le pone un épsilon —sería un umbral inventado— porque NO
+       HAY NÚMERO QUE DEPENDA DE ELLO: el despeje es 0 por los dos lados, así
+       que ν es 0 y la pérdida de filo la misma. Lo único que cambia es la
+       palabra, y quien la consuma debe tratar despeje ≈ 0 como roce. */
+    if ((hLo > 0) !== (hHi > 0)) {
+      /* cambia de signo DENTRO de la huella: el rayo atraviesa el panel */
+      var wCorte = lo + (hi - lo) * (hLo / (hLo - hHi));
+      return { estado: "tapado", despeje: 0, borde: zEje + wCorte * Math.tan(a),
+               wBorde: wCorte, motivo: null };
+    }
+    /* no lo atraviesa: difracta por el borde donde MENOS despeje queda */
+    var wB2 = Math.abs(hLo) <= Math.abs(hHi) ? lo : hi;
+    var h = Math.abs(hLo) <= Math.abs(hHi) ? hLo : hHi;
+    return {
+      estado: h > 0 ? "libre" : "hueco",          // por encima / por debajo del panel
+      despeje: Math.abs(h),
+      borde: zEje + wB2 * Math.tan(a),
+      wBorde: wB2,
+      motivo: null
+    };
+  }
+
   /* EL RÉGIMEN DEL ENLACE. Un enlace que va POR EL PASILLO entre dos filas no
    * cruza ninguna, y su física es otra: casi espacio libre con dos rayos. Uno
    * que CRUZA filas se come una banda por cada cruce. Confundirlos es lo que
@@ -503,6 +587,7 @@
     banda: banda,
     alturaRayo: alturaRayo,
     corta: corta,
+    cortaPanel: cortaPanel,
     regimen: regimen,
     relieveDominante: relieveDominante,
     anclaAntena: anclaAntena,

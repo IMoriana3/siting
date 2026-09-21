@@ -80,6 +80,50 @@ def corta(b, z_rayo):
     return {"estado": "tapado", "despeje": -min(d_top, d_bot), "borde": borde}
 
 
+def corta_panel(z_eje, cuerda_m, alpha_deg, wA, wB, zA, zB):
+    """Espejo de `cortaPanel()`. EL PANEL DE VERDAD ES UN PLANO INCLINADO.
+
+    `banda()` proyecta el panel como segmento VERTICAL sobre el eje. Para una
+    fila lejana da igual; para la fila PROPIA es falso: la antena está a
+    0,113 m del eje y el panel llega a ±1,19·cos alfa, diez veces más lejos.
+
+    Con w = distancia perpendicular con signo al eje (positiva hacia el borde
+    ALTO), el panel es z(w) = z_eje + w·tan alfa para |w| <= (c/2)·cos alfa, y
+    el rayo es otra recta en (w, z). El ángulo de cruce entra solo: quien llama
+    pasa wA/wB medidos con la perpendicular a ESA fila.
+
+    El VEREDICTO coincide con el de la banda —comprobado—; lo que NO coincide
+    es `wBorde`, la posición del borde difractante: la banda lo pone en w = 0 y
+    el panel en w = ±(c/2)·cos alfa."""
+    a = alpha_deg * GRADO
+    semi_w = (cuerda_m / 2.0) * math.cos(a)
+    dw = wB - wA
+    if abs(dw) < 1e-12:
+        return {"estado": "paralelo", "despeje": None, "borde": None,
+                "wBorde": None, "motivo": "enlace_paralelo_a_la_fila"}
+    w0, w1 = min(wA, wB), max(wA, wB)
+    lo, hi = max(w0, -semi_w), min(w1, semi_w)
+    if lo > hi:
+        return {"estado": "fuera", "despeje": None, "borde": None,
+                "wBorde": None, "motivo": "el_enlace_no_pisa_la_huella"}
+
+    def hueco(w):
+        zr = zA + (zB - zA) * ((w - wA) / dw)
+        return zr - (z_eje + w * math.tan(a))
+
+    h_lo, h_hi = hueco(lo), hueco(hi)
+    if (h_lo > 0) != (h_hi > 0):
+        w_corte = lo + (hi - lo) * (h_lo / (h_lo - h_hi))
+        return {"estado": "tapado", "despeje": 0, "borde": z_eje + w_corte * math.tan(a),
+                "wBorde": w_corte, "motivo": None}
+    if abs(h_lo) <= abs(h_hi):
+        w_b, h = lo, h_lo
+    else:
+        w_b, h = hi, h_hi
+    return {"estado": "libre" if h > 0 else "hueco", "despeje": abs(h),
+            "borde": z_eje + w_b * math.tan(a), "wBorde": w_b, "motivo": None}
+
+
 def ancla_antena(radio_m, alpha_deg):
     """Espejo de `anclaAntena()`. El conector de la TCU GIRA CON EL TUBO: no es
     una cota fija. Rotación de (0, −r, 0) alrededor del eje del tubo por −α, o

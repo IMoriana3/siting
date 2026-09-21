@@ -107,7 +107,8 @@ jobs:
           # La antena de la TCU: gira con el tubo, se desplaza en LATERAL, y a
           # partir de ~35° queda dentro de la banda de su propio modulo.
           rojo node tests/test_antena_tcu.js anclaFija sinLateral holguraAlSuelo \
-                                             cercaSinLambda patronPlano conductorNaN
+                                             cercaSinLambda patronPlano conductorNaN \
+                                             panelAlEje panelSinHuella
 
           rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \
                                               sinInterpolar nanCallado
@@ -120,7 +121,8 @@ jobs:
                                                    py_csqrt_rama js_semi_cuerda js_borde_top \
                                                    js_tol_regimen js_fase_signo \
                                                    py_ancla_fija js_sin_lateral py_patron_iso \
-                                                   js_cerca_fija py_conductor
+                                                   js_cerca_fija py_conductor \
+                                                   js_panel_eje py_panel_huella
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.

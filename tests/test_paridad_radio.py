@@ -60,6 +60,10 @@ MUTACIONES = {
     # geometria esta MAS cerca en longitudes de onda, y eso es justo lo que no
     # se puede perder al bajar de banda
     "js_cerca_fija":  ("js", r'return \{ cerca: d < u \* lam,', 'return { cerca: d < u * 0.1224,'),
+    # el corte con el panel colapsa a la banda SOLO en JS: el borde vuelve al eje
+    "js_panel_eje":   ("js", r'borde: zEje \+ wB2 \* Math\.tan\(a\),', 'borde: zEje,'),
+    # la huella del panel se ignora SOLO en Python: cualquier cruce vale
+    "py_panel_huella":("py", r'lo, hi = max\(w0, -semi_w\), min\(w1, semi_w\)', 'lo, hi = w0, w1'),
     # el conductor perfecto vuelve a dar NaN SOLO en Python
     "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
@@ -238,6 +242,15 @@ def casos_antena():
     for th in [0.01, 0.25, 1.0]:
         out.append(["reflinf", th, 5e-3, 2.45e9, "v"])
         out.append(["reflinf", th, 5e-3, 868e6, "h"])
+    # CORTE EXACTO CON EL PANEL INCLINADO. Se barren las CINCO ramas, porque una
+    # que solo exista en un lado es justo lo que esto vigila: paralelo, fuera de
+    # la huella, atraviesa, roza por debajo y roza por encima.
+    for al in [0, 10, 30, 35.091, 45, 55, -30]:
+        for wA, wB in [(0.1125, -10.0), (-10.0, 0.1125), (0.0, 0.0),   # cruza, al reves, paralelo
+                       (5.0, 9.0), (-9.0, -5.0),                        # fuera de la huella
+                       (-2.0, 2.0), (-0.5, 0.5)]:                       # cruza entero / tramo corto
+            for zA, zB in [(-0.6949, -0.6949), (-0.6949, 0.40), (2.0, 2.0), (-3.0, -3.0)]:
+                out.append(["panel", 0.0, 2.38, al, wA, wB, zA, zB])
     return out
 
 
@@ -293,6 +306,8 @@ out.antena = casos.antena.map(c => {
                       return [k.cerca, k.distanciaM, k.lambdas, k.umbralLambdas]; }
     case 'reflinf': { const g = R.coefReflexion(c[1], Infinity, c[2], c[3], c[4]);
                       return [g.re, g.im]; }
+    case 'panel':   { const p = R.cortaPanel(c[1], c[2], c[3], c[4], c[5], c[6], c[7]);
+                      return [p.estado, p.despeje, p.borde, p.wBorde, p.motivo]; }
   }
   throw new Error('caso de antena desconocido: ' + c[0]);
 });
@@ -353,6 +368,9 @@ def corre_python(mod, casos):
         elif c[0] == "reflinf":
             g = mod.coef_reflexion(c[1], math.inf, c[2], c[3], c[4])
             out["antena"].append([g[0], g[1]])
+        elif c[0] == "panel":
+            q = mod.corta_panel(c[1], c[2], c[3], c[4], c[5], c[6], c[7])
+            out["antena"].append([q["estado"], q["despeje"], q["borde"], q["wBorde"], q["motivo"]])
         else:
             raise ValueError("caso de antena desconocido: %s" % c[0])
     return out

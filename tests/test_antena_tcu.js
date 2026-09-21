@@ -41,6 +41,11 @@ const MUTACIONES = {
   patronPlano:    ['radio_pv_model.js', /if \(p !== "dipolo"\) throw/, 'if (true) return 0; if (p !== "dipolo") throw'],
   // el conductor perfecto vuelve a dar NaN en silencio
   conductorNaN:   ['radio_pv_model.js', /if \(epsR === Infinity\) return cx\(1\.0, 0\.0\);/, ''],
+  // el panel vuelve a colapsarse al eje: el borde difractante donde no esta
+  panelAlEje:     ['radio_pv_model.js', /borde: zEje \+ wB2 \* Math\.tan\(a\),/, 'borde: zEje,\n      wBordeMal: 0,'],
+  // se ignora la huella: cualquier cruce del plano cuenta, aunque caiga fuera
+  panelSinHuella: ['radio_pv_model.js', /var lo = Math\.max\(w0, -semiW\), hi = Math\.min\(w1, semiW\);/,
+                                        'var lo = w0, hi = w1;'],
 };
 const MUTA = process.env.MUTA;
 const fuentes = {};
@@ -165,6 +170,106 @@ check('el cruce cae DENTRO del recorrido de trabajo (los seguidores llegan a 55�
       cruce(2.380) < 55);
 check('por encima del cruce la holgura es negativa en TODO el resto del recorrido',
       [40, 45, 50, 55, 60].every(a => R.holguraBajoModulo(RAD, CAI, CUE, a) < 0));
+
+/* ══ 3b. EL PANEL DE VERDAD: PLANO INCLINADO, NO SEGMENTO VERTICAL ═══════
+ *
+ * `banda()` colapsa el panel al eje. Para la fila propia eso pone el borde
+ * difractante donde no está: la antena queda a 0,113 m del eje y el panel llega
+ * a ±1,19·cos α, diez veces más lejos.
+ *
+ * LOS NÚMEROS DE AQUÍ ESTÁN CALCULADOS A MANO, no con la función. Un rayo
+ * horizontal a −h(α) hacia el lado bajo corta el plano z = w·tan α en
+ * w = −h/tan α, y el panel acaba en w = −(c/2)·cos α:
+ *
+ *      α        h(α)      w de corte     borde del panel    veredicto
+ *     30°     0,6949       −1,2035          −1,0306          pasa  (corte MÁS ALLÁ del borde)
+ *  35,091°    0,6841       −0,9737          −0,9737          justo (corte EN el borde)
+ *  39,069°    0,6747       −0,8311          −0,9239          tapa  (corte DENTRO)
+ *     45°     0,6591       −0,6591          −0,8415          tapa
+ *
+ * y la transición sale de igualar las dos: h(α) = (c/2)·sen α. Con la cota
+ * GIRADA da 35,091°. Los 39,069° son esa MISMA ecuación con h fija en 0,75
+ * —asin(0,75/1,19)—, o sea la cota sin girar: la diferencia 39 vs 35 es cota
+ * fija contra cota girada, NO banda contra plano. Los dos modelos dan la misma
+ * transición, resuelta por separado. */
+console.log('\n· el panel como plano inclinado (valores calculados a mano)');
+[[30, 0.6949, -1.2035, -1.0306, 'hueco'],
+ [39.069, 0.6747, -0.8311, -0.9239, 'tapado'],
+ [45, 0.6591, -0.6591, -0.8415, 'tapado']].forEach(function (c) {
+  const al = c[0], h = c[1], wCorte = c[2], wBorde = c[3], esp = c[4];
+  /* la h a mano, contra la función */
+  check('alfa ' + al + '°: h(alfa) = ' + h.toFixed(4) + ' m bajo el eje',
+        cerca(-R.alturaAntenaTCU(0, RAD, CAI, al), h, 5e-5));
+  /* el veredicto a mano: ¿cae el corte dentro de la huella? */
+  const manoTapa = wCorte > wBorde;
+  check('alfa ' + al + '°: a mano, corte en ' + wCorte.toFixed(4) + ' y borde en ' +
+        wBorde.toFixed(4) + ' → ' + (manoTapa ? 'TAPA' : 'PASA'),
+        (manoTapa ? 'tapado' : 'hueco') === esp);
+  /* y ahora la función, que tiene que decir lo mismo */
+  const f = R.cortaPanel(0, CUE, al, R.anclaAntena(RAD, al).lateral, -10, -h, -h);
+  const wEsp = esp === 'tapado' ? wCorte : wBorde;
+  check('alfa ' + al + '°: la funcion dice «' + esp + '» y el borde en w=' + wEsp.toFixed(4),
+        f.estado === esp && cerca(f.wBorde, wEsp, 5e-4),
+        f.estado + ' @ ' + (f.wBorde === null ? '—' : f.wBorde.toFixed(4)));
+  /* Y LA COTA DEL CANTO, que es lo que consume la difraccion. Mirar solo
+     `wBorde` dejaba pasar una mutacion que colapsaba `borde` al eje: cazada
+     dormida. A mano, el canto esta en z = w·tan(alfa) con el eje en 0. */
+  const zEsp = wEsp * Math.tan(al * R.GRADO);
+  check('alfa ' + al + '°: y su COTA a mano, z = ' + zEsp.toFixed(4) + ' m',
+        cerca(f.borde, zEsp, 5e-4), f.borde === null ? '—' : f.borde.toFixed(4));
+});
+/* LA TANGENCIA EXACTA. A alfa = 35,091° el rayo ROZA el canto: el corte cae
+   justo en el borde y el despeje es 0. Ahí no se afirma una etiqueta, se afirma
+   lo que es fisicamente cierto —despeje nulo— y la CONVENCION declarada en la
+   funcion: el roce cuenta como tapado, que es lo conservador. */
+(function () {
+  const al = 35.091, h = RAD * Math.cos(al * R.GRADO) + CAI;
+  const f = R.cortaPanel(0, CUE, al, R.anclaAntena(RAD, al).lateral, -10, -h, -h);
+  const semiW = (CUE / 2) * Math.cos(al * R.GRADO);
+  check('alfa 35,091°: el rayo ROZA el canto — corte y borde coinciden',
+        cerca(f.wBorde, -semiW, 5e-4), f.wBorde.toFixed(5) + ' vs ' + (-semiW).toFixed(5));
+  check('alfa 35,091°: despeje nulo, que es lo que la tangencia significa',
+        Math.abs(f.despeje) < 1e-6, f.despeje);
+  /* LA ETIQUETA NO SE AFIRMA AQUI, y es a proposito: en la tangencia depende
+     del ultimo bit. Lo que SI es cierto y se exige es que no cambie ningun
+     NUMERO —despeje 0 por los dos lados, luego nu 0 y la misma perdida—. */
+  const nu0 = R.nu(0, 1.0, 50.0, F24);
+  check('la etiqueta en la tangencia no esta determinada, pero el NUMERO si: perdida de filo identica',
+        Math.abs(R.perdidaFiloDb(nu0) - R.perdidaFiloDb(-nu0)) < 1e-12 || R.perdidaFiloDb(nu0) === R.perdidaFiloDb(0));
+  check('y la funcion lo DICE en vez de fingir una convencion',
+        /NO ESTÁ DETERMINADA/.test(lee('radio_pv_model.js')));
+  /* un pelo a cada lado, que es donde la etiqueta sí significa algo */
+  const g = a => { const hh = RAD * Math.cos(a * R.GRADO) + CAI;
+    return R.cortaPanel(0, CUE, a, R.anclaAntena(RAD, a).lateral, -10, -hh, -hh).estado; };
+  check('un pelo por debajo (35,0°) PASA y un pelo por encima (35,2°) TAPA',
+        g(35.0) === 'hueco' && g(35.2) === 'tapado', g(35.0) + ' / ' + g(35.2));
+})();
+
+/* LA TRANSICIÓN, en los DOS modelos, resuelta por separado */
+function raiz(f) { let lo = 1, hi = 89; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m; } return lo; }
+const trPlano = raiz(a => (RAD * Math.cos(a * R.GRADO) + CAI) / Math.tan(a * R.GRADO) - (CUE / 2) * Math.cos(a * R.GRADO));
+const trBanda = raiz(a => (RAD * Math.cos(a * R.GRADO) + CAI) - (CUE / 2) * Math.sin(a * R.GRADO));
+check('la transicion del PLANO EXACTO sale 35,091°', cerca(trPlano, 35.091, 0.01), trPlano.toFixed(3));
+check('la de la BANDA VERTICAL sale la MISMA', cerca(trBanda, 35.091, 0.01), trBanda.toFixed(3));
+check('y los 39,069° son esa misma ecuacion con h FIJA en 0,75, no otro modelo',
+      cerca(Math.asin(0.75 / (CUE / 2)) / R.GRADO, 39.069, 0.01));
+/* EL DESPEJE COINCIDE; LO QUE CAMBIA ES DÓNDE ESTÁ EL BORDE */
+[10, 20, 30].forEach(function (al) {
+  const h = RAD * Math.cos(al * R.GRADO) + CAI;
+  const cb = R.corta(R.banda(0, CUE, al, -2), -h);
+  const cp = R.cortaPanel(0, CUE, al, R.anclaAntena(RAD, al).lateral, -10, -h, -h);
+  check('alfa ' + al + '°: banda y plano dan el MISMO despeje (' + cb.despeje.toFixed(4) + ' m)',
+        cerca(cb.despeje, cp.despeje, 1e-12));
+  check('alfa ' + al + '°: pero el borde va del eje (w=0) a w=' + cp.wBorde.toFixed(4),
+        Math.abs(cp.wBorde - 0) > 0.9 && cerca(Math.abs(cp.wBorde), (CUE / 2) * Math.cos(al * R.GRADO), 1e-9));
+});
+/* Y LAS RAMAS QUE LA BANDA NO TIENE */
+check('un enlace PARALELO a la fila no la cruza, y se dice con motivo',
+      R.cortaPanel(0, CUE, 30, 1.0, 1.0, 0.8, 0.8).motivo === 'enlace_paralelo_a_la_fila');
+check('un enlace que no pisa la huella tampoco es un obstaculo',
+      R.cortaPanel(0, CUE, 30, 5.0, 9.0, 0.8, 0.8).motivo === 'el_enlace_no_pisa_la_huella');
+check('y por encima del panel el estado es «libre», no «hueco»',
+      R.cortaPanel(0, CUE, 30, 2.0, -2.0, 5.0, 5.0).estado === 'libre');
 
 /* ══ 4. EL CAMPO CERCANO ═════════════════════════════════════════════════ */
 console.log('\n· el campo cercano, donde el filo de cuchillo no vale');
