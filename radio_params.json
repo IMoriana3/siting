@@ -24,8 +24,106 @@
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
     "ant_h_m": {
       "valor": 1.5,
-      "_fuente": "código: Siting/index.html:2357 `RF_ANT_H=1.5` (modelo antiguo)",
-      "_ojo": "altura de la antena. NO medida en campo; heredada del modelo antiguo y pendiente de confirmar contra el montaje real de la TCU."
+      "_fuente": "código: Siting/index.html:2365 `RF_ANT_H=1.5` (modelo antiguo)",
+      "_ojo": [
+        "OBSOLETO como altura de antena: se conserva porque el MOTOR ANTIGUO (A) lo usa, y",
+        "el selector lo mantiene. El motor nuevo NO lo usa: la antena de la TCU sale de",
+        "`antena_tcu` de aquí abajo, que es geometría de plano y depende de alfa.",
+        "",
+        "La cita decía `index.html:2357` y hoy es la 2365. Un `_fuente` que apunta a otra",
+        "línea es un `_fuente` roto; corregido al encontrarlo."
+      ]
+    },
+
+    "antena_tcu": {
+      "_que_es": [
+        "DÓNDE ESTÁ LA ANTENA DE LA TCU, que no es una cota fija. El conector cuelga del",
+        "TUBO y gira con él; del conector baja el coax, que cuelga en vertical por su peso.",
+        "",
+        "    altura  = eje − radio_ancla·cos(alfa) − coax_caida",
+        "    lateral = radio_ancla·sen(alfa)      (perpendicular a la fila)",
+        "",
+        "LA VERTICAL SE MUEVE POCO Y LA LATERAL DECIDE: 0,225·(1−cos 30°) son 3 cm, pero",
+        "0,225·sen 30° son 11 cm, y ese desplazamiento es el que pone la antena a un lado u",
+        "otro del eje de su propia fila — o sea, por qué lado sale el rayo."
+      ],
+      "radio_ancla_m": {
+        "valor": 0.225,
+        "_fuente": "código: Cobertura-Zigbee/seguidor.js:340 — `m: mT(THREE, D.tcuX-0.16, -0.225, 0)`. La X local es EL EJE DEL TUBO (`tcuX: 1.4`, «TCU desplazada a lo largo del tubo, junto al motor»), así que el radio en el plano perpendicular al giro son los 0,225 m bajo el eje.",
+        "_ojo": "el giro es `makeRotationX(−alfa)` en el marco canónico — Cobertura-Zigbee/terreno.html:1907."
+      },
+      "coax_caida_m": {
+        "valor": 0.50,
+        "_fuente": "código: Cobertura-Zigbee/seguidor.js:35 — `antHang: 0.50`, «la antena CUELGA 50 cm vertical desde el conector».",
+        "_ojo": "el 3D ya lo dibuja así: `aTip = [ax, ay − hang, az]` con (ax,ay,az) el conector YA rotado — terreno.html:1925. El motor usa la misma cuenta a propósito."
+      },
+      "_holgura_bajo_su_propio_modulo": [
+        "A 0° la antena cuelga 72,5 cm por debajo del borde bajo de su módulo; a 30°, 10,0 cm.",
+        "A PARTIR DE ALFA ~ 35,1° (cuerda 2,380 m; 34,6° con 2,411) LA HOLGURA CAMBIA DE",
+        "SIGNO: el látigo queda DENTRO de la banda que barre su propio panel, entre el módulo",
+        "y el suelo. Los seguidores trabajan hasta 55–60°, así que pasa en operación.",
+        "«El rayo sale por el hueco de debajo del panel» deja de ser cierto en la mitad alta",
+        "del recorrido, justo donde el panel más tapa."
+      ]
+    },
+
+    "antena_ncu_m": {
+      "valor": 3.15,
+      "_fuente": "código: Cobertura-Zigbee/equipos.js:44 `ncuAntY: 3.15` — «CENTRO del látigo, en la cabeza del poste». Plano DR_NCU_v0 / «Montaje NCU», poste C 100×60 de 2,95 m (`ncuMastH`, equipos.js:36).",
+      "_ojo": "coincide con `ANTENNAS.ncu.h` de cobertura-rf-fv. Dos módulos independientes dicen lo mismo, que es la mejor señal que hay aquí."
+    },
+
+    "antena_hsu_m": {
+      "valor": 6.50,
+      "_fuente": "código: Cobertura-Zigbee/equipos.js:59 `hsuAntY: 6.50` — «CENTRO de los látigos, en su brazo». Plano FTR.24.00145_5_C / «Montaje HSU», torre de celosía autoportante de 8 m.",
+      "_ojo": [
+        "Los dos látigos van en su propio brazo a MEDIA TORRE, no en la cabeza junto al",
+        "ultrasónico. Cota confirmada en campo (ago-2026).",
+        "",
+        "OJO AL COMENTARIO DE SU PROPIA FUENTE: la cabecera de `equipos.js:15` sigue diciendo",
+        "«dos látigos de antena a ~8,3 m» mientras el código dice 6,50. El comentario se quedó",
+        "sin corregir cuando se corrigió la cota. Vale el CÓDIGO, que es el que dibuja y el",
+        "que cita el plano."
+      ]
+    },
+
+    "campo_cercano_lambdas": {
+      "valor": 2,
+      "_fuente": "criterio, no medida: ITU-R P.526 supone el obstáculo lejos de los dos extremos en longitudes de onda. Por debajo no hay «filo de cuchillo», hay una antena metida debajo de una placa.",
+      "_ojo": [
+        "SUSTITUYE AL CORTE POR `t > 0,001` de `rfObstacles`, que no era físico: el 0,1 % del",
+        "enlace son 1,2 cm en un salto de 12 m y 33,8 cm en uno de 338 — proporcional al",
+        "enlace, no a lambda.",
+        "",
+        "Hoy no se notaba porque los extremos se ponían en el MOTOR, sobre el eje de la fila:",
+        "medidos 4.676 enlaces en El Burgo, 620 en Ayora, 446 en San José y 3.710 en Páramo,",
+        "CERO cruces por debajo de 10 lambdas, y el más próximo a 3,0 m (24 lambdas).",
+        "",
+        "Con la antena en su sitio, el cruce de su PROPIA fila cae a (0,225·sen alfa)/sen fi:",
+        "0,9 lambdas a 30° perpendicular y 1,3 a 45°. Dentro del campo cercano en todo el",
+        "recorrido útil.",
+        "",
+        "EL 2 NO ESTÁ MEDIDO CONTRA DATOS DE CAMPO y no se disfraza de que lo esté. Es el",
+        "orden de magnitud por debajo del cual la formulación de filo no aplica. Lo que sale",
+        "de ahí no es un dB: es un ESTADO con su motivo."
+      ]
+    },
+
+    "patron_antena": {
+      "valor": "dipolo",
+      "_fuente": "ficha de la Jinchang JCW435700RA, 3 dBi, dipolo ~lambda/2, citada en cobertura-rf-fv python/zigbee_pv_model.py:270.",
+      "_ojo": [
+        "F(e) = cos((pi/2)·sen e)/cos e, normalizado a F(0) = 1: SOLO RESTA, nunca suma.",
+        "",
+        "A 2,45 GHz apenas mueve: 2·gEl vale −0,24 dB en el peor TCU→NCU (12 m), −1,99 en el",
+        "peor TCU→HSU (12 m) y CERO EXACTO en todo el careo de El Burgo, donde las dos",
+        "antenas van a la misma altura. Entra porque una ganancia ESCALAR no se puede llevar",
+        "a sub-GHz: en LoRa o Wi-SUN la antena es otra y hoy no había dónde declararlo.",
+        "",
+        "NO MODELA que el látigo bascula con la mesa: se toma vertical. Declarado, no omitido.",
+        "",
+        "«iso» devuelve la ganancia plana de antes, para poder carear."
+      ]
     },
     "cuerda_m_defecto": {
       "valor": 2.38,

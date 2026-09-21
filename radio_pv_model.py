@@ -80,6 +80,36 @@ def corta(b, z_rayo):
     return {"estado": "tapado", "despeje": -min(d_top, d_bot), "borde": borde}
 
 
+def ancla_antena(radio_m, alpha_deg):
+    """Espejo de `anclaAntena()`. El conector de la TCU GIRA CON EL TUBO: no es
+    una cota fija. Rotación de (0, −r, 0) alrededor del eje del tubo por −α, o
+    sea y' = −r·cos α y z' = +r·sen α.
+
+    Procedencia: anclaje en (tcuX−0,16, −0,225, 0) —Cobertura-Zigbee
+    seguidor.js:340, con la X local siendo EL EJE DEL TUBO—, giro
+    `makeRotationX(−α)` —terreno.html:1907— y el 3D ya lo dibuja así en `aTip`
+    —terreno.html:1925—."""
+    a = alpha_deg * GRADO
+    return {"dz": -radio_m * math.cos(a), "lateral": radio_m * math.sin(a)}
+
+
+def altura_antena_tcu(eje_m, radio_m, caida_m, alpha_deg):
+    """Espejo de `alturaAntenaTCU()`: anclaje girado, más la caída del coax."""
+    return eje_m + ancla_antena(radio_m, alpha_deg)["dz"] - caida_m
+
+
+def holgura_bajo_modulo(radio_m, caida_m, cuerda_m, alpha_deg):
+    """Espejo de `holguraBajoModulo()`. Positivo = la antena cuelga en el hueco;
+    negativo = el látigo está DENTRO de la banda que barre su propio panel.
+
+    Cambia de signo en α ≈ 35,1° con cuerda 2,380 m, y los seguidores trabajan
+    hasta 55–60°."""
+    a = alpha_deg * GRADO
+    z_ant = ancla_antena(radio_m, alpha_deg)["dz"] - caida_m
+    z_bot = -(cuerda_m / 2.0) * abs(math.sin(a))
+    return z_bot - z_ant
+
+
 def regimen(dx_enlace, dy_enlace, dx_fila, dy_fila, tol_grados=None):
     """Espejo de `regimen()`: pasillo (no cruza filas) o cruza."""
     n1 = math.hypot(dx_enlace, dy_enlace)
@@ -176,7 +206,16 @@ def _cexp(z):
 
 
 def coef_reflexion(theta, eps_r, sigma, f_hz, pol=None):
-    """Coeficiente de reflexión de Fresnel en el suelo. Espejo de `coefReflexion()`."""
+    """Coeficiente de reflexión de Fresnel en el suelo. Espejo de `coefReflexion()`.
+
+    eps_r = inf -> CONDUCTOR PERFECTO, Gamma = +1, sin dependencia del ángulo:
+    la cota superior del rebote. Sin esto el canon no fallaba, MENTÍA: daba NaN
+    y ese NaN viajaba hasta el margen sin que nada lo dijera."""
+    if eps_r == math.inf:
+        return _cx(1.0, 0.0)
+    if not (eps_r > 0):
+        raise ValueError("radio_pv_model: epsR inválido (%r). "
+                         "Use math.inf para conductor perfecto." % (eps_r,))
     lam = longitud_onda(f_hz)
     eps = _cx(eps_r, -60.0 * lam * sigma)
     s = math.sin(theta)
@@ -277,6 +316,43 @@ def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
 def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
     """Espejo de `difraccionBandasDb()`: el total del detalle."""
     return difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
+
+
+def ganancia_patron_db(elev_rad, patron=None):
+    """Espejo de `gananciaPatronDb()`. Diagrama del dipolo de media onda, en dB
+    RELATIVOS a su máximo:
+
+        F(e) = cos((pi/2)·sen e) / cos e
+
+    Normalizado a F(0) = 1, así que SOLO RESTA. A 2,45 GHz apenas mueve nada
+    —cero exacto en todo el careo, donde las dos antenas van a la misma
+    altura—; entra porque una ganancia escalar no se puede llevar a sub-GHz.
+
+    Se aplica POR RAYO, no por enlace: cobertura-rf-fv lo aplica una vez con la
+    elevación del rayo directo y luego suma un dos rayos cuyo reflejado sale
+    con otro ángulo, lo cual es incoherente con su propio modelo."""
+    p = "iso" if patron is None else str(patron)
+    if p == "iso":
+        return 0.0
+    if p != "dipolo":
+        raise ValueError("radio_pv_model: patrón de antena «%s» no implementado" % p)
+    c = math.cos(elev_rad)
+    if abs(c) < 1e-9:
+        return -60.0
+    f = math.cos((math.pi / 2) * math.sin(elev_rad)) / c
+    return 20.0 * math.log10(max(abs(f), 1e-3))
+
+
+def campo_cercano(d1, d2, f_hz, umbral_lambdas=None):
+    """Espejo de `campoCercano()`. P.526 supone el obstáculo lejos de los dos
+    extremos en longitudes de onda; cerca no hay «filo», hay una antena metida
+    debajo de una placa. El corte va en lambdas, NO en `t`: el `t > 0,001` de
+    antes es el 0,1 % del enlace, o sea 1,2 cm a 12 m y 33,8 cm a 338."""
+    lam = longitud_onda(f_hz)
+    u = 2.0 if umbral_lambdas is None else umbral_lambdas
+    d = min(d1, d2)
+    return {"cerca": d < u * lam, "distanciaM": d, "lambdas": d / lam,
+            "umbralLambdas": u}
 
 
 def vegetacion_db(espesor_m, f_hz, modelo=None):

@@ -113,6 +113,64 @@
     return { estado: "tapado", despeje: -Math.min(dTop, dBot), borde: borde };
   }
 
+  /* ── DÓNDE ESTÁ LA ANTENA DE LA TCU ──────────────────────────────────────
+   * NO es una cota fija. El conector cuelga del TUBO y GIRA CON ÉL; del
+   * conector baja el coax, que cuelga en vertical por su peso. Así que la
+   * antena es «anclaje rotado por α, más la caída del coax hacia abajo».
+   *
+   * PROCEDENCIA, y es geometría de plano, no un supuesto:
+   *   · el anclaje está en el marco local del seguidor en (tcuX−0,16, −0,225, 0)
+   *     — Cobertura-Zigbee/seguidor.js:340. La X local es EL EJE DEL TUBO
+   *     (`tcuX: 1.4`, «TCU desplazada a lo largo del tubo, junto al motor»), así
+   *     que lo que cuenta para el giro es el RADIO en el plano perpendicular:
+   *     0,225 m por debajo del eje.
+   *   · el giro es `makeRotationX(−α)` en ese marco canónico
+   *     — Cobertura-Zigbee/terreno.html:1907.
+   *   · el coax cuelga 0,50 m — `antHang: 0.50`, seguidor.js:35.
+   *   · y el 3D ya lo dibuja así: `aTip = [ax, ay − hang, az]` con (ax,ay,az)
+   *     el conector YA rotado — terreno.html:1925. Esta función es esa misma
+   *     cuenta, para que el motor y el dibujo no se separen.
+   *
+   * Rotación de (0, −r, 0) alrededor de X por −α:  y' = −r·cos α, z' = +r·sen α.
+   *
+   * LA VERTICAL SE MUEVE POCO Y LA LATERAL NO: r·(1−cos α) son 3 cm a 30° y
+   * 22,5 a 90°, pero r·sen α son 11 cm a 30°, y ESE es el que decide por qué
+   * lado de su propia fila sale el rayo. Ver `holguraBajoModulo`. */
+  function anclaAntena(radioM, alphaDeg) {
+    var a = alphaDeg * GRADO, r = radioM;
+    return { dz: -r * Math.cos(a), lateral: r * Math.sin(a) };
+  }
+
+  /* Cota de la antena de la TCU sobre el suelo de SU seguidor. */
+  function alturaAntenaTCU(ejeM, radioM, caidaM, alphaDeg) {
+    return ejeM + anclaAntena(radioM, alphaDeg).dz - caidaM;
+  }
+
+  /* ¿CUELGA LA ANTENA EN EL HUECO DE SU PROPIO MÓDULO, O DENTRO DE LA BANDA?
+   *
+   * Positivo = cuelga por debajo del borde bajo, en el hueco. Negativo = el
+   * látigo está DENTRO de la banda que barre su propio panel, entre el módulo
+   * y el suelo.
+   *
+   * Y esto cambia de signo en operación, que es lo que obliga a tenerlo:
+   *
+   *     α       antena      borde bajo    holgura
+   *     0°      −0,725        0,000       +72,5 cm
+   *    30°      −0,695       −0,595       +10,0 cm
+   *    45°      −0,659       −0,842       −18,2 cm
+   *    55°      −0,629       −0,975       −34,6 cm
+   *
+   * El cambio de signo está en α ≈ 35,1° con cuerda 2,380 m (34,6° con 2,411),
+   * y los seguidores trabajan hasta 55–60°. O sea que «el rayo sale por el
+   * hueco de debajo del panel» deja de ser cierto en la mitad alta del
+   * recorrido, justo donde el panel más tapa. */
+  function holguraBajoModulo(radioM, caidaM, cuerdaM, alphaDeg) {
+    var a = alphaDeg * GRADO;
+    var zAnt = anclaAntena(radioM, alphaDeg).dz - caidaM;   // respecto al eje
+    var zBot = -(cuerdaM / 2) * Math.abs(Math.sin(a));      // idem
+    return zBot - zAnt;
+  }
+
   /* EL RÉGIMEN DEL ENLACE. Un enlace que va POR EL PASILLO entre dos filas no
    * cruza ninguna, y su física es otra: casi espacio libre con dos rayos. Uno
    * que CRUZA filas se come una banda por cada cruce. Confundirlos es lo que
@@ -231,6 +289,22 @@
 
   /* Coeficiente de reflexión de Fresnel en el suelo. `pol` "v" o "h". */
   function coefReflexion(theta, epsR, sigma, fHz, pol) {
+    /* CONDUCTOR PERFECTO: Γ = +1, sin dependencia del ángulo. Es la cota
+       superior del rebote, el caso de referencia que se enseña junto a la
+       tierra real. Absorbido de cobertura-rf-fv `reflection_coefficient`, y su
+       argumento para tenerlo en el núcleo es el bueno: «evita que cada página
+       se escriba su propio dos rayos con suelo perfecto», que es justo la
+       avería que la consolidación viene a cerrar.
+
+       Sin esto el canon NO fallaba: MENTÍA EN SILENCIO. Medido ejecutándolo,
+       `cSub(eps, cx(cos2,0))` daba Infinity, `cSqrt` lo propagaba y en `cDiv`
+       salía Infinity − Infinity = NaN; `dosRayosDb(100, 1.5, 1.5, 2.45e9,
+       Infinity, ...)` devolvía NaN y ese NaN viajaba hasta el margen sin que
+       nada lo dijera. */
+    if (epsR === Infinity) return cx(1.0, 0.0);
+    /* Y un epsR que no sea un número LANZA, en vez de propagar NaN. Mismo
+       criterio que `exigeF`: olvidarse de un parámetro tiene que hacer ruido. */
+    if (!(epsR > 0)) throw new Error("radio_pv_model: epsR inválido (" + epsR + "). Use Infinity para conductor perfecto.");
     var lam = longitudOnda(fHz);
     var eps = cx(epsR, -60.0 * lam * sigma);
     var s = Math.sin(theta);
@@ -346,6 +420,78 @@
    * ITU-R P.833). Con el parámetro a `null` en radio_params.json, esto devuelve
    * `null` —no 0 dB— para que quien lo consuma tenga que decir «no modelada»
    * en vez de dar por despejado lo que no se ha mirado. */
+  /* ── PATRÓN DE ANTENA ────────────────────────────────────────────────────
+   * La ganancia NO es un escalar. La Jinchang JCW435700RA es un dipolo de ~λ/2
+   * —lo dice su propia ficha, citada en cobertura-rf-fv
+   * python/zigbee_pv_model.py:270— y un dipolo tiene su máximo en el horizonte
+   * y un NULO en su propio eje. Tratar sus 3 dBi como un número suelto es
+   * optimista en todo salto con elevación.
+   *
+   *     F(e) = cos((π/2)·sen e) / cos e ,  e = elevación sobre el horizonte
+   *
+   * Normalizado a F(0) = 1, así que en el horizonte vale 0 dB y los 3 dBi de
+   * catálogo siguen siendo los de catálogo: esto SOLO RESTA, que es lo que
+   * tiene que hacer una corrección de patrón sobre la ganancia de pico.
+   *
+   * POR QUÉ ENTRA AHORA, dicho sin adornarlo: a 2,45 GHz casi no mueve nada.
+   * Medido sobre las geometrías reales, 2·gEl vale −0,24 dB en el peor
+   * TCU→NCU (12 m) y −1,99 en el peor TCU→HSU (12 m), y CERO EXACTO en todo el
+   * careo de El Burgo, donde las dos antenas van a la misma altura. Entra
+   * porque `gtx_dbi` como escalar NO SE PUEDE LLEVAR A SUB-GHZ: en LoRa o
+   * Wi-SUN la antena es otra, con otro patrón, y hoy no hay dónde declararlo.
+   *
+   * LO QUE NO MODELA, declarado: el látigo cuelga de la viga y BASCULA con la
+   * mesa, así que su eje no es exactamente la vertical. Se toma vertical.
+   *
+   * Y SE APLICA POR RAYO, no por enlace. cobertura-rf-fv lo aplica una sola vez
+   * con la elevación del rayo DIRECTO (python/zigbee_pv_model.py:362) y luego
+   * suma un modelo de dos rayos cuyo reflejado sale con OTRO ángulo —a 12 m con
+   * antenas a 1,5 m, 14° contra 0°—. Eso es incoherente con el propio modelo al
+   * que se suma, así que aquí la función toma la elevación y quien la llama la
+   * aplica al rayo que toca. */
+  function gananciaPatronDb(elevRad, patron) {
+    var p = patron == null ? "iso" : String(patron);
+    if (p === "iso") return 0;
+    if (p !== "dipolo") throw new Error("radio_pv_model: patrón de antena «" + p + "» no implementado");
+    var c = Math.cos(elevRad);
+    if (Math.abs(c) < 1e-9) return -60;                 // el nulo del eje, acotado
+    var f = Math.cos((Math.PI / 2) * Math.sin(elevRad)) / c;
+    return 20 * Math.log10(Math.max(Math.abs(f), 1e-3));
+  }
+
+  /* ── EL CAMPO CERCANO, QUE ES DONDE EL FILO DE CUCHILLO DEJA DE VALER ─────
+   * P.526 supone que el obstáculo está lejos de los dos extremos en longitudes
+   * de onda. Cerca no hay «filo»: hay una antena metida debajo de una placa.
+   *
+   * EL CORTE DE ANTES NO ERA FÍSICO. `rfObstacles` descartaba por `t > 0,001`,
+   * o sea el 0,1 % del enlace: 1,2 cm en un salto de 12 m y 33,8 cm en uno de
+   * 338. Proporcional al enlace, no a λ.
+   *
+   * HOY NO SE NOTABA, y conviene saber por qué: los extremos se ponían en el
+   * MOTOR, que está sobre el eje de la fila. Medidos 4.676 enlaces en El Burgo,
+   * 620 en Ayora, 446 en San José y 3.710 en Páramo: CERO cruces por debajo de
+   * 10 λ, y el más próximo a 3,0 m (24 λ), que es el `filaZ` de la bífila.
+   *
+   * SE NOTA EN CUANTO LA ANTENA SE PONE EN SU SITIO. Con el desplazamiento
+   * lateral r·sen α, el enlace cruza el eje de SU PROPIA fila a (r·sen α)/sen φ,
+   * con φ el ángulo entre el enlace y la fila:
+   *
+   *     α      perpendicular      φ=60°       φ=30°
+   *    15°      0,058 (0,5 λ)   0,067 (0,5)  0,116 (1,0)
+   *    30°      0,112 (0,9 λ)   0,130 (1,1)  0,225 (1,8)
+   *    45°      0,159 (1,3 λ)   0,184 (1,5)  0,318 (2,6)
+   *
+   * O sea DENTRO del campo cercano en todo el recorrido útil. Por eso el corte
+   * va en λ y no en `t`, y por eso lo que se devuelve es un ESTADO con motivo y
+   * no un número de dB: bajo su propio panel la antena no está difractando en
+   * un filo, y fabricar un dB ahí sería inventar. */
+  function campoCercano(d1, d2, fHz, umbralLambdas) {
+    var lam = longitudOnda(fHz);
+    var u = umbralLambdas == null ? 2 : umbralLambdas;
+    var d = Math.min(d1, d2);
+    return { cerca: d < u * lam, distanciaM: d, lambdas: d / lam, umbralLambdas: u };
+  }
+
   function vegetacionDb(espesorM, fHz, modelo) {
     if (!modelo) return null;
     throw new Error("radio_pv_model: modelo de vegetación «" + modelo + "» no implementado todavía");
@@ -359,6 +505,11 @@
     corta: corta,
     regimen: regimen,
     relieveDominante: relieveDominante,
+    anclaAntena: anclaAntena,
+    alturaAntenaTCU: alturaAntenaTCU,
+    holguraBajoModulo: holguraBajoModulo,
+    campoCercano: campoCercano,
+    gananciaPatronDb: gananciaPatronDb,
     // tecnología
     C_LUZ: C_LUZ,
     longitudOnda: longitudOnda,

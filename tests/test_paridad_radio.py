@@ -47,6 +47,21 @@ MUTACIONES = {
     # la constante de espacio libre se desvía 0,01 dB en Python: el banco tiene
     # que cazar incluso una diferencia que a ojo no se ve
     "py_fspl_001":    ("py", r'- 147\.55$', '- 147.56'),
+    # ── LA ANTENA DE LA TCU, por los dos lados ──────────────────────────────
+    # el anclaje deja de girar SOLO en Python: vuelve la cota fija
+    "py_ancla_fija":  ("py", r'return \{"dz": -radio_m \* math\.cos\(a\), "lateral": radio_m \* math\.sin\(a\)\}',
+                              'return {"dz": -radio_m, "lateral": 0.0}'),
+    # el lateral se pierde SOLO en JS: es el que decide por que lado sale el rayo
+    "js_sin_lateral": ("js", r'lateral: r \* Math\.sin\(a\)', 'lateral: 0'),
+    # el patron se aplana SOLO en Python
+    "py_patron_iso":  ("py", r'f = math\.cos\(\(math\.pi / 2\) \* math\.sin\(elev_rad\)\) / c',
+                              'f = 1.0'),
+    # el campo cercano deja de depender de lambda SOLO en JS: a 868 MHz la misma
+    # geometria esta MAS cerca en longitudes de onda, y eso es justo lo que no
+    # se puede perder al bajar de banda
+    "js_cerca_fija":  ("js", r'return \{ cerca: d < u \* lam,', 'return { cerca: d < u * 0.1224,'),
+    # el conductor perfecto vuelve a dar NaN SOLO en Python
+    "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
     "js_tol_regimen": ("js", r'var tol = tolGrados == null \? 10 : tolGrados;',
                               'var tol = tolGrados == null ? 20 : tolGrados;'),
@@ -197,10 +212,39 @@ def casos_difraccion():
     return out
 
 
+def casos_antena():
+    """LA ANTENA DE LA TCU Y EL PATRÓN, que son geometría nueva y tienen que
+    dar el mismo número en los dos motores como todo lo demás.
+
+    El patrón se barre hasta el NULO del eje: ahí la función es vertical y es
+    donde la paridad se rompería si una de las dos ramas se escribiera distinta.
+    Y el conductor perfecto entra porque es un CORTOCIRCUITO, no una fórmula:
+    una rama que solo exista en un lado es exactamente lo que esto vigila."""
+    out = []
+    for al in [0, 5, 15, 30, 35.09, 45, 55, 60, 75, 90, -30, -55, 120, 180]:
+        out.append(["ancla", 0.225, al])
+        out.append(["altura", 1.5, 0.225, 0.50, al])
+        for c in [2.380, 2.411]:
+            out.append(["holgura", 0.225, 0.50, c, al])
+    for e in [0.0, 1e-9, 0.01, 0.1, 0.25, 0.5, 1.0, 1.4, 1.5707963267948966,
+              1.5707963267948966 - 1e-9, -0.25, -1.0, -1.4, 3.0]:
+        out.append(["patron", e, "dipolo"])
+        out.append(["patron", e, "iso"])
+    for d1 in [0.0, 0.05, 0.1125, 0.25, 3.0, 100.0]:
+        for f in [2.45e9, 868e6, 2.4e9]:
+            for u in [2, 5, 0.5]:
+                out.append(["cerca", d1, 100.0, f, u])
+    # conductor perfecto: la rama de cortocircuito, por los dos lados
+    for th in [0.01, 0.25, 1.0]:
+        out.append(["reflinf", th, 5e-3, 2.45e9, "v"])
+        out.append(["reflinf", th, 5e-3, 868e6, "h"])
+    return out
+
+
 CASOS = {
     "banda": casos_banda(), "corta": casos_corta(), "regimen": casos_regimen(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
-    "difraccion": casos_difraccion(),
+    "difraccion": casos_difraccion(), "antena": casos_antena(),
 }
 
 # ── LOS DOS MOTORES ────────────────────────────────────────────────────────
@@ -239,6 +283,19 @@ out.escalares = casos.escalares.map(c => {
 });
 out.difraccion = casos.difraccion.map(([D, zA, zB, cr, f]) =>
   R.difraccionBandasDb(D, zA, zB, cr.map(([a, s]) => ({ s: s, banda: bandaDe(a) })), f));
+out.antena = casos.antena.map(c => {
+  switch (c[0]) {
+    case 'ancla':   { const a = R.anclaAntena(c[1], c[2]); return [a.dz, a.lateral]; }
+    case 'altura':  return R.alturaAntenaTCU(c[1], c[2], c[3], c[4]);
+    case 'holgura': return R.holguraBajoModulo(c[1], c[2], c[3], c[4]);
+    case 'patron':  return R.gananciaPatronDb(c[1], c[2]);
+    case 'cerca':   { const k = R.campoCercano(c[1], c[2], c[3], c[4]);
+                      return [k.cerca, k.distanciaM, k.lambdas, k.umbralLambdas]; }
+    case 'reflinf': { const g = R.coefReflexion(c[1], Infinity, c[2], c[3], c[4]);
+                      return [g.re, g.im]; }
+  }
+  throw new Error('caso de antena desconocido: ' + c[0]);
+});
 // 17 dígitos: el redondeo del JSON no puede ser quien decida si hay paridad
 process.stdout.write(JSON.stringify(out, (k, v) =>
   typeof v === 'number' && !Number.isInteger(v) ? Number(v.toPrecision(17)) : v));
@@ -280,6 +337,24 @@ def corre_python(mod, casos):
     out["difraccion"] = [
         mod.difraccion_bandas_db(D, zA, zB, [{"s": s, "banda": b(a)} for a, s in cr], f)
         for D, zA, zB, cr, f in casos["difraccion"]]
+    out["antena"] = []
+    for c in casos["antena"]:
+        if c[0] == "ancla":
+            a = mod.ancla_antena(c[1], c[2]); out["antena"].append([a["dz"], a["lateral"]])
+        elif c[0] == "altura":
+            out["antena"].append(mod.altura_antena_tcu(c[1], c[2], c[3], c[4]))
+        elif c[0] == "holgura":
+            out["antena"].append(mod.holgura_bajo_modulo(c[1], c[2], c[3], c[4]))
+        elif c[0] == "patron":
+            out["antena"].append(mod.ganancia_patron_db(c[1], c[2]))
+        elif c[0] == "cerca":
+            k = mod.campo_cercano(c[1], c[2], c[3], c[4])
+            out["antena"].append([k["cerca"], k["distanciaM"], k["lambdas"], k["umbralLambdas"]])
+        elif c[0] == "reflinf":
+            g = mod.coef_reflexion(c[1], math.inf, c[2], c[3], c[4])
+            out["antena"].append([g[0], g[1]])
+        else:
+            raise ValueError("caso de antena desconocido: %s" % c[0])
     return out
 
 
@@ -355,7 +430,13 @@ def igual(a, b, ruta):
 
 print("· los dos motores, caso a caso")
 total = 0
-for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"):
+# LOS BLOQUES SALEN DE `CASOS`, NO DE UNA LISTA A MANO. Estaba escrita dos
+# veces, y al añadir la familia «antena» los dos bucles siguieron recorriendo
+# las seis de antes: los casos nuevos se generaban, los dos motores los
+# calculaban, y NADIE LOS COMPARABA. El banco decia «1492 casos» y seguia en
+# verde. Una familia nueva entra sola ahora, y el guardian de abajo lo exige.
+BLOQUES = tuple(CASOS)
+for bloque in BLOQUES:
     a, b = JS.get(bloque), PYR.get(bloque)
     if a is None or b is None or len(a) != len(b):
         check("%s: mismo numero de casos" % bloque, False, "js=%s py=%s"
@@ -368,9 +449,17 @@ for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"
           % (len(malos), malos[0], a[malos[0]], b[malos[0]]))
 
 check("el barrido no esta vacio", total > 500, total)
+# GUARDIAN CONTRA LA DERIVA QUE ESTO ACABA DE TENER: toda familia declarada en
+# CASOS tiene que haber llegado a los DOS motores. Si un driver se queda sin su
+# rama, el bloque no aparece en la salida y esto lo dice, en vez de comparar
+# cinco familias de seis y llamarlo paridad.
+faltan = [b for b in BLOQUES if b not in JS or b not in PYR]
+check("las %d familias de CASOS llegan a los dos motores" % len(BLOQUES),
+      not faltan, "sin comparar: " + ", ".join(faltan) if faltan else None)
 print("     %d casos comparados. Peor diferencia por bloque:" % total)
-for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"):
-    unidad = {"regimen": "grados", "difraccion": "dB", "escalares": "dB/m (mezcla)"}
+for bloque in BLOQUES:
+    unidad = {"regimen": "grados", "difraccion": "dB", "escalares": "dB/m (mezcla)",
+              "antena": "dB/m (mezcla)"}
     print("       %-11s %.3e %s" % (bloque, peor.get(bloque, 0.0),
                                     unidad.get(bloque, "m")))
 
