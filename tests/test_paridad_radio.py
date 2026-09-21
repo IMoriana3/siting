@@ -40,7 +40,9 @@ MUTACIONES = {
     # media cuerda SOLO en JS
     "js_semi_cuerda": ("js", r'var semi = \(cuerdaM / 2\)', 'var semi = (cuerdaM / 4)'),
     # el Deygout del JS deja de relanzar desde el borde que toca
-    "js_borde_top":   ("js", r'var bordeDom = corta\(cruces\[mejor\]\.banda, zDom\)\.borde;',
+    # (ancla movida al partir `difraccionBandasDetalle`: ver la nota gemela en
+    #  test_radio_geom.js. Las dos anclaban la MISMA linea de JS.)
+    "js_borde_top":   ("js", r'var bordeDom = cDom\.borde;',
                               'var bordeDom = cruces[mejor].banda.zTop;'),
     # la constante de espacio libre se desvía 0,01 dB en Python: el banco tiene
     # que cazar incluso una diferencia que a ojo no se ve

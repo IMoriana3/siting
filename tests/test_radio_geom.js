@@ -52,7 +52,11 @@ const MUTACIONES = {
   rupturaMitad:   [/return \(4 \* ht \* hr\) \/ longitudOnda\(fHz\);/, 'return (2 * ht * hr) / longitudOnda(fHz);'],
   // Deygout relanzado desde el borde SUPERIOR: el error del modelo antiguo,
   // metido esta vez en la reconstrucción y no en la banda
-  bordeDeArriba:  [/var bordeDom = corta\(cruces\[mejor\]\.banda, zDom\)\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
+  // El ancla se movió al partir `difraccionBandasDetalle` en dos líneas (`cDom`
+  // se reusa para `estado` y `despeje` en el detalle). La CI lo cazó con rc=2
+  // — «no casó con el código»—, que es justo para lo que se exige rc=1 exacto:
+  // con «distinto de cero» esta mutación habría contado como cazada sin serlo.
+  bordeDeArriba:  [/var bordeDom = cDom\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
 
   // ── dos rayos ──
   // se cae el rayo reflejado: queda espacio libre y se pierden los lóbulos,
