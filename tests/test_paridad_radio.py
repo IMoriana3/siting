@@ -69,6 +69,9 @@ MUTACIONES = {
     "py_eje_medida":  ("py", r'return \{"valor": defecto_m, "medida": False,', 'return {"valor": defecto_m, "medida": True,'),
     # y SOLO en JS, un module_height a cero cuela como medida
     "js_eje_cero":    ("js", r'if \(typeof v === "number" && isFinite\(v\) && v > 0\)', 'if (typeof v === "number")'),
+    # al tapar se pierde la profundidad, SOLO en Python
+    "py_tapa_cero":   ("py", r'"despeje": -min\(abs\(h_lo\), abs\(h_hi\)\) if cruza else abs\(h\),',
+                              '"despeje": 0 if cruza else abs(h),'),
     # el conductor perfecto vuelve a dar NaN SOLO en Python
     "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS

@@ -109,7 +109,7 @@ jobs:
           rojo node tests/test_antena_tcu.js anclaFija sinLateral holguraAlSuelo \
                                              cercaSinLambda patronPlano conductorNaN \
                                              panelAlEje panelSinHuella \
-                                             ejeMiente ejeGlobal
+                                             ejeMiente ejeGlobal tapaSinFondo
 
           rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \
                                               sinInterpolar nanCallado
@@ -124,7 +124,7 @@ jobs:
                                                    py_ancla_fija js_sin_lateral py_patron_iso \
                                                    js_cerca_fija py_conductor \
                                                    js_panel_eje py_panel_huella \
-                                                   py_eje_medida js_eje_cero
+                                                   py_eje_medida js_eje_cero py_tapa_cero
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.

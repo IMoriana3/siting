@@ -50,6 +50,11 @@ const MUTACIONES = {
   ejeMiente:      ['radio_pv_model.js', /return \{ valor: defectoM, medida: false,/, 'return { valor: defectoM, medida: true,'],
   // la altura del eje vuelve a ser una constante global, ignorando la planta
   ejeGlobal:      ['radio_pv_model.js', /var v = montaje && montaje\.module_height;/, 'var v = null;'],
+  // al tapar se pierde la PROFUNDIDAD: nu = 0 y 6,03 dB fijos tape lo que tape.
+  // Es el fallo que tuvo la primera version de `cortaPanel`, puesto de mutacion
+  // para que no pueda volver en silencio.
+  tapaSinFondo:   ['radio_pv_model.js', /despeje: cruza \? -Math\.min\(Math\.abs\(hLo\), Math\.abs\(hHi\)\) : Math\.abs\(h\),/,
+                                        'despeje: cruza ? 0 : Math.abs(h),'],
 };
 const MUTA = process.env.MUTA;
 const fuentes = {};
@@ -211,8 +216,12 @@ console.log('\n· el panel como plano inclinado (valores calculados a mano)');
         (manoTapa ? 'tapado' : 'hueco') === esp);
   /* y ahora la función, que tiene que decir lo mismo */
   const f = R.cortaPanel(0, CUE, al, R.anclaAntena(RAD, al).lateral, -10, -h, -h);
-  const wEsp = esp === 'tapado' ? wCorte : wBorde;
-  check('alfa ' + al + '°: la funcion dice «' + esp + '» y el borde en w=' + wEsp.toFixed(4),
+  /* EL CANTO DIFRACTANTE ES SIEMPRE EL BORDE DEL PANEL, tape o no tape. Antes
+     este banco esperaba el PUNTO DE CORTE para el caso tapado, y era mio el
+     error: el rayo no difracta donde toca la placa, difracta por el canto que
+     tiene que rodear. */
+  const wEsp = wBorde;
+  check('alfa ' + al + '°: la funcion dice «' + esp + '» y el canto en w=' + wEsp.toFixed(4),
         f.estado === esp && cerca(f.wBorde, wEsp, 5e-4),
         f.estado + ' @ ' + (f.wBorde === null ? '—' : f.wBorde.toFixed(4)));
   /* Y LA COTA DEL CANTO, que es lo que consume la difraccion. Mirar solo
@@ -221,6 +230,13 @@ console.log('\n· el panel como plano inclinado (valores calculados a mano)');
   const zEsp = wEsp * Math.tan(al * R.GRADO);
   check('alfa ' + al + '°: y su COTA a mano, z = ' + zEsp.toFixed(4) + ' m',
         cerca(f.borde, zEsp, 5e-4), f.borde === null ? '—' : f.borde.toFixed(4));
+  /* EL DESPEJE A MANO: distancia vertical del rayo al canto, con signo. Al
+     TAPAR es negativa y NO es cero: la primera version devolvia 0 y daba
+     6,03 dB fijos tapara lo que tapara. */
+  const dEsp = zEsp - (-h);      // canto MENOS rayo, como en `corta`
+  check('alfa ' + al + '°: despeje a mano ' + dEsp.toFixed(4) + ' m (' +
+        (dEsp < 0 ? 'tapa, y CUANTO' : 'pasa') + ')',
+        cerca(f.despeje, dEsp, 5e-4), f.despeje.toFixed(4));
 });
 /* LA TANGENCIA EXACTA. A alfa = 35,091° el rayo ROZA el canto: el corte cae
    justo en el borde y el despeje es 0. Ahí no se afirma una etiqueta, se afirma

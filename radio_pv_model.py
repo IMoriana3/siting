@@ -132,15 +132,19 @@ def corta_panel(z_eje, cuerda_m, alpha_deg, wA, wB, zA, zB):
         return zr - (z_eje + w * math.tan(a))
 
     h_lo, h_hi = hueco(lo), hueco(hi)
-    if (h_lo > 0) != (h_hi > 0):
-        w_corte = lo + (hi - lo) * (h_lo / (h_lo - h_hi))
-        return {"estado": "tapado", "despeje": 0, "borde": z_eje + w_corte * math.tan(a),
-                "wBorde": w_corte, "motivo": None}
+    # El canto por el que difracta es el que deja MENOS hueco, y el despeje va
+    # CON SIGNO respecto a el: mismo convenio que `corta()`. Atravesar se
+    # detecta por el CAMBIO DE SIGNO, no por el despeje.
+    # FALLO CORREGIDO: la primera version devolvia despeje 0 al tapar, o sea
+    # nu = 0 y 6,03 dB fijos tapara lo que tapara.
+    cruza = (h_lo > 0) != (h_hi > 0)
     if abs(h_lo) <= abs(h_hi):
         w_b, h = lo, h_lo
     else:
         w_b, h = hi, h_hi
-    return {"estado": "libre" if h > 0 else "hueco", "despeje": abs(h),
+    return {"estado": "tapado" if cruza else ("libre" if h > 0 else "hueco"),
+            # MISMO SIGNO QUE `corta()`: positivo = el rayo pasa por FUERA.
+            "despeje": -min(abs(h_lo), abs(h_hi)) if cruza else abs(h),
             "borde": z_eje + w_b * math.tan(a), "wBorde": w_b, "motivo": None}
 
 

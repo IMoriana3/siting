@@ -256,26 +256,33 @@
       return zR - (zEje + w * Math.tan(a));
     }
     var hLo = hueco(lo), hHi = hueco(hi);
+    /* EL CANTO POR EL QUE DIFRACTA es el que deja MENOS hueco, y el despeje va
+       CON SIGNO respecto a él. Mismo convenio que `corta()`: positivo = el rayo
+       pasa por fuera, negativo = va por dentro y ése es el fondo que tiene que
+       rodear.
+       ATRAVESAR el panel se detecta por el CAMBIO DE SIGNO dentro de la huella,
+       no por el despeje.
+       AQUÍ HUBO UN FALLO MÍO: la primera versión devolvía `despeje: 0` para el
+       caso tapado, o sea ν = 0 y 6,03 dB FIJOS tapara lo que tapara. Medido:
+       α = 39,07°, 45° y 55° daban los tres 6,03 dB mientras el rayo pasaba a
+       7,5, 18,2 y 34,6 cm del canto. Se perdía la profundidad entera. */
+    var cruza = (hLo > 0) !== (hHi > 0);
+    var wB2 = Math.abs(hLo) <= Math.abs(hHi) ? lo : hi;
+    var h = Math.abs(hLo) <= Math.abs(hHi) ? hLo : hHi;
     /* EN LA TANGENCIA EXACTA LA ETIQUETA NO ESTÁ DETERMINADA, y se dice en vez
        de fingir una convención. Justo en la transición de α el rayo roza el
        canto: el despeje es 0 y el signo de `hueco()` en ese extremo depende del
-       último bit. Medido: con α = 35,091 sale «hueco» y con 35,0910 y 35,2
-       cambia. NO se le pone un épsilon —sería un umbral inventado— porque NO
-       HAY NÚMERO QUE DEPENDA DE ELLO: el despeje es 0 por los dos lados, así
-       que ν es 0 y la pérdida de filo la misma. Lo único que cambia es la
-       palabra, y quien la consuma debe tratar despeje ≈ 0 como roce. */
-    if ((hLo > 0) !== (hHi > 0)) {
-      /* cambia de signo DENTRO de la huella: el rayo atraviesa el panel */
-      var wCorte = lo + (hi - lo) * (hLo / (hLo - hHi));
-      return { estado: "tapado", despeje: 0, borde: zEje + wCorte * Math.tan(a),
-               wBorde: wCorte, motivo: null };
-    }
-    /* no lo atraviesa: difracta por el borde donde MENOS despeje queda */
-    var wB2 = Math.abs(hLo) <= Math.abs(hHi) ? lo : hi;
-    var h = Math.abs(hLo) <= Math.abs(hHi) ? hLo : hHi;
+       último bit. NO se le pone un épsilon —sería un umbral inventado— porque
+       el NÚMERO es el mismo por los dos lados: despeje 0, luego ν 0 y la misma
+       pérdida. Lo único que cambia es la palabra. */
     return {
-      estado: h > 0 ? "libre" : "hueco",          // por encima / por debajo del panel
-      despeje: Math.abs(h),
+      estado: cruza ? "tapado" : (h > 0 ? "libre" : "hueco"),
+      /* MISMO SIGNO QUE `corta()`: positivo = el rayo pasa por FUERA (libre o
+         por el hueco), negativo = va por dentro. Devolver `h` con su signo
+         crudo invertia el convenio para el caso «hueco», porque ahi el rayo
+         esta por DEBAJO del plano y `z_rayo − z_panel` sale negativo aunque
+         el rayo este limpio. Cazado por el banco. */
+      despeje: cruza ? -Math.min(Math.abs(hLo), Math.abs(hHi)) : Math.abs(h),
       borde: zEje + wB2 * Math.tan(a),
       wBorde: wB2,
       motivo: null
