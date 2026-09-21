@@ -60,24 +60,32 @@
   /* CUÁNTAS MESAS ATRAVIESA Y CUÁNTAS ROZA. La distinción no es cosmética: es
    * la que separa `l_mod_db` de `l_roce_db`, y el ajuste sólo las puede separar
    * si alguien midió los mismos pares con las palas planas y de canto. Aquí
-   * sale gratis, porque `corta()` ya lo sabe: "tapado" es atravesar y "hueco"
-   * es rozar por debajo. */
+   * sale gratis, porque `cortaPanel()` ya lo sabe: "tapado" es atravesar y
+   * "hueco" es rozar por debajo.
+   *
+   * SOBRE EL PANEL REAL, no sobre la banda vertical. El cruce trae su propia
+   * geometria -{s, zEje, cuerda, alpha, senPhi}- y el corte se resuelve con el
+   * plano inclinado, que es donde esta el canto de verdad. */
   function cuenta(D, zA, zB, cruces) {
-    var atraviesa = 0, roza = 0, porEncima = 0;
+    var atraviesa = 0, roza = 0, porEncima = 0, fuera = 0;
     for (var i = 0; i < cruces.length; i++) {
-      var s = cruces[i].s;
-      if (s <= 0 || s >= D) continue;
-      var e = RPV.corta(cruces[i].banda, RPV.alturaRayo(zA, zB, D, s)).estado;
-      if (e === "tapado") atraviesa++;
-      else if (e === "hueco") roza++;
+      var cr = cruces[i], sp = cr.senPhi;
+      if (!(sp > 0)) { fuera++; continue; }
+      var c = RPV.cortaPanel(cr.zEje, cr.cuerda, cr.alpha,
+                             -cr.s * sp, (D - cr.s) * sp, zA, zB);
+      if (c.wBorde == null) { fuera++; continue; }
+      var sB = cr.s + c.wBorde / sp;
+      if (sB <= 0 || sB >= D) { fuera++; continue; }
+      if (c.estado === "tapado") atraviesa++;
+      else if (c.estado === "hueco") roza++;
       else porEncima++;
     }
-    return { atraviesa: atraviesa, roza: roza, porEncima: porEncima };
+    return { atraviesa: atraviesa, roza: roza, porEncima: porEncima, fuera: fuera };
   }
 
   /* EL BALANCE DE UN ENLACE.
    *
-   *   Prx = Ptx + Gtx + Grx − (dos rayos + difracción por bandas + vegetación
+   *   Prx = Ptx + Gtx + Grx − (dos rayos + difracción por PANELES + vegetación
    *                            + l_mod·atraviesa + l_roce·roza + offset)
    *   margen = Prx − sensibilidad
    *
@@ -97,7 +105,7 @@
 
     var dosRayos = RPV.dosRayosDb(D, zA, zB, f, propagacion.eps_r_suelo,
                                   propagacion.sigma_suelo_s_m, propagacion.polarizacion);
-    var difrac = RPV.difraccionBandasDb(D, zA, zB, cruces, f);
+    var difrac = RPV.difraccionPanelesDb(D, zA, zB, cruces, f);
 
     /* EL RELIEVE VA APARTE de las bandas, y suma. Un cerro entre dos nodos no
        es una mesa: es terreno, es continuo y no tiene hueco por debajo. */

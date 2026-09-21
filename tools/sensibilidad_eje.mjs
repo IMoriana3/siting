@@ -42,8 +42,13 @@ function cruces(a, b, D, tilt, eje) {
     const den = ex * fy - ey * fx; if (Math.abs(den) < 1e-12) continue;
     const wx = s[0] - a[0], wy = s[1] - a[1];
     const t = (wx * fy - wy * fx) / den, u = (wx * ey - wy * ex) / den;
-    if (t > 0.001 && t < 0.999 && u >= 0 && u <= 1)
-      out.push({ s: t * D, banda: R.banda(eje, CUERDA, tilt, 0) });   // EJE, no antena
+    /* CONTRATO NUEVO: geometria de la fila. El eje ya iba bien aqui. Y el `if`
+       lleva LLAVES: sin ellas, meter una segunda sentencia deja la declaracion
+       fuera del condicional y el modulo ni compila. */
+    if (t > 0 && t < 1 && u >= 0 && u <= 1) {
+      const senPhi = Math.abs(den) / (D * Math.hypot(fx, fy));
+      out.push({ s: t * D, zEje: eje, cuerda: CUERDA, alpha: tilt, senPhi: senPhi });
+    }
   }
   out.sort((p, q) => p.s - q.s);
   return out;

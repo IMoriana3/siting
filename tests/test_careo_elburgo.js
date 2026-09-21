@@ -348,8 +348,49 @@ check('la pendiente del residuo contra las TRES variables',
       rz.pendientes && Object.keys(rz.pendientes).length === 3, Object.keys(rz.pendientes || {}).join(','));
 check('y cada una con su error tipico y su p',
       Object.values(rz.pendientes).every(v => v.b === null || (typeof v.se === 'number' && typeof v.p === 'number')));
-check('la salida marca las pendientes significativas',
-      /SIGNIFICATIVA/.test(txtTele) || /no se detecta/.test(txtTele));
+/* SE COMPRUEBA LA LOGICA, NO LA PALABRA. La version anterior era
+   `/SIGNIFICATIVA/.test(txt) || /no se detecta/.test(txt)`, con una puerta de
+   escape que la hacia pasar siempre que NINGUNA pendiente fuese significativa.
+   Y eso depende de los DATOS: al cambiar la geometria del cruce, el bloque de
+   telemetria dejo de tener ninguna significativa y la mutacion `sinSignificativa`
+   se quedo DORMIDA. Ahora se exige el SI Y SOLO SI, leyendo las p de la propia
+   salida: cada pendiente con p < 0,05 tiene que llevar la marca, y ninguna con
+   p >= 0,05 puede llevarla. Eso no se puede esquivar con los datos. */
+(function () {
+  /* SOLO LA TABLA DE PENDIENTES, que se reconoce por el `+-` del error tipico.
+     Las lineas de CORRELACION tambien llevan una p pero usan otro formato
+     -«(significativa)» en minusculas, no la marca «<- SIGNIFICATIVA»-, y
+     mezclarlas hacia que esta guarda fallase sobre salida correcta. */
+  /* SOBRE LAS DOS SALIDAS, no solo la de telemetria. Con `--telemetria` ninguna
+     de las tres pendientes llega a p < 0,05, asi que quitar la marca no viola
+     el «si y solo si» y la mutacion se dormia. En la salida de angulo FIJO si
+     las hay -distancia p=0,0006 y filas cruzadas p=4,3e-8-, que es donde la
+     marca tiene que aparecer. Juntando las dos, la guarda ve ambos casos: los
+     que deben llevarla y los que no. */
+  /* CONTRA LA SALIDA REAL, no contra los fixtures. `txtFijo` y `txtTele` corren
+     sobre geojson SINTETICOS donde ninguna pendiente llega a p < 0,05, asi que
+     el «si y solo si» se cumplia trivialmente y la mutacion `sinSignificativa`
+     se quedaba DORMIDA: no habia ni una marca que quitar. Sobre el arbitro real
+     hay dos -distancia p=0,0006 y filas cruzadas p=4,3e-8-, o sea los dos casos
+     que la guarda necesita ver. */
+  let txtReal = '';
+  try { txtReal = execFileSync(process.execPath, [herramienta],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
+  catch (e) { txtReal = String(e.stdout || '') + String(e.stderr || ''); }
+  const lineas = (txtReal + '\n' + txtFijo + '\n' + txtTele).split('\n')
+    .filter(l => /\+-/.test(l) && /p=[-0-9.e]+/.test(l));
+  check('la salida real trae pendientes MARCADAS, que es lo que da valor a la guarda',
+        lineas.some(l => /SIGNIFICATIVA/.test(l)),
+        lineas.filter(l => /SIGNIFICATIVA/.test(l)).length + ' marcadas de ' + lineas.length);
+  let mal = [];
+  for (const l of lineas) {
+    const m = l.match(/p=([0-9.e+-]+)/); if (!m) continue;
+    const pv = parseFloat(m[1]), marcada = /SIGNIFICATIVA/.test(l);
+    if ((pv < 0.05) !== marcada) mal.push(l.trim());
+  }
+  check('la marca de SIGNIFICATIVA aparece si y solo si p < 0,05 (' + lineas.length + ' pendientes)',
+        lineas.length > 0 && mal.length === 0, mal.join(' | '));
+})();
 
 // ── 6d. EL RÓTULO ───────────────────────────────────────────────────────────
 console.log('\n· el rotulo, para que el numero no se cite suelto');

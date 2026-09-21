@@ -100,7 +100,13 @@ function bruto(segs, n, m, top) {
     const den = ex * fy - ey * fx; if (Math.abs(den) < 1e-12) continue;
     const wx = s[0] - n.x, wy = s[1] - n.y;
     const t = (wx * fy - wy * fx) / den, u = (wx * ey - wy * ex) / den;
-    if (t > 0.001 && t < 0.999 && u >= 0 && u <= 1) obs.push([t * D, top]);
+    /* MISMO FILTRO QUE `rfObstacles`, y cambia a la vez que el. Antes era
+       `t > 0,001 && t < 0,999` en los dos: el 0,1 % del enlace, o sea un radio
+       PROPORCIONAL a D y no una distancia fisica. Quien decide si un canto esta
+       demasiado cerca para el filo de cuchillo es `campoCercano`, EN LONGITUDES
+       DE ONDA, y vive en `rfEnlace` porque necesita la frecuencia. Aqui, que es
+       la referencia GEOMETRICA, entra todo lo que cruza el vano. */
+    if (t > 0 && t < 1 && u >= 0 && u <= 1) obs.push([t * D, top]);
   }
   obs.sort((p, q) => p[0] - q[0]);
   return obs;

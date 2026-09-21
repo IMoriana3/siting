@@ -38,7 +38,9 @@ const MUTACIONES = {
   siempreCalib:  ['zigbee', /if \(!calib\) return \{ lMod: 0, lRoce: 0, offset: 0, modo: TEORICO/,
                             'if (!calib) return { lMod: 0, lRoce: 0, offset: 0, modo: CALIBRADO'],
   // atravesar y rozar dejan de distinguirse: l_mod y l_roce pasan a ser lo mismo
-  rozarEsTapar:  ['zigbee', /else if \(e === "hueco"\) roza\+\+;/, 'else if (e === "hueco") atraviesa++;'],
+  // (ancla movida al cortar contra el plano inclinado: `cuenta` ya no resuelve
+  //  una banda con `corta`, resuelve el panel con `cortaPanel` y mira su estado)
+  rozarEsTapar:  ['zigbee', /else if \(c\.estado === "hueco"\) roza\+\+;/, 'else if (c.estado === "hueco") atraviesa++;'],
   // la vegetación no modelada deja de avisar
   vegCallada:    ['zigbee', /if \(veg === null\) motivos\.push\("vegetacion_no_modelada"\);/, ''],
   // el canal desconocido deja de avisar: la Ptx de la PRO pasaria por buena
@@ -123,10 +125,13 @@ const PROP = {
 // 0,725, que es la altura del ajuste de El Burgo), dos filas en medio de canto.
 console.log('\n· el balance de enlace, y lo que se niega a dar');
 const R = ctx.RadioPV;
+/* EL ENLACE DE PRUEBA, con el contrato nuevo: el cruce trae la geometria de la
+   fila -eje, cuerda, su alfa y el seno del angulo de cruce- y el motor corta
+   contra el plano inclinado. Antes traia una banda vertical ya resuelta. */
 const enlace = {
   D: 60, zA: 0.775, zB: 0.775,
-  cruces: [{ s: 20, banda: R.banda(2.0, 2.38, 90, 0) },
-           { s: 40, banda: R.banda(2.0, 2.38, 90, 0) }]
+  cruces: [{ s: 20, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 1 },
+           { s: 40, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 1 }]
 };
 const pPro = ZB.presupuesto(enlace, PRO, PROP, null);
 const pStd = ZB.presupuesto(enlace, STD, PROP, null);
@@ -166,20 +171,30 @@ console.log('     (medido: PRO ' + pPro.margenDb.toFixed(2) + ' dB de margen · 
 // pasando por debajo. Para que ATRAVIESE hay que subir las antenas dentro de la
 // banda. Los tres casos, a mano.
 console.log('\n· atravesar una mesa no es rozarla por debajo');
-const deCanto  = R.banda(2.0, 2.38, 90, 0);   // 0,810 .. 3,190
-const planas   = R.banda(2.0, 2.38, 0, 0);    // 2,000 .. 2,000
+/* MISMA INTENCION, CONTRATO NUEVO. `cuenta` ya no recibe una banda vertical ya
+   resuelta: recibe la geometria CRUDA de la fila y corta contra el plano
+   inclinado. El cruce es {s, zEje, cuerda, alpha, senPhi}, y `senPhi` hace
+   falta porque el canto vive a ±(c/2)·cos α del eje y hay que llevarlo de `w` a
+   distancia recorrida. Un cruce SIN `senPhi` no es «cero obstaculos»: es un
+   cruce que no se puede resolver, y por eso `cuenta` lo manda a `fuera`. */
+const cruceCanto = (s, al) => ({ s: s, zEje: 2.0, cuerda: 2.38, alpha: al, senPhi: 1 });
+const deCanto = R.banda(2.0, 2.38, 90, 0);   // 0,810 .. 3,190
 check('de canto, la banda va de 0,810 a 3,190', cerca(deCanto.zBot, 0.81) && cerca(deCanto.zTop, 3.19),
       deCanto.zBot.toFixed(3) + '..' + deCanto.zTop.toFixed(3));
-const cCanto = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, banda: deCanto }]);
+const cCanto = ZB.cuenta(60, 0.775, 0.775, [cruceCanto(30, 90)]);
 check('a 0,775 m el rayo ROZA la mesa de canto, no la atraviesa',
       cCanto.roza === 1 && cCanto.atraviesa === 0, JSON.stringify(cCanto));
-const cDentro = ZB.cuenta(60, 2.0, 2.0, [{ s: 30, banda: deCanto }]);
+const cDentro = ZB.cuenta(60, 2.0, 2.0, [cruceCanto(30, 90)]);
 check('a 2,0 m la ATRAVIESA', cDentro.atraviesa === 1 && cDentro.roza === 0, JSON.stringify(cDentro));
-const cPlana = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, banda: planas }]);
+const cPlana = ZB.cuenta(60, 0.775, 0.775, [cruceCanto(30, 0)]);
 check('con las palas planas, a 0,775 m también roza', cPlana.roza === 1, JSON.stringify(cPlana));
-const cEncima = ZB.cuenta(60, 5.0, 5.0, [{ s: 30, banda: deCanto }]);
+const cEncima = ZB.cuenta(60, 5.0, 5.0, [cruceCanto(30, 90)]);
 check('y a 5,0 m pasa por encima, que no es ninguna de las dos',
       cEncima.porEncima === 1 && cEncima.atraviesa === 0 && cEncima.roza === 0, JSON.stringify(cEncima));
+/* Y UN CRUCE QUE NO SE PUEDE RESOLVER SE CUENTA APARTE, no como «no tapa». */
+const cSinPhi = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 0 }]);
+check('un cruce sin angulo (enlace paralelo a la fila) va a `fuera`, no a «no tapa»',
+      cSinPhi.fuera === 1 && cSinPhi.roza === 0 && cSinPhi.atraviesa === 0, JSON.stringify(cSinPhi));
 
 // ── UN JSON DE CALIBRACIÓN A MEDIAS LANZA ───────────────────────────────────
 console.log('\n· la calibración, entera o ninguna');
