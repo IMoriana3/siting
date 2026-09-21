@@ -108,11 +108,64 @@
     var difrac = RPV.difraccionPanelesDb(D, zA, zB, cruces, f);
 
     /* EL RELIEVE VA APARTE de las bandas, y suma. Un cerro entre dos nodos no
-       es una mesa: es terreno, es continuo y no tiene hueco por debajo. */
-    var relieve = 0, relieveDom = RPV.relieveDominante(zA, zB, D, enlace.perfil);
-    if (relieveDom && relieveDom.invade > -1e9) {
-      var v = RPV.nu(relieveDom.invade, relieveDom.s, D - relieveDom.s, f);
-      relieve = RPV.perdidaFiloDb(v);
+       es una mesa: es terreno, es continuo y no tiene hueco por debajo.
+
+       SIN PERFIL NO SE DICE 0, SE DICE QUE NO SE HA MIRADO. Hasta ahora, si no
+       llegaba perfil, `relieveDominante` devolvía `null`, `relieve` se quedaba
+       en su 0 inicial y la salida publicaba `relieveDb: 0` — que se lee igual
+       que «hay terreno y esta llano». No es lo mismo:
+
+         perfil AUSENTE   nadie ha mirado el terreno. Hoy es el caso de TODOS
+                          los enlaces del mapa, porque `index.html` pasa
+                          `perfil: null` a pelo y nada lo rellena nunca.
+         perfil PRESENTE  se ha mirado y el rayo pasa por encima: 0 de verdad.
+
+       Es la misma disciplina que la vegetación tres líneas más abajo, que sí la
+       tenía. Un cero callado es la forma más barata de mentir en un balance.
+
+       ─────────────────────────────────────────────────────────────────────
+       AVISO PARA QUIEN VENGA A CONECTAR EL DEM (A3): NO LE METAS AQUÍ LA COTA
+       ABSOLUTA DEL TERRENO. Se cuenta dos veces.
+
+       `dosRayosDb` YA supone un plano reflectante debajo, en la cota 0, y
+       modela su efecto entero -el rayo reflejado y sus lóbulos-. Si además se
+       le pasa a `relieveDominante` el suelo como una fila de puntos, cada uno
+       actúa de filo de cuchillo y se cobra OTRA VEZ. Medido, con la antena a
+       0,475 m (eje 1,20) y un perfil PLANO a cota 0:
+
+           D(m)   r1 Fresnel   despeje   relieveDb   dosRayosDb
+             20         0,78     0,475        0,00        66,63
+             50         1,24     0,475        1,64        81,18
+            100         1,75     0,475        2,84        92,84
+            200         2,47     0,475        3,74       104,70
+            400         3,50     0,475        4,40       116,66
+
+       De 1,6 a 4,4 dB de más, y sin que el terreno suba un milímetro. La causa
+       es que a esta altura de antena el despeje (0,475 m) es MENOR que el radio
+       de la primera zona de Fresnel en todos los vanos largos, así que el suelo
+       plano «obstruye» por sí solo. Y con el eje a 1,20 m eso es la norma, no
+       un caso raro.
+
+       LO QUE `relieveDominante` ESPERA es terreno que SOBRESALE: un cerro, un
+       talud, el borde de una vaguada. Un filo de cuchillo es un obstáculo
+       LOCAL; un plano infinito no es un filo, es el suelo, y su efecto es el de
+       dos rayos. La regla que falta decidir -y es decisión de modelo, no de
+       código, por eso NO se implementa aquí de tapadillo- es con qué se compara
+       cada punto para saber si sobresale. El `min` de rf-fv está descartado por
+       encargo. Está en el banco: `test_radio_malla.js`, bloque del relieve. */
+    var relieve = null, relieveDom = null;   // `null` = no evaluado, como la vegetacion
+    if (!enlace.perfil || !enlace.perfil.length) {
+      motivos.push("relieve_no_evaluado_sin_perfil");
+    } else {
+      relieveDom = RPV.relieveDominante(zA, zB, D, enlace.perfil);
+      if (relieveDom === null) {
+        /* Hay perfil, pero ni un punto cae DENTRO del vano (todos en s<=0 o
+           s>=D). Tampoco se ha mirado nada: el perfil no cubre este enlace. */
+        motivos.push("relieve_sin_puntos_dentro_del_vano");
+      } else {
+        var v = RPV.nu(relieveDom.invade, relieveDom.s, D - relieveDom.s, f);
+        relieve = RPV.perdidaFiloDb(v);    // puede salir 0, y entonces el 0 SÍ significa llano
+      }
     }
 
     /* VEGETACIÓN: `null` si no hay modelo. NO se suma como 0 callando. */
@@ -120,8 +173,8 @@
                                (propagacion.vegetacion && propagacion.vegetacion.modelo) || null);
     if (veg === null) motivos.push("vegetacion_no_modelada");
 
-    var perdida = dosRayos + difrac + relieve + c.lMod * n.atraviesa + c.lRoce * n.roza + c.offset
-                + (veg || 0);
+    var perdida = dosRayos + difrac + (relieve || 0) + c.lMod * n.atraviesa + c.lRoce * n.roza
+                + c.offset + (veg || 0);
 
     var salida = {
       modo: c.modo, variante: variante.nombre || null,

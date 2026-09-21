@@ -191,9 +191,26 @@ console.log('\n· lo que el panel puede ensenar');
   check('el enlace de prueba cruza filas', e.cruces.length > 3, e.cruces.length);
   check('trae la distancia, las alturas y la variante',
         typeof e.D === 'number' && typeof e.zA === 'number' && !!e.variante, e.variante);
+  /* EL RELIEVE VA COMO LA VEGETACION, y antes no. Este check exigia
+     `typeof relieveDb === 'number'` mientras a la vegetacion solo le pedia
+     estar presente, y esa asimetria ERA el defecto: el relieve siempre traia
+     un numero porque sin perfil devolvia un 0 callado. Ahora los dos pueden
+     ser `null` -no evaluado- y los dos tienen que DECIRLO con un motivo.
+     Se aprieta, no se afloja: antes no se comprobaba ningun motivo. */
   check('trae el desglose: dos rayos, difraccion, relieve y vegetacion por separado',
         typeof e.dosRayosDb === 'number' && typeof e.difraccionDb === 'number' &&
-        typeof e.relieveDb === 'number' && 'vegetacionDb' in e);
+        'relieveDb' in e && 'vegetacionDb' in e);
+  check('y lo que NO se ha evaluado va a null CON su motivo, nunca a cero callado',
+        (e.relieveDb !== null || e.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0) &&
+        (e.vegetacionDb !== null || e.motivos.indexOf('vegetacion_no_modelada') >= 0),
+        'relieve=' + e.relieveDb + ' veg=' + e.vegetacionDb + ' motivos=' + e.motivos.join(','));
+  /* Y que el panel de HOY cae en ese caso: `rfEnlace` no pasa perfil ninguno,
+     asi que el relieve de todo el mapa esta sin evaluar. Si algun dia se
+     conecta el DEM esto se pondra rojo, y entonces habra que venir a mirarlo
+     -que es justo lo que se quiere: que el cambio no pase desapercibido-. */
+  check('y HOY el relieve del mapa esta sin evaluar, porque nadie pasa perfil',
+        e.relieveDb === null && e.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0,
+        e.relieveDb + ' / ' + e.motivos.join(','));
   /* MISMA INTENCION: el cruce tiene que traer lo bastante para que el panel
      dibuje SU geometria sin recalcular nada. Lo que cambia es QUE: ya no una
      banda vertical ya resuelta, sino la geometria cruda de la fila -eje, cuerda,

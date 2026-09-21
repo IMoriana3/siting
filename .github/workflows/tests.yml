@@ -97,7 +97,8 @@ jobs:
           # mutación que tocase los dos ficheros a la vez dejaría el banco
           # verde, que es exactamente la avería que esto vigila.
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
-                                              canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+                                              canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
+                                              relieveCallado relieveFueraCero
 
           rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
                                             detalleOtroTope sinOrdenT

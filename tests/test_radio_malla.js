@@ -34,6 +34,12 @@ const MUTACIONES = {
   // la variante sin sensibilidad se inventa un margen: el fallo que este banco
   // existe para impedir
   sensInventada: ['zigbee', /if \(variante\.rx_sens_dbm == null\) \{/, 'if (false) {'],
+  // el relieve sin perfil vuelve a decir 0 en vez de «no lo he mirado»
+  relieveCallado: ['zigbee', /motivos\.push\("relieve_no_evaluado_sin_perfil"\);/,
+                             'relieve = 0;'],
+  // el perfil que no pisa el vano se confunde con un vano llano
+  relieveFueraCero: ['zigbee', /motivos\.push\("relieve_sin_puntos_dentro_del_vano"\);/,
+                               'relieve = 0;'],
   // el modo calibrado se da por hecho aunque no haya campaña
   siempreCalib:  ['zigbee', /if \(!calib\) return \{ lMod: 0, lRoce: 0, offset: 0, modo: TEORICO/,
                             'if (!calib) return { lMod: 0, lRoce: 0, offset: 0, modo: CALIBRADO'],
@@ -314,6 +320,48 @@ const anPoda = ML.vecinosViables(enRecta(10), () => ({ viable: true, margenDb: 1
 check('con alcance 15 sobre 45 pares, se podan 36', anPoda.podados === 36,
       anPoda.podados + ' podados / ' + anPoda.evaluados + ' evaluados');
 check('y los evaluados son los 9 pares contiguos', anPoda.evaluados === 9, anPoda.evaluados);
+
+/* ── EL RELIEVE: TRES ESTADOS, NO DOS ─────────────────────────────────────
+   Antes eran dos y uno de ellos mentía. Sin perfil, `relieveDominante`
+   devolvía `null`, la variable se quedaba en su 0 inicial y la salida
+   publicaba `relieveDb: 0` — que se lee exactamente igual que «hay terreno y
+   está llano». Y no es un caso de borde: HOY le pasa a TODOS los enlaces del
+   mapa, porque `index.html` pasa `perfil: null` a pelo y nada lo rellena. */
+const baseRel = { D: 100, zA: 0.475, zB: 0.475, cruces: [] };
+const rSin   = ZB.presupuesto(Object.assign({ perfil: null }, baseRel), PRO, PROP, null);
+const rFuera = ZB.presupuesto(Object.assign({ perfil: [[-10, 3], [200, 3]] }, baseRel), PRO, PROP, null);
+const rLlano = ZB.presupuesto(Object.assign({ perfil: [[50, 0.0]] }, baseRel), PRO, PROP, null);
+const rCerro = ZB.presupuesto(Object.assign({ perfil: [[50, 3.0]] }, baseRel), PRO, PROP, null);
+
+check('sin perfil el relieve es null, NO cero, y lo dice',
+      rSin.relieveDb === null && rSin.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0,
+      rSin.relieveDb + ' ' + rSin.motivos.join(','));
+check('con perfil que no pisa el vano, tambien null y con SU motivo',
+      rFuera.relieveDb === null && rFuera.motivos.indexOf('relieve_sin_puntos_dentro_del_vano') >= 0,
+      rFuera.relieveDb + ' ' + rFuera.motivos.join(','));
+check('con perfil dentro del vano ya es un numero, no null',
+      typeof rLlano.relieveDb === 'number' && typeof rCerro.relieveDb === 'number',
+      rLlano.relieveDb + ' / ' + rCerro.relieveDb);
+check('y un cerro de 3 m cobra mas que el suelo llano',
+      rCerro.relieveDb > rLlano.relieveDb + 10,
+      rCerro.relieveDb.toFixed(2) + ' vs ' + rLlano.relieveDb.toFixed(2));
+check('el relieve no evaluado NO se suma como 0 escondido: la perdida cuadra',
+      Math.abs(rSin.perdidaTotalDb - rSin.dosRayosDb - rSin.difraccionDb) < 1e-9,
+      rSin.perdidaTotalDb + ' vs ' + (rSin.dosRayosDb + rSin.difraccionDb));
+
+/* EL DOBLE CONTEO, FIJADO CON SU NUMERO. Esto NO es un comportamiento que se
+   quiera: es la trampa que espera a quien conecte el DEM (A3). `dosRayosDb` ya
+   supone un plano reflectante en la cota 0 y modela su efecto entero; si ademas
+   se le pasa el suelo como puntos de perfil, cada uno hace de filo y se cobra
+   otra vez. Se fija aqui para que el numero este en el acta y nadie meta una
+   cota absoluta sin verlo. Con la antena a 0,475 m -o sea, con el eje a 1,20-
+   el despeje es MENOR que el radio de Fresnel en todo vano largo, asi que el
+   suelo plano obstruye por si solo. */
+const r1 = Math.sqrt(R.longitudOnda(PRO.f_hz) * 50 * 50 / 100);
+check('a 100 m el despeje (0,475 m) es menor que el radio de Fresnel',
+      0.475 < r1, '0,475 < ' + r1.toFixed(2));
+check('y por eso un perfil LLANO a cota 0 cobra ~2,8 dB que dos rayos YA modela',
+      Math.abs(rLlano.relieveDb - 2.84) < 0.05, rLlano.relieveDb.toFixed(2));
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'
                        : 'TODO OK — ' + ok + ' comprobaciones'));
