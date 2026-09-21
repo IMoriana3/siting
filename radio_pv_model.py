@@ -17,6 +17,10 @@ toca una fórmula aquí y no allí —o al revés—, el banco lo dice. Es el mi
 mecanismo con el que SolarGPTfull tiene pinchado el modelo antiguo contra
 `factiun_core.rf` a 0,000000 dB.
 
+UNA SOLA FUNCIÓN DE DESPEJE. El despeje de una fila lo da `corta_panel` y nadie
+más. La banda vertical —`banda`/`corta`— ya no vive aquí: está en
+`tests/referencia_banda_vertical.js`, con otro nombre y sólo para carearla.
+
 QUÉ NO HAY AQUÍ. Ningún sesgo global, ningún número de potencia, sensibilidad
 ni regulación: eso vive en `radio_params.json`, con su procedencia. Esto son
 solo geometría y ecuaciones de pérdida.
@@ -53,50 +57,11 @@ def bajo_tierra(eje_m, cuerda_m, alpha_deg, suelo_m=None):
     }
 
 
-def banda(eje, cuerda_m, alpha_deg, suelo_m=None):
-    """Banda vertical que ocupa un seguidor inclinado `alpha_deg`.
-
-        zTop = eje + (c/2)·|sen α|
-        zBot = eje − (c/2)·|sen α|
-
-    y por debajo de zBot hay HUECO hasta el suelo. Ése es el cambio de fondo
-    frente al modelo antiguo, que subía un filo de cuchillo desde el suelo
-    hasta el borde superior y por tanto daba por tapado lo que pasa por debajo
-    del panel. Espejo de `banda()` en radio_pv_model.js."""
-    semi = (cuerda_m / 2) * abs(math.sin(alpha_deg * GRADO))
-    suelo = 0.0 if suelo_m is None else suelo_m
-    return {
-        "eje": eje,
-        "semi": semi,
-        "zBot": eje - semi,
-        "zTop": eje + semi,
-        "suelo": suelo,
-        "hueco": max(0.0, eje - semi - suelo),
-    }
-
-
 def altura_rayo(zA, zB, D, s):
     """Espejo de `alturaRayo()`."""
     if D <= 0:
         return zA
     return zA + (zB - zA) * (s / D)
-
-
-def corta(b, z_rayo):
-    """Espejo de `corta()`: "tapado" / "hueco" / "libre", con el despeje CON
-    SIGNO respecto al borde MÁS PRÓXIMO.
-
-    En "hueco" el borde que cuenta es zBot, no el suelo: un rayo que pasa
-    rozando por debajo del panel difracta en el CANTO INFERIOR del módulo."""
-    if z_rayo > b["zTop"]:
-        return {"estado": "libre", "despeje": z_rayo - b["zTop"], "borde": b["zTop"]}
-    if z_rayo < b["zBot"]:
-        return {"estado": "hueco", "despeje": b["zBot"] - z_rayo, "borde": b["zBot"],
-                "bajoSuelo": z_rayo < b["suelo"]}
-    d_top = b["zTop"] - z_rayo
-    d_bot = z_rayo - b["zBot"]
-    borde = b["zTop"] if d_top <= d_bot else b["zBot"]
-    return {"estado": "tapado", "despeje": -min(d_top, d_bot), "borde": borde}
 
 
 def altura_eje(montaje, defecto_m):
@@ -417,67 +382,6 @@ def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
 
 def difraccion_paneles_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
     return difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
-
-
-def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
-    """Deygout sobre BANDAS, con el DETALLE. Espejo de `difraccionBandasDetalle()`.
-
-    HAY UNA SOLA IMPLEMENTACIÓN y `difraccion_bandas_db` es una envoltura que se
-    queda con el total: el panel de perfil del visor necesita saber cuál fue el
-    obstáculo dominante y cómo se partió el enlace, y calcularlo por un segundo
-    camino sería tener dos Deygout que se separan solos."""
-    p = prof or 0
-    tope = 3 if max_prof is None else max_prof
-    vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
-             "derecha": None, "profundidad": p, "motivo": None}
-    if not cruces:
-        vacio["motivo"] = "sin cruces"; return vacio
-    if p >= tope:
-        vacio["motivo"] = "tope de recursion (%d)" % tope; return vacio
-    if D <= 0:
-        vacio["motivo"] = "tramo de longitud nula"; return vacio
-    mejor_v, mejor, mejor_s = -1e9, -1, 0.0
-    for i, cr in enumerate(cruces):
-        s = cr["s"]
-        if s <= 0 or s >= D:
-            continue
-        z = altura_rayo(zA, zB, D, s)
-        c = corta(cr["banda"], z)
-        v = nu(-c["despeje"], s, D - s, f_hz)
-        if v > mejor_v:
-            mejor_v, mejor, mejor_s = v, i, s
-    if mejor < 0:
-        vacio["motivo"] = "ningun cruce cae dentro del tramo"; return vacio
-    if mejor_v <= -0.78:
-        vacio["motivo"] = "el dominante despeja (nu = %.3f <= -0,78)" % mejor_v
-        return vacio
-    z_dom = altura_rayo(zA, zB, D, mejor_s)
-    c_dom = corta(cruces[mejor]["banda"], z_dom)
-    borde_dom = c_dom["borde"]
-    perdida_dom = perdida_filo_db(mejor_v)
-    izq, der = [], []
-    for k, cr in enumerate(cruces):
-        if k == mejor:
-            continue
-        if cr["s"] < mejor_s:
-            izq.append(cr)
-        else:
-            der.append({"s": cr["s"] - mejor_s, "banda": cr["banda"]})
-    d_izq = difraccion_bandas_detalle(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
-    d_der = difraccion_bandas_detalle(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
-    return {
-        "totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
-        "dominante": {"indice": mejor, "s": mejor_s, "zRayo": z_dom, "nu": mejor_v,
-                      "perdidaDb": perdida_dom, "estado": c_dom["estado"],
-                      "despeje": c_dom["despeje"], "borde": borde_dom,
-                      "banda": cruces[mejor]["banda"]},
-        "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
-    }
-
-
-def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
-    """Espejo de `difraccionBandasDb()`: el total del detalle."""
-    return difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
 
 
 def ganancia_patron_db(elev_rad, patron=None):

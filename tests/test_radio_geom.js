@@ -28,69 +28,104 @@ const cerca = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-9 : tol);
 // puesta, esa comprobación no comprobaba nada.
 const MUTACIONES = {
   // el error del modelo antiguo, reintroducido a propósito: filo desde el suelo
-  filoDesdeSuelo: [/zBot: eje - semi,/, 'zBot: sueloM == null ? 0 : sueloM,'],
+  filoDesdeSuelo: ['tests/referencia_banda_vertical.js', /zBot: eje - semi,/, 'zBot: sueloM == null ? 0 : sueloM,'],
   // media cuerda en vez de cuerda entera: la banda sale con la mitad de alto
-  semiCuerda:     [/var semi = \(cuerdaM \/ 2\)/, 'var semi = (cuerdaM / 4)'],
+  semiCuerda:     ['tests/referencia_banda_vertical.js', /var semi = \(cuerdaM \/ 2\)/, 'var semi = (cuerdaM / 4)'],
   // coseno en vez de seno: el seguidor plano taparía lo máximo y el vertical nada
-  /* EL ANCLA LLEVA `var semi =` A PROPOSITO. Sin el contexto casaba con la
-     PRIMERA aparicion de `Math.abs(Math.sin(alphaDeg * GRADO))`, y al insertar
-     `bajoTierra()` ENCIMA de `banda()` -con una expresion casi identica- la
-     mutacion paso a mutar la funcion nueva, que este banco no prueba: se quedo
-     DORMIDA en verde. Meter codigo parecido por encima de otro le roba sus
-     anclas, y eso no avisa solo. */
-  senoPorCoseno:  [/var semi = \(cuerdaM \/ 2\) \* Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/,
+  /* EL ANCLA LLEVA `var semi =` A PROPOSITO. Cuando `banda()` vivia en el
+     motor, sin ese contexto casaba con la PRIMERA aparicion de
+     `Math.abs(Math.sin(alphaDeg * GRADO))`, y al insertar `bajoTierra()`
+     ENCIMA -con una expresion casi identica- la mutacion paso a mutar la
+     funcion nueva, que este banco no prueba: se quedo DORMIDA en verde.
+     Ahora la banda esta sola en la referencia y el riesgo ya no existe ahi,
+     pero el contexto se queda: meter codigo parecido por encima de otro le
+     roba sus anclas, y eso no avisa solo. */
+  senoPorCoseno:  ['tests/referencia_banda_vertical.js', /var semi = \(cuerdaM \/ 2\) \* Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/,
                    'var semi = (cuerdaM / 2) * Math.abs(Math.cos(alphaDeg * GRADO))'],
   // el hueco deja de existir: cualquier rayo por debajo se da por tapado
-  sinHueco:       [/if \(zRayo < b\.zBot\) \{/, 'if (false) {'],
+  sinHueco:       ['tests/referencia_banda_vertical.js', /if \(zRayo < b\.zBot\) \{/, 'if (false) {'],
   // el régimen siempre dice «cruza»: se pierde el caso del pasillo
-  siemprCruza:    [/ang <= tol \? "pasillo" : "cruza"/, '"cruza"'],
+  siemprCruza:    ['radio_pv_model.js', /ang <= tol \? "pasillo" : "cruza"/, '"cruza"'],
 
   // ── y de la parte de TECNOLOGÍA ──
   // la frecuencia recupera un valor por defecto: el fallo que esto viene a
   // impedir es predecir sub-GHz con los números de 2,4 y que nadie se entere
-  sinExigeF:      [/if \(!\(fHz > 0\)\) throw new Error\([^;]*\);/, 'if (!(fHz > 0)) return 2.45e9;'],
+  sinExigeF:      ['radio_pv_model.js', /if \(!\(fHz > 0\)\) throw new Error\([^;]*\);/, 'if (!(fHz > 0)) return 2.45e9;'],
   // el radio de Fresnel deja de depender de λ: la misma geometría despejaría
   // igual en 868 MHz que en 2,45 GHz, que es justo lo que NO se puede trasladar
-  fresnelSinLambda: [/\(nn \* longitudOnda\(fHz\) \* d1 \* d2\)/, '(nn * d1 * d2)'],
+  fresnelSinLambda: ['radio_pv_model.js', /\(nn \* longitudOnda\(fHz\) \* d1 \* d2\)/, '(nn * d1 * d2)'],
   // se cae el corte de ν = −0,78: la difracción empieza a dar pérdidas
   // NEGATIVAS (ganancia) donde debería dar 0
-  filoSinCorte:   [/if \(v <= -0\.78\) return 0\.0;/, 'if (false) return 0.0;'],
+  filoSinCorte:   ['radio_pv_model.js', /if \(v <= -0\.78\) return 0\.0;/, 'if (false) return 0.0;'],
   // punto de ruptura con 2 en vez de 4
-  rupturaMitad:   [/return \(4 \* ht \* hr\) \/ longitudOnda\(fHz\);/, 'return (2 * ht * hr) / longitudOnda(fHz);'],
+  rupturaMitad:   ['radio_pv_model.js', /return \(4 \* ht \* hr\) \/ longitudOnda\(fHz\);/, 'return (2 * ht * hr) / longitudOnda(fHz);'],
   // Deygout relanzado desde el borde SUPERIOR: el error del modelo antiguo,
   // metido esta vez en la reconstrucción y no en la banda
   // El ancla se movió al partir `difraccionBandasDetalle` en dos líneas (`cDom`
   // se reusa para `estado` y `despeje` en el detalle). La CI lo cazó con rc=2
   // — «no casó con el código»—, que es justo para lo que se exige rc=1 exacto:
   // con «distinto de cero» esta mutación habría contado como cazada sin serlo.
-  bordeDeArriba:  [/var bordeDom = cDom\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
+  bordeDeArriba:  ['tests/referencia_banda_vertical.js', /var bordeDom = cDom\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
 
   // ── dos rayos ──
   // se cae el rayo reflejado: queda espacio libre y se pierden los lóbulos,
   // que es justo lo que este modelo añade sobre el FSPL
-  sinReflejado:   [/var campo = cAdd\(cx\(1 \/ dLos, 0\), refl\);/, 'var campo = cx(1 / dLos, 0);'],
+  sinReflejado:   ['radio_pv_model.js', /var campo = cAdd\(cx\(1 \/ dLos, 0\), refl\);/, 'var campo = cx(1 / dLos, 0);'],
   // el suelo pasa a ser un conductor perfecto sin pérdidas: eps deja de tener
   // parte imaginaria y el coeficiente de reflexión se vuelve real
-  sueloSinPerdida:[/var eps = cx\(epsR, -60\.0 \* lam \* sigma\);/, 'var eps = cx(epsR, 0);'],
+  sueloSinPerdida:['radio_pv_model.js', /var eps = cx\(epsR, -60\.0 \* lam \* sigma\);/, 'var eps = cx(epsR, 0);'],
   // el ángulo de incidencia se mide con la DIFERENCIA de alturas en vez de la
   // suma: deja de ser el rayo reflejado y pasa a ser el directo
-  anguloDirecto:  [/var theta = Math\.atan2\(ht \+ hr, d\);/, 'var theta = Math.atan2(ht - hr, d);'],
+  anguloDirecto:  ['radio_pv_model.js', /var theta = Math\.atan2\(ht \+ hr, d\);/, 'var theta = Math.atan2(ht - hr, d);'],
 };
+/* CADA MUTACION DICE A QUE FICHERO VA. Al mudarse la banda vertical a la
+   referencia, cinco mutaciones se quedaron apuntando a un codigo que ya no
+   estaba en el motor: salian rc=2 -«no caso»- en vez de rojas, o sea cinco
+   guardias apagados. Por eso se exige rc=1 EXACTO en la CI y no «distinto de
+   cero»: con eso habrian contado como cazadas sin serlo. */
 const MUTA = process.env.MUTA;
-let fuente = fs.readFileSync(path.join(RAIZ, 'radio_pv_model.js'), 'utf8');
-if (MUTA) {
+let casada = false;
+function fuenteDe(rel) {
+  let t = fs.readFileSync(path.join(RAIZ, rel), 'utf8');
+  if (!MUTA) return t;
   const m = MUTACIONES[MUTA];
   if (!m) { console.error('mutacion desconocida. Hay: ' + Object.keys(MUTACIONES).join(', ')); process.exit(2); }
-  const antes = fuente;
-  fuente = fuente.replace(m[0], m[1]);
-  if (fuente === antes) { console.error('la mutacion «' + MUTA + '» no casó con el código'); process.exit(2); }
-  console.log('### MUTACION «' + MUTA + '» PUESTA: este banco TIENE que salir rojo\n');
+  if (m[0] !== rel) return t;
+  const antes = t; t = t.replace(m[1], m[2]);
+  if (t === antes) { console.error('la mutacion «' + MUTA + '» no casó con ' + rel); process.exit(2); }
+  casada = true;
+  console.log('### MUTACION «' + MUTA + '» PUESTA en ' + rel + ': este banco TIENE que salir rojo\n');
+  return t;
 }
+const fuente = fuenteDe('radio_pv_model.js');
 const ctx = { module: { exports: {} }, globalThis: {} };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
 vm.runInContext(fuente, ctx);
 const R = ctx.module.exports;
+/* LA BANDA VERTICAL YA NO ESTA EN EL MOTOR: vive en la referencia, con otro
+   nombre, porque el motor no puede tener dos funciones que den el despeje de
+   una fila. Este banco la prueba COMO REFERENCIA -es lo que se carea contra
+   `cortaPanel`-, no como camino de calculo.
+
+   SE CARGA DESDE EL FUENTE, no con `require`, por dos razones. Una: `require`
+   lee del disco y las mutaciones viven en memoria, asi que las cinco que
+   apuntan a la referencia no llegarian nunca y se quedarian dormidas. Y dos:
+   el `require` interno de la referencia se sustituye por ESTE motor -el del
+   `vm`, mutaciones incluidas-, de modo que banda y plano comparten `nu`,
+   `perdidaFiloDb` y `alturaRayo` en vez de careares contra dos copias. */
+const ctxRef = { module: { exports: {} }, require: () => R, Math: Math, console: console };
+ctxRef.globalThis = ctxRef;
+vm.createContext(ctxRef);
+vm.runInContext(fuenteDe('tests/referencia_banda_vertical.js'), ctxRef);
+const REF = ctxRef.module.exports;
+if (MUTA && !casada) {
+  console.error('la mutacion «' + MUTA + '» apunta a un fichero que este banco no carga: ' + MUTACIONES[MUTA][0]);
+  process.exit(2);
+}
+R.banda = REF.banda; R.corta = REF.corta;
+R.difraccionBandasDb = REF.difraccionBandasRefDb;
+R.difraccionBandasDetalle = REF.difraccionBandasRef;
 check('el motor se carga y expone la geometría',
       R && typeof R.banda === 'function' && typeof R.corta === 'function');
 if (!R || !R.banda) { console.log('\nFALLOS: ' + ko); process.exit(1); }

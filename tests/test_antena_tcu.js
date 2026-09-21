@@ -85,6 +85,10 @@ const R = (function () {
   return mod.exports;
 })();
 const P = JSON.parse(fs.readFileSync(path.join(RAIZ, 'radio_params.json'), 'utf8')).geometria;
+/* la banda vertical es REFERENCIA, no motor: se pide a su fichero */
+const REF = require('./referencia_banda_vertical.js');
+R.banda = REF.banda; R.corta = REF.corta;
+R.difraccionBandasDb = REF.difraccionBandasRefDb;
 
 let ok = 0, ko = 0;
 function check(msg, cond, extra) {

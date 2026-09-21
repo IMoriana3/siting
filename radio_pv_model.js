@@ -20,6 +20,13 @@
  *               NO se traslada: ni la potencia, ni la sensibilidad, ni una
  *               calibración hecha a 2,4 GHz.
  *
+ * UNA SOLA FUNCION DE DESPEJE. El despeje de una fila lo da `cortaPanel` y
+ * NADIE MAS. La banda vertical -`banda`/`corta`, que colapsaba el panel sobre
+ * el eje- ya no vive aqui: esta en `tests/referencia_banda_vertical.js`, con
+ * otro nombre y para carearla. Dos funciones que dan el despeje de una fila es
+ * como una se queda vieja sin que nadie lo note, y hay una puerta en la CI que
+ * lo impide.
+ *
  * SIN SESGO GLOBAL. El modelo antiguo lleva `EL_BURGO_BIAS_DB` para recentrar
  * la predicción sobre lo medido. Aquí no hay. Cuando haya campaña, sus
  * parámetros entran por `radio_params.json` con su versión y su origen, no
@@ -84,21 +91,6 @@
     };
   }
 
-  function banda(eje, cuerdaM, alphaDeg, sueloM) {
-    var semi = (cuerdaM / 2) * Math.abs(Math.sin(alphaDeg * GRADO));
-    var suelo = sueloM == null ? 0 : sueloM;
-    return {
-      eje: eje,
-      semi: semi,
-      zBot: eje - semi,
-      zTop: eje + semi,
-      suelo: suelo,
-      /* hueco libre bajo el panel. Puede ser 0 si el seguidor está tan bajo o
-         tan inclinado que la banda llega al suelo. Nunca negativo. */
-      hueco: Math.max(0, eje - semi - suelo)
-    };
-  }
-
   /* DÓNDE ESTÁ EL RAYO al llegar a esa banda. Recta entre las dos antenas, en
      el plano vertical que las une. `s` es la distancia recorrida desde A. */
   function alturaRayo(zA, zB, D, s) {
@@ -120,21 +112,6 @@
    * OJO al caso "hueco": el borde que cuenta es `zBot`, no el suelo. Un rayo
    * que pasa rozando por debajo del panel está difractando en el BORDE INFERIOR
    * del módulo, no en el terreno. */
-  function corta(b, zRayo) {
-    if (zRayo > b.zTop) return { estado: "libre", despeje: zRayo - b.zTop, borde: b.zTop };
-    if (zRayo < b.zBot) {
-      /* por debajo del panel, pero ¿queda dentro del hueco o ya está bajo
-         tierra? Lo segundo es el terreno tapando, y eso no lo decide la banda:
-         lo decide el relieve, que va aparte. */
-      return { estado: "hueco", despeje: b.zBot - zRayo, borde: b.zBot, bajoSuelo: zRayo < b.suelo };
-    }
-    /* dentro de la banda: el despeje es negativo y se mide al borde MÁS
-       PRÓXIMO, porque por ahí es por donde se escapa la energía. */
-    var dTop = b.zTop - zRayo, dBot = zRayo - b.zBot;
-    var borde = dTop <= dBot ? b.zTop : b.zBot;
-    return { estado: "tapado", despeje: -Math.min(dTop, dBot), borde: borde };
-  }
-
   /* ── LA ALTURA DEL EJE DEL TUBO, POR PLANTA ──────────────────────────────
    * NUNCA una constante global escondida. Se pide con el `montaje` de la planta
    * delante, y si la planta no la declara se cae al defecto CON MOTIVO, para
@@ -586,54 +563,6 @@
    * entendible el número. Calcularlo por un segundo camino sería tener dos
    * Deygout que se separan solos — el error que este repo ya se ha comido con
    * la física y con el recuento de filas. */
-  function difraccionBandasDetalle(D, zA, zB, cruces, fHz, prof, maxProf) {
-    var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
-    var vacio = { totalDb: 0.0, dominante: null, izquierda: null, derecha: null,
-                  profundidad: p, motivo: null };
-    if (!cruces || !cruces.length) { vacio.motivo = "sin cruces"; return vacio; }
-    if (p >= tope) { vacio.motivo = "tope de recursion (" + tope + ")"; return vacio; }
-    if (D <= 0) { vacio.motivo = "tramo de longitud nula"; return vacio; }
-    var mejorV = -1e9, mejor = -1, mejorS = 0;
-    for (var i = 0; i < cruces.length; i++) {
-      var s = cruces[i].s;
-      if (s <= 0 || s >= D) continue;
-      var z = alturaRayo(zA, zB, D, s);
-      var c = corta(cruces[i].banda, z);
-      var v = nu(-c.despeje, s, D - s, fHz);      // despeje positivo ⇒ ν negativo
-      if (v > mejorV) { mejorV = v; mejor = i; mejorS = s; }
-    }
-    if (mejor < 0) { vacio.motivo = "ningun cruce cae dentro del tramo"; return vacio; }
-    if (mejorV <= -0.78) {
-      vacio.motivo = "el dominante despeja (nu = " + mejorV.toFixed(3) + " <= -0,78)";
-      return vacio;
-    }
-    var zDom = alturaRayo(zA, zB, D, mejorS);
-    var cDom = corta(cruces[mejor].banda, zDom);
-    var bordeDom = cDom.borde;
-    var perdidaDom = perdidaFiloDb(mejorV);
-    var izq = [], der = [];
-    for (var k = 0; k < cruces.length; k++) {
-      if (k === mejor) continue;
-      if (cruces[k].s < mejorS) izq.push(cruces[k]);
-      else der.push({ s: cruces[k].s - mejorS, banda: cruces[k].banda });
-    }
-    /* los sub-tramos van del extremo al BORDE del dominante, que es donde se
-       reconstruye el rayo. Igual que el Deygout del modelo antiguo. */
-    var dIzq = difraccionBandasDetalle(mejorS, zA, bordeDom, izq, fHz, p + 1, tope);
-    var dDer = difraccionBandasDetalle(D - mejorS, bordeDom, zB, der, fHz, p + 1, tope);
-    return {
-      totalDb: perdidaDom + dIzq.totalDb + dDer.totalDb,
-      dominante: { indice: mejor, s: mejorS, zRayo: zDom, nu: mejorV,
-                   perdidaDb: perdidaDom, estado: cDom.estado,
-                   despeje: cDom.despeje, borde: bordeDom, banda: cruces[mejor].banda },
-      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null
-    };
-  }
-
-  function difraccionBandasDb(D, zA, zB, cruces, fHz, prof, maxProf) {
-    return difraccionBandasDetalle(D, zA, zB, cruces, fHz, prof, maxProf).totalDb;
-  }
-
   /* VEGETACIÓN. Declarada y NO implementada, a propósito: el encargo pide un
    * modelo de follaje estándar CITADO y dependiente de la frecuencia, y no se
    * escribe un coeficiente sin tener la recomendación delante (candidata:
@@ -720,10 +649,8 @@
   var RadioPV = {
     GRADO: GRADO,
     // geometría
-    banda: banda,
     bajoTierra: bajoTierra,
     alturaRayo: alturaRayo,
-    corta: corta,
     cortaPanel: cortaPanel,
     alturaEje: alturaEje,
     regimen: regimen,
@@ -745,8 +672,6 @@
     nu: nu,
     difraccionPanelesDb: difraccionPanelesDb,
     difraccionPanelesDetalle: difraccionPanelesDetalle,
-    difraccionBandasDb: difraccionBandasDb,
-    difraccionBandasDetalle: difraccionBandasDetalle,
     vegetacionDb: vegetacionDb,
     _version: "fase1"
   };

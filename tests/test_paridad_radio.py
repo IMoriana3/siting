@@ -32,18 +32,6 @@ sys.path.insert(0, RAIZ)
 # no estaba comparando ese trozo. Se aplican sobre una COPIA: los ficheros del
 # repo no se tocan.
 MUTACIONES = {
-    # el hueco bajo el panel desaparece SOLO en Python
-    "py_sin_hueco":   ("py", r'if z_rayo < b\["zBot"\]:', 'if False:'),
-    # el borde más próximo se sustituye por el de arriba, SOLO en Python
-    "py_borde_top":   ("py", r'borde = b\["zTop"\] if d_top <= d_bot else b\["zBot"\]',
-                              'borde = b["zTop"]'),
-    # media cuerda SOLO en JS
-    "js_semi_cuerda": ("js", r'var semi = \(cuerdaM / 2\)', 'var semi = (cuerdaM / 4)'),
-    # el Deygout del JS deja de relanzar desde el borde que toca
-    # (ancla movida al partir `difraccionBandasDetalle`: ver la nota gemela en
-    #  test_radio_geom.js. Las dos anclaban la MISMA linea de JS.)
-    "js_borde_top":   ("js", r'var bordeDom = cDom\.borde;',
-                              'var bordeDom = cruces[mejor].banda.zTop;'),
     # la constante de espacio libre se desvía 0,01 dB en Python: el banco tiene
     # que cazar incluso una diferencia que a ojo no se ve
     "py_fspl_001":    ("py", r'- 147\.55$', '- 147.56'),
@@ -119,23 +107,8 @@ def check(nombre, cond, extra=None):
 F = [2.45e9, 868e6, 915e6, 2.4e9]
 
 
-def casos_banda():
-    out = []
-    for eje in (1.4, 2.0, 2.6, 3.15):
-        for cuerda in (2.38, 2.384, 4.0):
-            for alpha in (0, 5, 17.5, 30, 45, 55, 60, 90, -30, -55):
-                for suelo in (0.0, 0.4, 1.9):
-                    out.append([eje, cuerda, alpha, suelo])
-    return out
 
 
-def casos_corta():
-    out = []
-    for b in ([2.0, 2.38, 30, 0.0], [2.6, 2.38, 90, 0.0], [1.4, 2.38, 0, 0.0],
-              [3.15, 4.0, 55, 1.9], [2.0, 2.38, 5, 0.4]):
-        for z in (-0.5, 0.0, 0.775, 1.0, 1.405, 1.5, 2.0, 2.595, 3.0, 5.2, 9.9):
-            out.append([b, z])
-    return out
 
 
 def casos_regimen():
@@ -200,34 +173,6 @@ def casos_escalares():
     return out
 
 
-def casos_difraccion():
-    """Enlaces completos. Éste es el que de verdad cierra la fase: mete la
-    geometría de banda dentro de la recursión de Deygout, que es donde una
-    diferencia de un borde se convierte en dB."""
-    out = []
-    filas = {
-        "plana":   [2.0, 2.38, 0, 0.0],
-        "poco":    [2.0, 2.38, 17.5, 0.0],
-        "media":   [2.0, 2.38, 30, 0.0],
-        "canto":   [2.6, 2.38, 90, 0.0],
-        "alta":    [3.15, 4.0, 55, 1.9],
-    }
-    esquemas = [
-        [("media", 50)],
-        [("canto", 60), ("media", 140)],
-        [("media", 60), ("canto", 140)],
-        [("plana", 40), ("poco", 80), ("media", 120), ("canto", 160)],
-        [("alta", 30), ("alta", 90), ("alta", 150)],
-        [("media", 0), ("media", 200)],          # en los extremos: se descartan
-        [("canto", 12), ("canto", 24), ("canto", 36), ("canto", 48), ("canto", 60)],
-    ]
-    for esq in esquemas:
-        for zA, zB in ((1.5, 1.5), (0.775, 0.775), (0.775, 3.15), (3.15, 0.775),
-                       (2.0, 2.0), (4.5, 4.5), (1.0, 1.0)):
-            for f in F:
-                for D in (200, 120.5):
-                    out.append([D, zA, zB, [[filas[n], s] for n, s in esq], f])
-    return out
 
 
 def casos_antena():
@@ -296,11 +241,16 @@ def casos_paneles():
     return out
 
 
+# LAS FAMILIAS «banda», «corta» y «difraccion» YA NO ESTAN, y no es una perdida
+# de cobertura: esas funciones ya no existen en NINGUNO de los dos motores. La
+# banda vertical se saco a `tests/referencia_banda_vertical.js` porque el motor
+# no puede tener dos funciones que den el despeje de una fila, y lo que el motor
+# calcula ahora -el corte con el plano inclinado y su Deygout- esta cubierto por
+# «paneles» y por la parte de panel de «antena».
 CASOS = {
-    "paneles": casos_paneles(),
-    "banda": casos_banda(), "corta": casos_corta(), "regimen": casos_regimen(),
+    "paneles": casos_paneles(), "regimen": casos_regimen(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
-    "difraccion": casos_difraccion(), "antena": casos_antena(),
+    "antena": casos_antena(),
 }
 
 # ── LOS DOS MOTORES ────────────────────────────────────────────────────────
@@ -313,12 +263,7 @@ vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
 const R = ctx.module.exports;
 const casos = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const bandaDe = a => R.banda(a[0], a[1], a[2], a[3]);
 const out = {};
-out.banda = casos.banda.map(a => { const b = bandaDe(a);
-  return [b.eje, b.semi, b.zBot, b.zTop, b.suelo, b.hueco]; });
-out.corta = casos.corta.map(([a, z]) => { const c = R.corta(bandaDe(a), z);
-  return [c.estado, c.despeje, c.borde, c.bajoSuelo === undefined ? null : c.bajoSuelo]; });
 out.regimen = casos.regimen.map(([e, f, tol]) => {
   const r = R.regimen(e[0], e[1], f[0], f[1], tol); return [r.tipo, r.anguloDeg]; });
 out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDominante(zA, zB, D, p);
@@ -342,8 +287,6 @@ out.paneles = casos.paneles.map(([D, zA, zB, cr, f]) => {
   const d = r.dominante;
   return [r.totalDb, r.motivo, d === null ? null : [d.s, d.sEje, d.nu, d.perdidaDb, d.estado, d.despeje, d.borde, d.wBorde]];
 });
-out.difraccion = casos.difraccion.map(([D, zA, zB, cr, f]) =>
-  R.difraccionBandasDb(D, zA, zB, cr.map(([a, s]) => ({ s: s, banda: bandaDe(a) })), f));
 out.antena = casos.antena.map(c => {
   switch (c[0]) {
     case 'ancla':   { const a = R.anclaAntena(c[1], c[2]); return [a.dz, a.lateral]; }
@@ -370,14 +313,7 @@ process.stdout.write(JSON.stringify(out, (k, v) =>
 
 
 def corre_python(mod, casos):
-    b = lambda a: mod.banda(a[0], a[1], a[2], a[3])
     out = {}
-    out["banda"] = [[x["eje"], x["semi"], x["zBot"], x["zTop"], x["suelo"], x["hueco"]]
-                    for x in (b(a) for a in casos["banda"])]
-    out["corta"] = []
-    for a, z in casos["corta"]:
-        c = mod.corta(b(a), z)
-        out["corta"].append([c["estado"], c["despeje"], c["borde"], c.get("bajoSuelo")])
     out["regimen"] = []
     for e, f, tol in casos["regimen"]:
         r = mod.regimen(e[0], e[1], f[0], f[1], tol)
@@ -407,9 +343,6 @@ def corre_python(mod, casos):
         d = r["dominante"]
         out["paneles"].append([r["totalDb"], r["motivo"], None if d is None else
             [d["s"], d["sEje"], d["nu"], d["perdidaDb"], d["estado"], d["despeje"], d["borde"], d["wBorde"]]])
-    out["difraccion"] = [
-        mod.difraccion_bandas_db(D, zA, zB, [{"s": s, "banda": b(a)} for a, s in cr], f)
-        for D, zA, zB, cr, f in casos["difraccion"]]
     out["antena"] = []
     for c in casos["antena"]:
         if c[0] == "ancla":
@@ -541,22 +474,25 @@ check("las %d familias de CASOS llegan a los dos motores" % len(BLOQUES),
       not faltan, "sin comparar: " + ", ".join(faltan) if faltan else None)
 print("     %d casos comparados. Peor diferencia por bloque:" % total)
 for bloque in BLOQUES:
-    unidad = {"regimen": "grados", "difraccion": "dB", "escalares": "dB/m (mezcla)",
+    unidad = {"regimen": "grados", "paneles": "dB", "escalares": "dB/m (mezcla)",
               "antena": "dB/m (mezcla)"}
     print("       %-11s %.3e %s" % (bloque, peor.get(bloque, 0.0),
                                     unidad.get(bloque, "m")))
 
-# Y que el barrido toque de verdad los tres estados de `corta` y los dos
+# Y que el barrido toque de verdad los estados de `cortaPanel` y los dos
 # regimenes: un barrido que solo pasara por un camino compararia poco.
-estados = {c[0] for c in JS["corta"]}
+# Los casos de panel viven DENTRO de la familia «antena», mezclados con los
+# demas, asi que hay que ir a buscarlos por su indice en CASOS.
+iPanel = [i for i, c in enumerate(CASOS["antena"]) if c[0] == "panel"]
+estados = {JS["antena"][i][0] for i in iPanel}
 tipos = {r[0] for r in JS["regimen"]}
-check("el barrido pasa por los tres estados de la banda",
-      estados == {"libre", "hueco", "tapado"}, sorted(estados))
+check("el barrido pasa por los cinco estados del panel inclinado",
+      estados == {"libre", "hueco", "tapado", "fuera", "paralelo"}, sorted(estados))
 check("y por los dos regimenes, mas el degenerado",
       tipos == {"pasillo", "cruza", "degenerado"}, sorted(tipos))
-noCero = [x for x in JS["difraccion"] if x > 0]
-check("y hay difraccion que cobra de verdad, no todo ceros",
-      len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["difraccion"])))
+noCero = [x[0] for x in JS["paneles"] if x[0] > 0]
+check("y hay difraccion de panel que cobra de verdad, no todo ceros",
+      len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["paneles"])))
 
 # ── EL SUELO DE LA PLATAFORMA ──────────────────────────────────────────────
 # Por qué la tolerancia no es cero, dicho con números y no de palabra.

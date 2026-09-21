@@ -125,6 +125,11 @@ const PROP = {
 // 0,725, que es la altura del ajuste de El Burgo), dos filas en medio de canto.
 console.log('\n· el balance de enlace, y lo que se niega a dar');
 const R = ctx.RadioPV;
+/* LA BANDA VERTICAL YA NO ESTA EN EL MOTOR. Vive en la referencia, con otro
+   nombre, porque el motor no puede tener DOS funciones que den el despeje de
+   una fila. Aqui se usa solo para construir el caso de prueba. */
+const REF = require('./referencia_banda_vertical.js');
+R.banda = REF.banda; R.corta = REF.corta;
 /* EL ENLACE DE PRUEBA, con el contrato nuevo: el cruce trae la geometria de la
    fila -eje, cuerda, su alfa y el seno del angulo de cruce- y el motor corta
    contra el plano inclinado. Antes traia una banda vertical ya resuelta. */

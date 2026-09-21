@@ -119,8 +119,19 @@ jobs:
                                                 sinSupuestas sinRotulo sinSignificativa sinSigma \
                                                 anguloConstante
 
-          rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
-                                                   py_csqrt_rama js_semi_cuerda js_borde_top \
+          # LA PUERTA DE LA HOLGURA UNICA. No compara numeros: lee el fuente de
+          # los dos motores y cuenta cuantas funciones dan el despeje de una
+          # fila. Tiene que ser UNA. La banda vertical y el plano inclinado
+          # daban el mismo despeje -0,000000 m- y distinto CANTO, asi que un
+          # banco de numeros no podia cazar que convivieran; este si.
+          rojo node tests/test_una_holgura.js segundaHolgura segundaHolguraPy bandaDeVuelta \
+                                              refEnLaApp nombresDistintos refHuerfana
+
+          # `py_sin_hueco`, `py_borde_top`, `js_semi_cuerda` y `js_borde_top`
+          # se han ido con las familias de banda: esas funciones ya no existen
+          # en ningun motor, asi que sus mutaciones no tendrian que mutar.
+          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+                                                   py_csqrt_rama \
                                                    js_tol_regimen js_fase_signo \
                                                    py_ancla_fija js_sin_lateral py_patron_iso \
                                                    js_cerca_fija py_conductor \
