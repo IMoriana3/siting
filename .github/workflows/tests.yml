@@ -91,14 +91,15 @@ jobs:
           }
           rojo node tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
                                              sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba \
-                                             sinReflejado sueloSinPerdida anguloDirecto
+                                             sinReflejado sueloSinPerdida anguloDirecto \
+                                             sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
           # verde, que es exactamente la avería que esto vigila.
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
-                                              relieveCallado relieveFueraCero
+                                              relieveCallado relieveCortoCero dosRayosSinLisa
 
           rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
                                             detalleOtroTope sinOrdenT
@@ -135,7 +136,8 @@ jobs:
           # daban el mismo despeje -0,000000 m- y distinto CANTO, asi que un
           # banco de numeros no podia cazar que convivieran; este si.
           rojo node tests/test_una_holgura.js segundaHolgura segundaHolguraPy bandaDeVuelta \
-                                              refEnLaApp nombresDistintos refHuerfana
+                                              refEnLaApp nombresDistintos refHuerfana \
+                                              segundaLisa segundaLisaPy relieveViejo
 
           # `py_sin_hueco`, `py_borde_top`, `js_semi_cuerda` y `js_borde_top`
           # se han ido con las familias de banda: esas funciones ya no existen

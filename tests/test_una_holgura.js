@@ -55,6 +55,23 @@ const MUTACIONES = {
   // el motor exporta la función con nombres distintos en cada idioma: la
   // paridad dejaría de comparar la misma cosa sin que nada lo dijera
   nombresDistintos: ['radio_pv_model.py', /^def corta_panel\(/m, 'def corta_el_panel('],
+  // vuelve una SEGUNDA referencia de terreno, con otro nombre
+  segundaLisa: ['radio_pv_model.js', /(\n  function tierraLisa)/,
+    '\n  function superficieBase(perfil) {\n' +
+    '    var n = perfil.length, s = 0;\n' +
+    '    for (var i = 0; i < n; i++) s += perfil[i][1];\n' +
+    '    return { hst: s / n, hsr: s / n };\n' +
+    '  }\n$1'],
+  // y la misma recaída por Python
+  segundaLisaPy: ['radio_pv_model.py', /(\ndef tierra_lisa\()/,
+    '\ndef superficie_base(perfil):\n' +
+    '    m = sum(p[1] for p in perfil) / len(perfil)\n' +
+    '    return {"hst": m, "hsr": m}\n\n$1'],
+  // el `relieveDominante` viejo vuelve al motor
+  relieveViejo: ['radio_pv_model.js', /(\n  function tierraLisa)/,
+    '\n  function relieveDominante(zA, zB, D, perfil) {\n' +
+    '    return perfil && perfil.length ? { s: perfil[0][0], invade: 0 } : null;\n' +
+    '  }\n$1'],
   // la referencia se queda huérfana: nadie la carea, o sea que el «vive en el
   // banco con otro nombre» degenera en «se borró y ya». Hay que tocar LOS TRES
   // bancos que la carean: aflojar uno solo no la deja huérfana, y una puerta
@@ -155,6 +172,37 @@ check('los dos nombres son el mismo traducido (cortaPanel ↔ corta_panel)',
       jsProd[0] + ' / ' + pyProd[0]);
 check('y las dos salen exportadas',
       /\bcortaPanel\s*:/.test(js) && /["']corta_panel["']|\bcorta_panel\b/.test(py));
+
+/* ── UNA SOLA REFERENCIA DE TERRENO, por la misma razon ───────────────────
+   Dos funciones que dan la superficie de referencia de un vano es la misma
+   enfermedad que dos que dan el despeje de una fila: una se queda vieja y
+   nadie lo nota. Y aqui el sintoma seria peor, porque la resta contra la
+   referencia SOLO cancela si la difraccion y los dos rayos usan la MISMA: con
+   dos referencias, el perfil plano dejaria de dar 0 y nadie sabria por que.
+
+   `relieveDominante` era la de antes y ya no esta: daba el punto que mas
+   invade el rayo y con eso se cobraba un filo por cada punto del terreno, o
+   sea 21,66 dB medidos de doble conteo sobre un perfil PLANO. */
+function produceLisa(cuerpo) {
+  /* PRODUCIR vs REENVIAR, igual que con el despeje: `relieveDeltaDb` devuelve
+     `hst`/`hsr` en su salida pero no los CALCULA, los copia de `tierraLisa`.
+     Esa forma -`hst: <algo>.hst`- se quita antes de contar. */
+  const limpio = cuerpo
+    .replace(/["']?hs[tr]["']?\s*:\s*[A-Za-z_$][\w$.\[\]"']*\.hs[tr]/g, '')
+    .replace(/["']hs[tr]["']\s*:\s*[A-Za-z_$][\w$]*\[["']hs[tr]["']\]/g, '');
+  return /["']?hst["']?\s*:/.test(limpio) && /["']?hsr["']?\s*:/.test(limpio);
+}
+const jsLisa = troceaJs(js).filter(f => produceLisa(f.cuerpo)).map(f => f.nombre);
+const pyLisa = troceaPy(py).filter(f => produceLisa(f.cuerpo)).map(f => f.nombre);
+check('en el motor JS la tierra lisa la da UNA sola función',
+      jsLisa.length === 1 && jsLisa[0] === 'tierraLisa',
+      jsLisa.length + ' -> ' + (jsLisa.join(', ') || '(ninguna)'));
+check('y en el motor Python, la MISMA y una sola',
+      pyLisa.length === 1 && pyLisa[0] === 'tierra_lisa',
+      pyLisa.length + ' -> ' + (pyLisa.join(', ') || '(ninguna)'));
+check('y `relieveDominante` no ha vuelto por ningún lado',
+      troceaJs(js).concat(troceaPy(py)).every(f =>
+        f.nombre !== 'relieveDominante' && f.nombre !== 'relieve_dominante'));
 
 /* ── LOS NOMBRES DE LA BANDA NO VUELVEN AL MOTOR ───────────────────────────
    Por nombre además de por forma: es la recaída más probable, porque el

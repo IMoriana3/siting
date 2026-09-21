@@ -189,18 +189,222 @@ def regimen(dx_enlace, dy_enlace, dx_fila, dy_fila, tol_grados=None):
     return {"tipo": "pasillo" if ang <= tol else "cruza", "anguloDeg": ang}
 
 
-def relieve_dominante(zA, zB, D, perfil):
-    """Espejo de `relieveDominante()`: el punto de terreno que más invade."""
-    if not perfil:
+def _fix3(v):
+    """`toFixed(3)` de JS, para que los motivos salgan IDENTICOS en los dos."""
+    return ("%.3f" % v)
+
+
+def tierra_lisa(perfil):
+    """Espejo de `tierraLisa()`. ITU-R P.1812-6, Anexo 1, Adjunto 1, §5.6.1,
+    ecuaciones (85)-(88), mas las cotas modificadas (89)-(91) y el recorte (92).
+
+    Cita verificada contra la implementacion de referencia de la UIT
+    (`eeveetza/p1812`, `private/smooth_earth_heights.m`), no de memoria."""
+    if not perfil or len(perfil) < 2:
         return None
-    peor = None
-    for s, z_suelo in perfil:
+    n = len(perfil)
+    D = perfil[n - 1][0] - perfil[0][0]
+    if not (D > 0):
+        return None
+    # SE CENTRA ANTES DE AJUSTAR y se descentra al final: con cotas absolutas
+    # grandes el ajuste pierde precision y el caso PLANO deja de dar cero
+    # exacto (medido a 739,23 m: 1,44e-12 dB de residuo). Centrando, el perfil
+    # plano tiene cotas CERO exactas y el cero pasa a ser por construccion.
+    d_ref, h_ref = perfil[0][0], perfil[0][1]
+    v1 = 0.0
+    v2 = 0.0
+    for i in range(1, n):
+        d0 = perfil[i - 1][0] - d_ref
+        h0 = perfil[i - 1][1] - h_ref
+        d1 = perfil[i][0] - d_ref
+        h1 = perfil[i][1] - h_ref
+        dd = d1 - d0
+        v1 += dd * (h1 + h0)                                         # (85)
+        v2 += dd * (h1 * (2 * d1 + d0) + h0 * (d1 + 2 * d0))         # (86)
+    hst = (2 * v1 * D - v2) / (D * D)                                # (87)
+    hsr = (v2 - v1 * D) / (D * D)                                    # (88)
+    h_ini, hNe = 0.0, perfil[n - 1][1] - h_ref
+    hobs = -math.inf
+    a_obt = -math.inf
+    a_obr = -math.inf
+    for j in range(1, n - 1):
+        dj = perfil[j][0] - d_ref
+        HH = (perfil[j][1] - h_ref) - (hst * (D - dj) + hsr * dj) / D
+        if HH > hobs:
+            hobs = HH                                                # (89a)
+        if dj > 0 and HH / dj > a_obt:
+            a_obt = HH / dj                                          # (89b)
+        if D - dj > 0 and HH / (D - dj) > a_obr:
+            a_obr = HH / (D - dj)                                    # (89c)
+    if not (hobs > 0):
+        hstp, hsrp = hst, hsr                                        # (90a,b)
+    else:
+        suma = a_obt + a_obr
+        gt = 0.5 if suma == 0 else a_obt / suma                      # (90e)
+        gr = 0.5 if suma == 0 else a_obr / suma                      # (90f)
+        hstp = hst - hobs * gt                                       # (90c)
+        hsrp = hsr - hobs * gr                                       # (90d)
+    hstd = h_ini if hstp >= h_ini else hstp                          # (91a,b)
+    hsrd = hNe if hsrp > hNe else hsrp                               # (91c,d)
+    return {"hst": min(hst, h_ini) + h_ref,                          # (92a)
+            "hsr": min(hsr, hNe) + h_ref,                            # (92b)
+            "hstd": hstd + h_ref, "hsrd": hsrd + h_ref,
+            "hobs": None if hobs == -math.inf else hobs,
+            "hstBruto": hst + h_ref, "hsrBruto": hsr + h_ref,
+            "v1": v1, "v2": v2, "D": D}
+
+
+def difraccion_cantos_detalle(D, zA, zB, cantos, f_hz, prof=0, max_prof=None):
+    """Espejo de `difraccionCantosDetalle()`: Deygout sobre cantos sueltos."""
+    p = prof or 0
+    tope = 3 if max_prof is None else max_prof
+    vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
+             "derecha": None, "profundidad": p, "motivo": None}
+    if not cantos:
+        vacio["motivo"] = "sin cantos"
+        return vacio
+    if p >= tope:
+        vacio["motivo"] = "tope de recursion (%d)" % tope
+        return vacio
+    if D <= 0:
+        vacio["motivo"] = "tramo de longitud nula"
+        return vacio
+    mejor_v, mejor = -1e9, -1
+    for i, c in enumerate(cantos):
+        s = c["s"]
         if s <= 0 or s >= D:
             continue
-        invade = z_suelo - altura_rayo(zA, zB, D, s)
-        if peor is None or invade > peor["invade"]:
-            peor = {"s": s, "zSuelo": z_suelo, "invade": invade}
-    return peor
+        v = nu(c["z"] - altura_rayo(zA, zB, D, s), s, D - s, f_hz)
+        if v > mejor_v:
+            mejor_v, mejor = v, i
+    if mejor < 0:
+        vacio["motivo"] = "ningun canto cae dentro del tramo"
+        return vacio
+    if mejor_v <= -0.78:
+        vacio["motivo"] = "el dominante despeja (nu = %s <= -0,78)" % _fix3(mejor_v)
+        return vacio
+    s_dom, z_dom = cantos[mejor]["s"], cantos[mejor]["z"]
+    perdida_dom = perdida_filo_db(mejor_v)
+    izq, der = [], []
+    for k, c in enumerate(cantos):
+        if k == mejor:
+            continue
+        if c["s"] < s_dom:
+            izq.append({"s": c["s"], "z": c["z"]})
+        else:
+            der.append({"s": c["s"] - s_dom, "z": c["z"]})
+    d_izq = difraccion_cantos_detalle(s_dom, zA, z_dom, izq, f_hz, p + 1, tope)
+    d_der = difraccion_cantos_detalle(D - s_dom, z_dom, zB, der, f_hz, p + 1, tope)
+    return {"totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
+            "dominante": {"indice": mejor, "s": s_dom, "z": z_dom,
+                          "nu": mejor_v, "perdidaDb": perdida_dom},
+            "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None}
+
+
+def bullington_db(D, zA, zB, cantos, f_hz):
+    """Espejo de `bullingtonDb()`: UN filo equivalente, sin recursion.
+
+    El terreno va con esto y no con Deygout porque Deygout sobre perfil denso
+    da un numero que depende del muestreo (1,10 dB con 2 puntos, 22,74 con 80)
+    y del tope de recursion (1,10 con tope 1, 42,81 con tope 6). Medido."""
+    if not cantos or not (D > 0):
+        return 0.0
+    s_tim = -math.inf
+    s_tr = (zB - zA) / D
+    for c in cantos:
+        s = c["s"]
+        if not (s > 0) or not (s < D):
+            continue
+        pend = (c["z"] - zA) / s
+        if pend > s_tim:
+            s_tim = pend
+    if s_tim == -math.inf:
+        return 0.0
+    if s_tim < s_tr:
+        v_max = -math.inf
+        for c in cantos:
+            s = c["s"]
+            if not (s > 0) or not (s < D):
+                continue
+            w = nu(c["z"] - altura_rayo(zA, zB, D, s), s, D - s, f_hz)
+            if w > v_max:
+                v_max = w
+        v = v_max
+    else:
+        s_rim = -math.inf
+        for c in cantos:
+            s = c["s"]
+            if not (s > 0) or not (s < D):
+                continue
+            q = (c["z"] - zB) / (D - s)
+            if q > s_rim:
+                s_rim = q
+        den = s_tim + s_rim
+        if not (abs(den) > 1e-12):
+            return 0.0
+        s_b = (zB - zA + s_rim * D) / den
+        if not (s_b > 0) or not (s_b < D):
+            return 0.0
+        z_bull = zA + s_tim * s_b
+        v = nu(z_bull - altura_rayo(zA, zB, D, s_b), s_b, D - s_b, f_hz)
+    return perdida_filo_db(v) if v > -0.78 else 0.0
+
+
+def recorta_perfil(perfil, D):
+    """Espejo de `recortaPerfil()`: el perfil, recortado AL VANO."""
+    if not perfil or len(perfil) < 2 or not (D > 0):
+        return None
+    d0 = perfil[0][0]
+    n = len(perfil)
+    if perfil[n - 1][0] - d0 < D:
+        return None
+
+    def altura(s):
+        for i in range(1, n):
+            a = perfil[i - 1][0] - d0
+            b = perfil[i][0] - d0
+            if s <= b:
+                if b == a:
+                    return perfil[i][1]
+                return perfil[i - 1][1] + (perfil[i][1] - perfil[i - 1][1]) * (s - a) / (b - a)
+        return perfil[n - 1][1]
+
+    out = [[0, altura(0)]]
+    for j in range(n):
+        s = perfil[j][0] - d0
+        if 0 < s < D:
+            out.append([s, perfil[j][1]])
+    out.append([D, altura(D)])
+    return out
+
+
+def relieve_delta_db(D, zA, zB, perfil, f_hz):
+    """Espejo de `relieveDeltaDb()`: lo que el terreno cobra POR ENCIMA de la
+    tierra lisa. Con perfil plano o en rampa sale 0 EXACTO, sin umbral."""
+    rec = recorta_perfil(perfil, D)
+    if rec is None:
+        return None
+    perfil = rec
+    L = tierra_lisa(perfil)
+    if L is None:
+        return None
+    d0 = perfil[0][0]
+    pend = (L["hsr"] - L["hst"]) / L["D"]
+    real, liso = [], []
+    for punto in perfil:
+        s = punto[0] - d0
+        if s <= 0 or s >= D:
+            continue
+        real.append({"s": s, "z": punto[1]})
+        liso.append({"s": s, "z": L["hst"] + pend * s})
+    ht_e = zA - L["hst"]
+    hr_e = zB - L["hsr"]
+    a = bullington_db(D, zA, zB, real, f_hz)
+    b = bullington_db(D, zA, zB, liso, f_hz)
+    d = a - b
+    return {"db": d if d > 0 else 0.0, "bruto": d, "real": a, "liso": b,
+            "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
+            "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
 
 
 # ═══ TECNOLOGÍA ════════════════════════════════════════════════════════════

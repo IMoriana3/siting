@@ -122,14 +122,28 @@ def casos_regimen():
 
 
 def casos_relieve():
+    """El relieve contra la TIERRA LISA. Los perfiles cubren los casos que el
+    motor tiene que distinguir: plano a varias cotas -donde el resultado es 0
+    EXACTO-, rampas, cerros, vaguadas, muestreo irregular, y perfiles que NO
+    cubren el vano (que dan None, no 0)."""
+    def rej(h, D, n=12):
+        return [[D * i / n, h(D * i / n)] for i in range(n + 1)]
     perfiles = [
-        [], [[50, 1.0]], [[30, 0.5], [50, 2.2], [70, 1.1]],
-        [[10, -0.3], [90, -0.9]], [[0, 5.0], [200, 5.0]],
-        [[25, 1.9], [50, 1.9], [75, 1.9]],
+        [],                                            # vacio
+        [[0, 0.0], [50, 0.0]],                         # NO cubre un vano de 100
+        rej(lambda s: 0.0, 200),                       # plano a 0
+        rej(lambda s: 739.23, 200),                    # plano a cota de Ayora
+        rej(lambda s: -12.75, 200),                    # plano bajo el cero
+        rej(lambda s: 0.05 * s, 200),                  # rampa
+        rej(lambda s: -0.15 * s, 200),                 # rampa al reves
+        rej(lambda s: 2.0 * math.exp(-((s - 100) / 30.0) ** 2), 200),    # cerro
+        rej(lambda s: -2.0 * math.exp(-((s - 100) / 30.0) ** 2), 200),   # vaguada
+        [[0, 0.0], [1, 0.05], [3, 0.4], [97, 1.1], [150, 0.2], [200, 0.0]],  # irregular
+        [[0, 5.0], [200, 5.0]],                        # solo dos puntos
     ]
     out = []
     for p in perfiles:
-        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 200), (3.15, 0.775, 120)):
+        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 180), (3.15, 0.775, 120)):
             out.append([zA, zB, D, p])
     return out
 
@@ -268,8 +282,8 @@ const casos = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const out = {};
 out.regimen = casos.regimen.map(([e, f, tol]) => {
   const r = R.regimen(e[0], e[1], f[0], f[1], tol); return [r.tipo, r.anguloDeg]; });
-out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDominante(zA, zB, D, p);
-  return r === null ? null : [r.s, r.zSuelo, r.invade]; });
+out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDeltaDb(D, zA, zB, p, 2.45e9);
+  return r === null ? null : [r.db, r.bruto, r.hst, r.hsr, r.hstd, r.hsrd, r.htE, r.hrE]; });
 out.escalares = casos.escalares.map(c => {
   switch (c[0]) {
     case 'fspl':    return R.fsplDb(c[1], c[2]);
@@ -322,8 +336,10 @@ def corre_python(mod, casos):
         out["regimen"].append([r["tipo"], r["anguloDeg"]])
     out["relieve"] = []
     for zA, zB, D, p in casos["relieve"]:
-        r = mod.relieve_dominante(zA, zB, D, p)
-        out["relieve"].append(None if r is None else [r["s"], r["zSuelo"], r["invade"]])
+        r = mod.relieve_delta_db(D, zA, zB, p, 2.45e9)
+        out["relieve"].append(None if r is None else
+                              [r["db"], r["bruto"], r["hst"], r["hsr"],
+                               r["hstd"], r["hsrd"], r["htE"], r["hrE"]])
     out["escalares"] = []
     for c in casos["escalares"]:
         k = c[0]

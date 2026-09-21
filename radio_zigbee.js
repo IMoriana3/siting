@@ -103,70 +103,57 @@
     var cruces = enlace.cruces || [];
     var n = cuenta(D, zA, zB, cruces);
 
-    var dosRayos = RPV.dosRayosDb(D, zA, zB, f, propagacion.eps_r_suelo,
-                                  propagacion.sigma_suelo_s_m, propagacion.polarizacion);
     var difrac = RPV.difraccionPanelesDb(D, zA, zB, cruces, f);
 
-    /* EL RELIEVE VA APARTE de las bandas, y suma. Un cerro entre dos nodos no
-       es una mesa: es terreno, es continuo y no tiene hueco por debajo.
-
-       SIN PERFIL NO SE DICE 0, SE DICE QUE NO SE HA MIRADO. Hasta ahora, si no
-       llegaba perfil, `relieveDominante` devolvía `null`, `relieve` se quedaba
-       en su 0 inicial y la salida publicaba `relieveDb: 0` — que se lee igual
-       que «hay terreno y esta llano». No es lo mismo:
-
-         perfil AUSENTE   nadie ha mirado el terreno. Hoy es el caso de TODOS
-                          los enlaces del mapa, porque `index.html` pasa
-                          `perfil: null` a pelo y nada lo rellena nunca.
-         perfil PRESENTE  se ha mirado y el rayo pasa por encima: 0 de verdad.
-
-       Es la misma disciplina que la vegetación tres líneas más abajo, que sí la
-       tenía. Un cero callado es la forma más barata de mentir en un balance.
-
-       ─────────────────────────────────────────────────────────────────────
-       AVISO PARA QUIEN VENGA A CONECTAR EL DEM (A3): NO LE METAS AQUÍ LA COTA
-       ABSOLUTA DEL TERRENO. Se cuenta dos veces.
-
-       `dosRayosDb` YA supone un plano reflectante debajo, en la cota 0, y
-       modela su efecto entero -el rayo reflejado y sus lóbulos-. Si además se
-       le pasa a `relieveDominante` el suelo como una fila de puntos, cada uno
-       actúa de filo de cuchillo y se cobra OTRA VEZ. Medido, con la antena a
-       0,475 m (eje 1,20) y un perfil PLANO a cota 0:
-
-           D(m)   r1 Fresnel   despeje   relieveDb   dosRayosDb
-             20         0,78     0,475        0,00        66,63
-             50         1,24     0,475        1,64        81,18
-            100         1,75     0,475        2,84        92,84
-            200         2,47     0,475        3,74       104,70
-            400         3,50     0,475        4,40       116,66
-
-       De 1,6 a 4,4 dB de más, y sin que el terreno suba un milímetro. La causa
-       es que a esta altura de antena el despeje (0,475 m) es MENOR que el radio
-       de la primera zona de Fresnel en todos los vanos largos, así que el suelo
-       plano «obstruye» por sí solo. Y con el eje a 1,20 m eso es la norma, no
-       un caso raro.
-
-       LO QUE `relieveDominante` ESPERA es terreno que SOBRESALE: un cerro, un
-       talud, el borde de una vaguada. Un filo de cuchillo es un obstáculo
-       LOCAL; un plano infinito no es un filo, es el suelo, y su efecto es el de
-       dos rayos. La regla que falta decidir -y es decisión de modelo, no de
-       código, por eso NO se implementa aquí de tapadillo- es con qué se compara
-       cada punto para saber si sobresale. El `min` de rf-fv está descartado por
-       encargo. Está en el banco: `test_radio_malla.js`, bloque del relieve. */
-    var relieve = null, relieveDom = null;   // `null` = no evaluado, como la vegetacion
+    /* EL RELIEVE, CONTRA LA TIERRA LISA.
+     *
+     * SIN PERFIL NO SE DICE 0, SE DICE QUE NO SE HA MIRADO. Tres estados:
+     *
+     *   perfil AUSENTE   nadie ha mirado el terreno. Es el caso de TODOS los
+     *                    enlaces del mapa hoy: `index.html` pasa `perfil: null`.
+     *   perfil que NO PISA el vano   tampoco se ha mirado nada.
+     *   perfil DENTRO del vano       un numero, y si sale 0 ese 0 SI significa
+     *                    «llano», porque es exacto por construccion.
+     *
+     * Misma disciplina que la vegetacion de abajo. Un cero callado es la forma
+     * mas barata de mentir en un balance.
+     *
+     * ───────────────────────────────────────────────────────────────────────
+     * POR QUE CONTRA LA TIERRA LISA Y NO CONTRA LA COTA CERO. Porque
+     * `dosRayosDb` YA supone un plano reflectante debajo y modela su efecto
+     * entero. Pasarle el terreno como cotas absolutas a un filo de cuchillo
+     * cobra OTRA VEZ ese mismo plano. Medido, antena a 0,475 m (eje 1,20) y
+     * perfil PLANO a cota 0, con 11 puntos de perfil: 21,66 dB de doble conteo
+     * a 100 m. Con un solo punto medio eran 2,84. Ni uno ni otro es terreno:
+     * es el suelo que los dos rayos ya tienen puesto.
+     *
+     * La referencia es la RECTA DE MINIMOS CUADRADOS del perfil -ITU-R
+     * P.1812-6, Anexo 1, Adjunto 1, §5.6.1, ec. (85)-(88)- y el relieve es lo
+     * que el terreno real cobra POR ENCIMA de esa recta. Con perfil plano o en
+     * rampa, real y referencia son la misma cuenta y sale 0 EXACTO, sin umbral.
+     *
+     * Y LAS ALTURAS DE ANTENA DE LOS DOS RAYOS VAN SOBRE ESA MISMA RECTA
+     * (`htE`, `hrE`, ec. (94)), no sobre la cota cero: si la referencia de la
+     * difraccion y la del rebote fueran distintas, la resta no cancelaria. */
+    var relieve = null, relieveDet = null;   // `null` = no evaluado, como la vegetacion
+    var htE = zA, hrE = zB;                  // sin perfil, el suelo es la cota 0
     if (!enlace.perfil || !enlace.perfil.length) {
       motivos.push("relieve_no_evaluado_sin_perfil");
     } else {
-      relieveDom = RPV.relieveDominante(zA, zB, D, enlace.perfil);
-      if (relieveDom === null) {
-        /* Hay perfil, pero ni un punto cae DENTRO del vano (todos en s<=0 o
-           s>=D). Tampoco se ha mirado nada: el perfil no cubre este enlace. */
-        motivos.push("relieve_sin_puntos_dentro_del_vano");
+      relieveDet = RPV.relieveDeltaDb(D, zA, zB, enlace.perfil, f);
+      if (relieveDet === null) {
+        /* El perfil no cubre el vano entero -o tiene menos de dos puntos-. No
+           se ha mirado nada, y eso NO es un 0: se dice, igual que la ausencia. */
+        motivos.push("relieve_perfil_no_cubre_el_vano");
       } else {
-        var v = RPV.nu(relieveDom.invade, relieveDom.s, D - relieveDom.s, f);
-        relieve = RPV.perdidaFiloDb(v);    // puede salir 0, y entonces el 0 SÍ significa llano
+        relieve = relieveDet.db;
+        htE = relieveDet.htE;
+        hrE = relieveDet.hrE;
       }
     }
+
+    var dosRayos = RPV.dosRayosDb(D, htE, hrE, f, propagacion.eps_r_suelo,
+                                  propagacion.sigma_suelo_s_m, propagacion.polarizacion);
 
     /* VEGETACIÓN: `null` si no hay modelo. NO se suma como 0 callando. */
     var veg = RPV.vegetacionDb(enlace.vegetacionM || 0, f,

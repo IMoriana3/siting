@@ -47,6 +47,23 @@ const MUTACIONES = {
   // el régimen siempre dice «cruza»: se pierde el caso del pasillo
   siemprCruza:    ['radio_pv_model.js', /ang <= tol \? "pasillo" : "cruza"/, '"cruza"'],
 
+  // ── LA TIERRA LISA, y las cuatro formas de romperla ──
+  // se quita el CENTRADO: el ajuste pierde precision con cotas grandes y el
+  // perfil plano a 739,23 m deja de dar cero EXACTO (1,44e-12 dB de residuo)
+  sinCentrar:     ['radio_pv_model.js', /var dRef = perfil\[0\]\[0\], hRef = perfil\[0\]\[1\];/,
+                                        'var dRef = 0, hRef = 0;'],
+  // se cae el recorte de (92): la tierra lisa puede quedar POR ENCIMA del
+  // terreno en los extremos y la antena queda enterrada en su referencia
+  sinRecorte92:   ['radio_pv_model.js', /return \{ hst: Math\.min\(hst, hIni\) \+ hRef,/,
+                                        'return { hst: hst + hRef,'],
+  // el terreno vuelve a Deygout: el resultado pasa a depender del muestreo
+  terrenoDeygout: ['radio_pv_model.js', /var a = bullingtonDb\(D, zA, zB, real, fHz\);/,
+                                        'var a = difraccionCantosDetalle(D, zA, zB, real, fHz).totalDb;'],
+  // el perfil deja de recortarse al vano: la recta se ajusta sobre TODO lo que
+  // llegue y la altura de antena efectiva sale mal
+  sinRecortarVano:['radio_pv_model.js', /var rec = recortaPerfil\(perfil, D\);/,
+                                        'var rec = perfil;'],
+
   // ── y de la parte de TECNOLOGÍA ──
   // la frecuencia recupera un valor por defecto: el fallo que esto viene a
   // impedir es predecir sub-GHz con los números de 2,4 y que nadie se entere
@@ -197,17 +214,78 @@ check('a 15° ya cruza',
 check('y el sentido da igual: antiparalelo también es pasillo',
       R.regimen(-1, 0, 1, 0, 10).tipo === 'pasillo');
 
-// ── RELIEVE ──────────────────────────────────────────────────────────────────
-console.log('\n· el terreno entre los nodos');
-// rayo de 2 a 2 sobre 100 m: horizontal a 2 m. Un cerro de 3 m en s=50 invade 1 m.
-const perfil = [[20, 0.5], [50, 3.0], [80, 1.0]];
-const dom = R.relieveDominante(2, 2, 100, perfil);
-check('el punto dominante es el que más invade el rayo', dom && dom.s === 50, dom && dom.s);
-check('y dice cuánto invade: 1,0 m', dom && cerca(dom.invade, 1.0), dom && dom.invade);
-check('sin perfil, no hay relieve que valga (null, no 0)',
-      R.relieveDominante(2, 2, 100, null) === null);
-check('un terreno que no llega al rayo da invasión negativa, no se descarta',
-      R.relieveDominante(2, 2, 100, [[50, 1.0]]).invade < 0);
+/* ── RELIEVE: LA TIERRA LISA ──────────────────────────────────────────────
+   `relieveDominante` ya no existe. Daba el punto que mas invade el rayo y con
+   eso se cobraba un filo de cuchillo, lo cual con un perfil de terreno cuenta
+   DOS VECES el mismo suelo que `dosRayosDb` ya modela: 21,66 dB medidos sobre
+   un perfil PLANO a 100 m. Ahora la referencia es la recta de minimos
+   cuadrados -P.1812-6, Anexo 1, Adjunto 1, §5.6.1- y el relieve es lo que el
+   terreno cobra POR ENCIMA de ella.
+
+   Los numeros de abajo estan CALCULADOS A MANO, que es lo que la recta permite:
+     perfil PLANO a cota c  ->  la recta ES el perfil  ->  hst = hsr = c
+     rampa h = a + b·d      ->  la recta ES la rampa   ->  hst = a, hsr = a+b·D
+   y en los dos casos real y referencia son la MISMA cuenta, asi que 0 exacto. */
+console.log('\n· el terreno entre los nodos: la tierra lisa');
+const LL = (h, D, n) => { const p = []; for (let i = 0; i <= (n || 10); i++)
+  { const s = D * i / (n || 10); p.push([s, h(s)]); } return p; };
+check('perfil PLANO a 0: la recta es el perfil',
+      cerca(R.tierraLisa(LL(() => 0, 100)).hst, 0) && cerca(R.tierraLisa(LL(() => 0, 100)).hsr, 0));
+check('perfil PLANO a 7,5: idem, hst = hsr = 7,5',
+      cerca(R.tierraLisa(LL(() => 7.5, 100)).hst, 7.5) &&
+      cerca(R.tierraLisa(LL(() => 7.5, 100)).hsr, 7.5));
+check('rampa 2 + 0,05·d sobre 100 m: hst = 2 y hsr = 7 (a mano)',
+      cerca(R.tierraLisa([[0, 2], [25, 3.25], [60, 5], [100, 7]]).hst, 2) &&
+      cerca(R.tierraLisa([[0, 2], [25, 3.25], [60, 5], [100, 7]]).hsr, 7));
+check('un cerro CENTRADO no inclina la recta',
+      cerca(R.tierraLisa([[0, 0], [25, 0], [50, 10], [75, 0], [100, 0]]).hst,
+            R.tierraLisa([[0, 0], [25, 0], [50, 10], [75, 0], [100, 0]]).hsr));
+/* Y EL AJUSTE ES CONTINUO, no por puntos: pesa cada tramo por su longitud, asi
+   que un muestreo irregular da la MISMA recta. Es lo que permite mezclar DEM y
+   levantamiento sin que el resultado dependa de donde caiga cada muestra. */
+check('el muestreo irregular da la misma recta que el fino',
+      cerca(R.tierraLisa([[0, 2], [100, 7]]).hst,
+            R.tierraLisa([[0, 2], [1, 2.05], [99, 6.95], [100, 7]]).hst) &&
+      cerca(R.tierraLisa([[0, 2], [100, 7]]).hsr,
+            R.tierraLisa([[0, 2], [1, 2.05], [99, 6.95], [100, 7]]).hsr));
+
+/* EL REQUISITO: perfil plano o en rampa -> relieve 0 EXACTO. No «pequeño»:
+   exacto, porque real y referencia son la misma cuenta. */
+const FREL = 2.45e9;
+for (const [q, p, zA, zB] of [
+  ['plano a 0',      LL(() => 0, 100),        0.475,   0.475],
+  ['plano a 739,23', LL(() => 739.23, 100),   739.705, 739.705],
+  ['plano a -12,75', LL(() => -12.75, 100),  -12.275, -12.275],
+  ['rampa +5 %',     LL(s => 0.05 * s, 100),  0.475,   5.475],
+  ['rampa -15 %',    LL(s => -0.15 * s, 100), 0.475,  -14.525],
+]) {
+  check('relieve 0 EXACTO con ' + q, R.relieveDeltaDb(100, zA, zB, p, FREL).db === 0,
+        R.relieveDeltaDb(100, zA, zB, p, FREL).db);
+}
+/* Y UN CERRO SI COBRA, y mas cuanto mas alto. Sin esto el banco pasaria con
+   una funcion que devolviera 0 siempre. */
+const cerro = H => LL(s => H * Math.exp(-Math.pow((s - 50) / (100 / 6), 2)), 100, 20);
+const dbs = [0.1, 0.5, 2, 5, 10].map(H => R.relieveDeltaDb(100, 0.475, 0.475, cerro(H), FREL).db);
+check('un cerro cobra, y monotono con su altura',
+      dbs[0] > 0 && dbs.every((v, i) => i === 0 || v > dbs[i - 1]), dbs.map(v => v.toFixed(2)).join(' '));
+
+/* BULLINGTON Y NO DEYGOUT PARA EL TERRENO, y esto es lo que lo decide: el
+   resultado NO PUEDE depender de lo fino que se muestree el terreno. Con
+   Deygout daba 1,10 dB con 2 puntos y 22,74 con 80 -medido-; el mismo terreno
+   dando veinte veces mas segun como se mire no es una propiedad del terreno. */
+const ond = n => LL(s => 0.10 * Math.sin(Math.PI * s / 24), 24, n);
+const muestreos = [2, 4, 10, 20, 40, 80].map(n => R.relieveDeltaDb(24, 0.475, 0.475, ond(n), FREL).db);
+check('el relieve NO depende de la densidad de muestreo',
+      muestreos.every(v => Math.abs(v - muestreos[0]) < 1e-9),
+      muestreos.map(v => v.toFixed(4)).join(' '));
+
+/* EL PERFIL SE RECORTA AL VANO. Un DEM se muestrea con margen, y si la recta
+   se ajusta sobre el perfil entero en vez de sobre el tramo del enlace, la
+   altura de antena efectiva sale mal: medido, 1,33 m en vez de 0,475. */
+check('un perfil MAS LARGO que el vano se recorta y da lo mismo que el justo',
+      cerca(R.relieveDeltaDb(100, 3.475, 3.475, [[-10, 3], [200, 3]], FREL).htE, 0.475));
+check('y uno MAS CORTO que el vano no se inventa nada: null',
+      R.relieveDeltaDb(100, 0.475, 0.475, [[0, 0], [50, 0]], FREL) === null);
 
 // ── TECNOLOGÍA: paridad con el modelo congelado ──────────────────────────────
 // Las fórmulas compartidas NO se escriben de memoria: se citan de
