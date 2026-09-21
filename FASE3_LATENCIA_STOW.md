@@ -16,10 +16,10 @@
 > 825 s de giro. Es el único punto donde un cambio de configuración —sin
 > tecnología nueva— mueve la aguja en centenares de segundos.
 >
-> **Y la pregunta del giro tiene respuesta barata**: el registro `30010` de la
-> TCU da la velocidad de giro en grados/segundo, en vivo. El factor 2,6 entre
-> spec y campo se resuelve leyéndolo, sin cronómetro y sin tocar ningún script.
-> Ver §2.4.
+> **Y la pregunta del giro tiene respuesta barata**: el SCADA ya sondea el ángulo
+> de cada TCU (`30506`) cada 30 s. El factor 2,6 entre spec y campo se resuelve
+> diferenciándolo sobre un giro ya registrado, sin cronómetro. Lo que esa
+> resolución de 30 s **no** da es el tramo de radio. Ver §2.4.
 
 Cada cifra lleva su estado, y no se mezclan:
 
@@ -170,11 +170,43 @@ Los cuatro primeros forman una secuencia coherente. **El quinto no**: 0,0667
 está a un tercio del techo sin carga, y eso ya no lo explica la carga. O es
 otra definición de la medida, o es un hallazgo.
 
-**Y ESTO SE PUEDE ZANJAR SIN INSTRUMENTAR NADA.** El registro **`30010`
-«Tracker's rotation velocity»** está en **grados/segundo** y es de **lectura
-viva, por TCU**. No hace falta cronómetro ni tocar ningún script de campo para
-resolver el factor 2,6: basta leer 30010 durante un giro real. Es la respuesta
-más barata que hay en toda esta fase.
+**Y ESTO SE PUEDE ZANJAR SIN INSTRUMENTAR NADA — pero no por donde yo dije.**
+
+> **CORRECCIÓN, a lo que decía la versión anterior de este párrafo.** Escribí
+> «basta leer `30010` durante un giro real». **La NCU NO expone `30010`.**
+> Comprobado: ni «rotation velocity» ni «operating channel» aparecen en el mapa
+> de la NCU. El bloque `TCU Data` (30500–34899) da **22 registros por TCU** y no
+> incluye ninguno de los dos. Para leer `30010` hay que estar en el bus de la
+> propia TCU —Toolbox, BLE, en planta y TCU a TCU—, que no es «sin tocar nada».
+
+Lo que **sí** está expuesto por la NCU, por TCU y ya recogido, es mejor para
+esto:
+
+| registro | qué es | dónde |
+|---|---|---|
+| `30506` | **Current angle in radians** | bloque `TCU Data`, por TCU |
+| `30510` | **Target angle in radians** | ídem |
+| `29500` | **«Unix Epoch timestamp of the last successful read of this TCU»** | bloque `TCUs Last Comunication`, 200 unidades |
+
+Y el SCADA ya los sondea: `SCADA/config/plants.yml` declara `interval_s: 30`
+para el ciclo completo por NCU (10 s para la meteo).
+
+**La velocidad de giro sale de diferenciar `30506` entre sondeos.** Es,
+presumiblemente, lo que hizo la validación de campo — y explica por qué las dos
+lecturas del mismo día no coinciden: diferenciar un ángulo sobre una rejilla
+gruesa depende mucho de cómo se defina la diferencia, que es literalmente lo
+que aquel documento concluyó.
+
+**Y la resolución es de 30 s, lo cual decide qué se puede y qué no:**
+
+* **SÍ** se puede reconstruir el giro y el reparto grueso de un stow real ya
+  registrado, sin instrumentar nada nuevo.
+* **NO** se puede resolver el tramo de radio, que se mueve en segundos. Para el
+  ranking del §6 hacen falta **10 s o menos** de resolución, y 30 s no los da.
+
+O sea: los datos que el SCADA ya guarda resuelven el §2.4 entero y **no**
+resuelven el §2.3. El cronómetro del §5 sigue haciendo falta, y sólo para la
+radio.
 
 Relacionados, para cuando se lea: `41039` «Motor velocity evaluation time» =
 5.000 ms, `41066` «Low speed motor fault detection time» = 15 s, y `30003` bit
@@ -343,9 +375,19 @@ es una marca de tiempo por transacción.
 
 1. ¿Existe un CSV de cronómetro D.2 de algún SAT real? Si existe, esto se
    carea contra él en vez de instrumentar nada.
+
+   **Y con una resolución concreta que pedirle**: 10 s o menos. El SCADA ya
+   sondea a 30 s y eso resuelve el giro pero no la radio, así que un cronómetro
+   a 30 s no aportaría nada que no haya ya.
 2. El canal Zigbee del bloque 8a. Sigue en `null` en `radio_params.json`, con
    su aviso: a canal 26 la potencia máxima cae a +3 dBm en las dos variantes,
    y eso cambia el alcance y por tanto la profundidad de la malla.
+
+   **Se ha buscado un atajo y NO lo hay.** La TCU tiene el canal en vivo en su
+   registro `30031` («Zigbee operating channel», bits 7:0), pero **la NCU no lo
+   expone**: sus 22 registros por TCU son estado, ángulos, alarmas y batería.
+   `radio_params.json` tenía razón — el canal sale del volcado del inventario
+   (`zigbee_inventario.ps1`, bloque 8a) y de ningún otro sitio.
 
 ---
 
@@ -367,8 +409,9 @@ hoy, y es lo que este documento aporta:
   TCU declara el techo —**0,200 °/s sin carga**, `41067`— y eso ordena los
   demás valores en una escala coherente, salvo la segunda lectura de campo
   (0,0667 °/s), que se queda a un tercio del techo y no lo explica la carga.
-  **Y se puede zanjar leyendo el registro `30010`**, que da la velocidad de
-  giro en grados/segundo por TCU: no hace falta cronómetro ni tocar nada.
+  **Y se puede zanjar con lo que el SCADA ya guarda**: `30506` (ángulo actual
+  por TCU) diferenciado sobre su ciclo de 30 s. No hace falta cronómetro. Ojo:
+  NO por el registro `30010`, que la NCU no expone — ver la corrección del §2.4.
 * **La palanca que más quita del camino crítico no es de radio, ya existe, y
   está configurada en 10 minutos**: el stow autónomo de la TCU por pérdida de
   comunicación con la NCU (`40022`). 600 s dominan la cadena entera. Bajarlo es
