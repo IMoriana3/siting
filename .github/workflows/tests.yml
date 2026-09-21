@@ -80,8 +80,10 @@ jobs:
               if [ "$rc" -ne 1 ]; then
                 echo "::error::$banco con la mutación «$m» salió rc=$rc; se esperaba 1 (banco en rojo)"
                 tail -30 "$log"
-                rotas="$rotas
-  $banco · $m (rc=$rc)"
+                # Sin salto de línea embebido: dentro de un bloque `run: |` una
+                # continuación con menos sangría CIERRA el escalar y rompe el
+                # YAML entero. El separador es `;` y lo desdobla el `tr` final.
+                rotas="$rotas;$banco · $m (rc=$rc)"
                 continue
               fi
               echo "  $banco · $m: roja, bien"
@@ -116,6 +118,7 @@ jobs:
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.
           if [ -n "$rotas" ]; then
-            echo "::error::mutaciones que no salieron rc=1:$rotas"
+            echo "::error::mutaciones que NO salieron rc=1 (rc=2 = ancla que se quedo atras en un refactor; NO es «cazada»):"
+            echo "$rotas" | tr ';' '\n' | grep -v '^$'
             exit 1
           fi
