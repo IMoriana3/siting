@@ -55,7 +55,7 @@ MUTACIONES = {
     # la altura del eje deja de decir que NO esta medida, SOLO en Python: una
     # cota declarada que se presenta como medida es el falso verde de siempre
     "py_eje_medida":  ("py", r'return \{"valor": defecto_m, "medida": False,', 'return {"valor": defecto_m, "medida": True,'),
-    # y SOLO en JS, un module_height a cero cuela como medida
+    # y SOLO en JS, un eje_m a cero cuela como medida
     "js_eje_cero":    ("js", r'if \(typeof v === "number" && isFinite\(v\) && v > 0\)', 'if (typeof v === "number")'),
     # al tapar se pierde la profundidad, SOLO en Python
     "py_tapa_cero":   ("py", r'"despeje": -min\(abs\(h_lo\), abs\(h_hi\)\) if cruza else abs\(h\),',
@@ -202,11 +202,13 @@ def casos_antena():
         out.append(["reflinf", th, 5e-3, 2.45e9, "v"])
         out.append(["reflinf", th, 5e-3, 868e6, "h"])
     # LA ALTURA DEL EJE: declarada, medida, sin montaje, y el cero que NO cuela
-    for m in [{"module_height": None}, {"module_height": 2.0}, {"module_height": 1.87},
-              {"module_height": 0}, {"module_height": -1}, {}, None]:
-        out.append(["eje", m, 1.20])
-    for m in [{"eje_m": 1.35}, {"eje_m": 1.35, "module_height": 2.0},
-              {"eje_m": None, "module_height": 1.87}, {"eje_m": 0}]:
+    # EL NOMBRE ES `eje_m` Y SOLO ESE. Los casos con `module_height` PUESTO ya
+    # no van aqui: los dos motores LANZAN, y eso se carea abajo con su propio
+    # bloque. Un `module_height: null` si entra, porque es lo que el generador
+    # emite hoy en las diez plantas y tiene que seguir siendo inocuo.
+    for m in [{"eje_m": None}, {"eje_m": 2.0}, {"eje_m": 1.87},
+              {"eje_m": 0}, {"eje_m": -1}, {}, None,
+              {"module_height": None}, {"module_height": None, "eje_m": 1.35}]:
         out.append(["eje", m, 1.20])
     for cu in [2.380, 2.382, 2.384, 2.411]:
         for al in [0, 30, 55, 84.5248, 90]:
@@ -568,6 +570,29 @@ try:
 except Exception as e:
     revento = "f_hz" in str(e)
 check("en Python tambien LANZA si falta la frecuencia", revento)
+
+# EL NOMBRE VIEJO DE LA ALTURA DEL EJE: los DOS motores tienen que lanzar.
+# Si uno lo ignorase y el otro no, una planta con el campo viejo puesto daria
+# mapas distintos en el visor y en la calibracion, que es la averia que esta
+# paridad existe para impedir.
+def _lanza_py():
+    try:
+        PY.altura_eje({"module_height": 1.87}, 1.20); return False
+    except Exception as e:
+        return "module_height" in str(e) and "eje_m" in str(e)
+
+_fEje = os.path.join(tmp, "eje_viejo.js")
+open(_fEje, "w").write(
+    "const fs=require('fs'),vm=require('vm');const c={module:{exports:{}},globalThis:{}};"
+    "c.globalThis=c;vm.createContext(c);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),c);"
+    "try{c.module.exports.alturaEje({module_height:1.87},1.20);process.stdout.write('NO_LANZO');}"
+    "catch(e){process.stdout.write(/module_height/.test(e.message)&&/eje_m/.test(e.message)"
+    "?'LANZA_BIEN':'LANZA_MAL:'+e.message);}")
+_rEje = subprocess.run([os.environ.get("NODE", "node"), _fEje, ruta_js],
+                       capture_output=True, text=True)
+check("los dos motores LANZAN con el nombre viejo PUESTO, no lo ignoran",
+      _lanza_py() and _rEje.stdout.strip() == "LANZA_BIEN",
+      "py=%s js=%s" % (_lanza_py(), (_rEje.stdout or _rEje.stderr)[:80]))
 
 print()
 print("FALLOS: %d (de %d)" % (ko, ok + ko) if ko else "TODO OK — %d comprobaciones" % ok)

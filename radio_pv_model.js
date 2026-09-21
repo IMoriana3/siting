@@ -128,14 +128,37 @@
    * 2,00 sobre las 49 de El Burgo. Lo que decide es el REBOTE EN EL SUELO:
    * 4,8–5,8 dB por enlace. Y eso la acopla al relieve, no al panel. */
   function alturaEje(montaje, defectoM) {
-    /* DOS NOMBRES PARA LA MISMA COTA, y eso hay que cerrarlo. `module_height`
-       es el hueco que ya existe en `plantas_indice.json` —generado por
-       `montaje_edm.mjs`, con su procedencia escrita— y `eje_m` es el nombre
-       pedido al fijar el estandar. Se aceptan los dos con `eje_m` mandando,
-       para no romper lo que hay mientras se decide; tener dos nombres para una
-       cota es justo el problema que esta consolidacion viene a cerrar, asi que
-       esto es un puente, no un destino. */
-    var v = montaje && (montaje.eje_m != null ? montaje.eje_m : montaje.module_height);
+    /* CERRADO: EL NOMBRE ES `eje_m`, Y SOLO ESE.
+       Habia dos para la misma cota y el motor aceptaba los dos «mientras se
+       decide». Decidido: `eje_m`, que es el nombre fijado con el estandar.
+
+       `module_height` sale de pvlib, donde significa la altura del MODULO, no
+       la del tubo. Aqui se usaba para la del tubo -lo dice su propia cadena de
+       procedencia en `montaje_edm.mjs:133`, «no se ha medido la altura del
+       TUBO en ninguna planta»-, o sea un nombre prestado que apunta a otra
+       cota. Es exactamente el enredo de `HEJE` en `terreno.html`, que decia
+       «eje» y era la cara del modulo.
+
+       CAMBIAR ESTO NO MUEVE NINGUN NUMERO, y es comprobable: `module_height`
+       vale `null` en las DIEZ plantas de `plantas_indice.json` que lo traen, y
+       las otras dos ni lo tienen. Nadie lo puebla y nadie mas lo lee: el unico
+       codigo que lo menciona es el generador que lo emite vacio. Asi que antes
+       y despues se cae al defecto declarado por el mismo camino.
+
+       Y NO SE IGNORA EN SILENCIO: si alguna planta llega con `module_height`
+       PUESTO, esto LANZA. Ignorarlo callando seria peor que aceptarlo — el dia
+       que alguien mida un tubo de verdad y lo escriba en el campo viejo, su
+       medida se perderia y el mapa saldria con el defecto sin decirlo.
+
+       PENDIENTE, y va aparte a proposito: renombrar el campo en el generador
+       (`Cobertura-Zigbee/tools/montaje_edm.mjs`) y regenerar el indice. No
+       entra en el PR de comentarios de aquel repo, que declara no tocar codigo. */
+    if (montaje && montaje.module_height != null) {
+      throw new Error("radio_pv_model: `module_height` ya no se lee; la altura del eje se " +
+                      "declara como `eje_m`. Viene con valor " + montaje.module_height +
+                      ", y descartarlo en silencio perderia una medida.");
+    }
+    var v = montaje && montaje.eje_m;
     if (typeof v === "number" && isFinite(v) && v > 0) {
       return { valor: v, medida: true, motivo: null };
     }

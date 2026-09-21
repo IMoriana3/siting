@@ -69,17 +69,28 @@ def altura_eje(montaje, defecto_m):
     constante global escondida: si la planta no la declara se cae al defecto
     CON MOTIVO, para poder rotular la salida como «declarada».
 
-    El hueco por planta ya existe y esta vacio: `montaje.module_height` en
-    plantas_indice.json vale null en las once, y su generador lo dice.
+    El hueco por planta ya existe y esta vacio: `eje_m` en plantas_indice.json,
+    generado hoy todavia con el nombre viejo `module_height` y a null en las
+    diez plantas que lo traen.
 
     Y lo que decide esta cota, medido: NO donde cae el canto respecto a la
     antena -subir el eje sube la banda y la antena a la vez, difraccion
     invariante, 0,00e+0 dB- sino el REBOTE EN EL SUELO, 4,8-5,8 dB por enlace."""
-    # DOS NOMBRES PARA LA MISMA COTA: `module_height` es el hueco que ya existe
-    # en plantas_indice.json y `eje_m` el nombre pedido al fijar el estandar.
-    # Mandan `eje_m`; es un puente mientras se decide, no un destino.
+    # CERRADO: EL NOMBRE ES `eje_m`, Y SOLO ESE. Habia dos para la misma cota.
+    # `module_height` viene de pvlib, donde significa la altura del MODULO, y
+    # aqui se usaba para la del TUBO -lo dice su propia procedencia en
+    # `montaje_edm.mjs:133`-: el mismo enredo que `HEJE` en terreno.html.
+    #
+    # No mueve ningun numero: vale null en las diez plantas que lo traen y
+    # nadie lo puebla. Y NO se ignora callando: si llega PUESTO, lanza, porque
+    # descartar en silencio la unica medida real de un tubo seria peor.
     m = montaje or {}
-    v = m.get("eje_m") if m.get("eje_m") is not None else m.get("module_height")
+    if m.get("module_height") is not None:
+        raise ValueError(
+            "radio_pv_model: `module_height` ya no se lee; la altura del eje se "
+            "declara como `eje_m`. Viene con valor %r, y descartarlo en silencio "
+            "perderia una medida." % (m.get("module_height"),))
+    v = m.get("eje_m")
     if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0:
         return {"valor": float(v), "medida": True, "motivo": None}
     if not (defecto_m and defecto_m > 0):

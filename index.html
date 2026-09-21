@@ -2543,10 +2543,11 @@ function rfPropagacion(){ const p=rfParamsNuevo(); if(!p)return null;
           polarizacion:p.propagacion.polarizacion.valor, sigma_db:p.propagacion.sigma_db.valor,
           vegetacion:{modelo:p.vegetacion.modelo.valor}}; }
 function rfAngulo(_i){ return rfTilt(); }          // punto 2: por seguidor y por hora
-/* LA COTA DEL EJE DEL TUBO, POR PLANTA. `alturaEje` lee `module_height` del
-   `montaje` de la planta y, si no esta, cae al defecto declarado CON MOTIVO —que
-   es lo que pasa en las ONCE, porque nadie lo ha medido—. El motivo viaja hasta
-   la leyenda para que el mapa no presente una cota declarada como medida. */
+/* LA COTA DEL EJE DEL TUBO, POR PLANTA. `alturaEje` lee `eje_m` del `montaje`
+   de la planta y, si no esta, cae al defecto declarado CON MOTIVO —que es lo
+   que pasa en las DOCE, porque nadie lo ha medido—. El motivo viaja hasta la
+   leyenda para que el mapa no presente una cota declarada como medida.
+   El nombre viejo `module_height` ya no se lee: si llega con valor, LANZA. */
 function rfEjeTubo(){ const p=rfParamsNuevo(); if(!p) return null;
   return RadioPV.alturaEje((S.p&&S.p.montaje)||null, p.geometria.eje_tubo_m.valor); }
 /* Y LA ANTENA SALE DEL EJE, no de una cota propia: cuelga del tubo y GIRA CON EL.

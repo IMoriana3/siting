@@ -49,7 +49,7 @@ const MUTACIONES = {
   // la cota declarada se presenta como medida: el falso verde de siempre
   ejeMiente:      ['radio_pv_model.js', /return \{ valor: defectoM, medida: false,/, 'return { valor: defectoM, medida: true,'],
   // la altura del eje vuelve a ser una constante global, ignorando la planta
-  ejeGlobal:      ['radio_pv_model.js', /var v = montaje && \(montaje\.eje_m != null \? montaje\.eje_m : montaje\.module_height\);/, 'var v = null;'],
+  ejeGlobal:      ['radio_pv_model.js', /var v = montaje && montaje\.eje_m;/, 'var v = null;'],
   // al tapar se pierde la PROFUNDIDAD: nu = 0 y 6,03 dB fijos tape lo que tape.
   // Es el fallo que tuvo la primera version de `cortaPanel`, puesto de mutacion
   // para que no pueda volver en silencio.
@@ -58,9 +58,10 @@ const MUTACIONES = {
   // la geometria bajo tierra se CORRIGE callando, subiendo el borde al suelo:
   // un numero plausible sobre una planta que no existe
   tierraCallada:  ['radio_pv_model.js', /bajoTierra: zBot < suelo,/, 'bajoTierra: false,'],
-  // `eje_m` deja de mandar sobre el nombre viejo
-  ejeNombreViejo: ['radio_pv_model.js', /var v = montaje && \(montaje\.eje_m != null \? montaje\.eje_m : montaje\.module_height\);/,
-                                        'var v = montaje && montaje.module_height;'],
+  // el nombre viejo vuelve a colarse en silencio en vez de LANZAR: el dia que
+  // alguien mida un tubo y lo escriba ahi, su medida se perderia sin ruido
+  ejeNombreViejo: ['radio_pv_model.js', /if \(montaje && montaje\.module_height != null\) \{/,
+                                        'if (false) {'],
 };
 const MUTA = process.env.MUTA;
 const fuentes = {};
@@ -304,14 +305,26 @@ check('y por encima del panel el estado es «libre», no «hueco»',
 /* ══ 3c. LA ALTURA DEL EJE: POR PLANTA, Y LO QUE DE VERDAD DECIDE ════════ */
 console.log('\n· la altura del eje, por planta y con motivo');
 check('una planta que NO la declara cae al defecto y lo DICE',
-      R.alturaEje({ module_height: null }, 2.00).medida === false &&
-      R.alturaEje({ module_height: null }, 2.00).motivo === 'altura_de_eje_declarada_no_medida_en_esta_planta');
+      R.alturaEje({ eje_m: null }, 2.00).medida === false &&
+      R.alturaEje({ eje_m: null }, 2.00).motivo === 'altura_de_eje_declarada_no_medida_en_esta_planta');
 check('una planta que SI la declara manda sobre el defecto',
-      R.alturaEje({ module_height: 1.87 }, 2.00).valor === 1.87 &&
-      R.alturaEje({ module_height: 1.87 }, 2.00).medida === true);
+      R.alturaEje({ eje_m: 1.87 }, 2.00).valor === 1.87 &&
+      R.alturaEje({ eje_m: 1.87 }, 2.00).medida === true);
 check('un 0 o un negativo NO cuelan como medida',
-      R.alturaEje({ module_height: 0 }, 2.00).medida === false &&
-      R.alturaEje({ module_height: -1 }, 2.00).medida === false);
+      R.alturaEje({ eje_m: 0 }, 2.00).medida === false &&
+      R.alturaEje({ eje_m: -1 }, 2.00).medida === false);
+/* EL NOMBRE VIEJO NO SE IGNORA, LANZA. Habia DOS nombres para esta cota y el
+   motor aceptaba los dos. Cerrado en `eje_m`. Pero descartar `module_height`
+   en silencio seria peor que aceptarlo: el dia que alguien mida un tubo de
+   verdad y lo escriba en el campo viejo, su medida se perderia y el mapa
+   saldria con el defecto sin decir una palabra. Un `null` sigue siendo
+   legitimo -es lo que emite hoy el generador en las diez plantas-. */
+check('el nombre viejo con valor LANZA, no se ignora callando', (function () {
+  try { R.alturaEje({ module_height: 1.87 }, 2.00); return false; }
+  catch (e) { return /module_height/.test(e.message) && /eje_m/.test(e.message); }
+})());
+check('pero un `module_height: null` NO estorba: es lo que genera el indice hoy',
+      R.alturaEje({ module_height: null, eje_m: 1.35 }, 2.00).valor === 1.35);
 check('sin montaje y sin defecto, LANZA', (function () {
   try { R.alturaEje(null, 0); return false; } catch (e) { return /altura del eje/.test(e.message); }
 })());
@@ -329,10 +342,16 @@ check('planta SIN eje declarado -> 1,20 y rotulada como no especifica',
 check('planta CON `eje_m` -> el suyo, y marcada como medida',
       R.alturaEje({ eje_m: 1.35 }, P.eje_tubo_m.valor).valor === 1.35 &&
       R.alturaEje({ eje_m: 1.35 }, P.eje_tubo_m.valor).medida === true);
-check('y `eje_m` MANDA sobre el `module_height` que ya existia',
-      R.alturaEje({ eje_m: 1.35, module_height: 2.00 }, 1.20).valor === 1.35);
-check('el `module_height` solo sigue valiendo, para no romper lo que hay',
-      R.alturaEje({ module_height: 1.87 }, 1.20).valor === 1.87);
+/* AQUI HABIA DOS CHECKS QUE FIJABAN EL PUENTE: que `eje_m` mandaba sobre
+   `module_height` y que el nombre viejo «sigue valiendo, para no romper lo que
+   hay». El puente se ha cerrado: el nombre es `eje_m` y solo ese. Lo que se
+   exige ahora es mas fuerte, no menos — que el nombre viejo con valor LANCE en
+   vez de perderse. Cambiarlo no mueve un numero: vale `null` en las diez
+   plantas de `plantas_indice.json` que lo traen y las otras dos ni lo tienen. */
+check('con los DOS puestos ya no hay precedencia que elegir: LANZA', (function () {
+  try { R.alturaEje({ eje_m: 1.35, module_height: 2.00 }, 1.20); return false; }
+  catch (e) { return /module_height/.test(e.message); }
+})());
 /* NINGUN TERCER CAMINO: sin planta y sin defecto no se inventa una cota. */
 check('sin declarar y SIN defecto, LANZA en vez de suponer', (function () {
   try { R.alturaEje({}, null); return false; } catch (e) { return /altura del eje/.test(e.message); }

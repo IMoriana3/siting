@@ -41,8 +41,8 @@
       "_rotulo": "eje estándar 1,20 m, no específico de la planta",
       "_fuente": "ESTÁNDAR FACTIUN, indicado por Iñaki (2026-09-21). No sale de un plano ni de una medida de campo: es la altura de tubo que la casa monta por defecto.",
       "_ojo": [
-        "DEFECTO DECLARADO, NO MEDIDA. Si la planta declara `eje_m` -o el `module_height` que",
-        "ya existe en `plantas_indice.json`- manda el de la planta, con su cita. Si no, se usa",
+        "DEFECTO DECLARADO, NO MEDIDA. Si la planta declara `eje_m` en `plantas_indice.json`",
+        "manda el de la planta, con su cita. Si no, se usa",
         "este 1,20 y la salida LO ROTULA: «eje estándar 1,20 m, no específico de la planta».",
         "",
         "SUSTITUYE AL 2,00 QUE HABÍA. Aquel salía de `seguidor.js:31 postH`, corroborado por",
