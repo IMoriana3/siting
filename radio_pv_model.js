@@ -476,6 +476,79 @@
    * Deygout: se busca el obstáculo dominante (el de ν mayor), se cobra su
    * pérdida y se repite a los dos lados. `maxProf` acota la recursión igual que
    * en el modelo antiguo (3). */
+
+  /* ── DEYGOUT SOBRE PANELES, QUE ES EL QUE PARTE EN EL CANTO ───────────────
+   *
+   * El de bandas parte en el EJE de la fila dominante, porque la banda pone el
+   * obstáculo ahí. Con el panel real el canto está a ±(c/2)·cos α del eje, y
+   * partir en el eje mete un error en d1 y d2 de hasta ese metro largo: para la
+   * fila propia eso es la diferencia entre 0,9 λ y 9,3 λ, o sea entre «no se
+   * puede calcular» y un número.
+   *
+   * EL CRUCE LLEVA SU PROPIA GEOMETRÍA, no una banda ya resuelta:
+   *
+   *     { s, zEje, cuerda, alpha, senPhi }
+   *
+   * con `s` la distancia recorrida hasta el EJE de esa fila y `senPhi` el seno
+   * del ángulo entre el enlace y la fila. De ahí sale todo: el `w` de cada
+   * extremo es −s·senφ y (D−s)·senφ, y el canto vuelve a distancia recorrida
+   * como s + wBorde/senφ. Así la misma función vale para un enlace
+   * perpendicular a la fila y para uno que la corta de refilón.
+   *
+   * SE PARTE POR EL EJE, NO POR EL CANTO, al repartir los cruces en izquierda y
+   * derecha. No es un descuido: el canto de CADA cruce depende de las cotas del
+   * tramo, que cambian al recursionar, así que usarlo para repartir daría un
+   * reparto distinto en cada nivel. El eje es estable. Lo que sí va al canto es
+   * el PUNTO DE CORTE del tramo y la cota desde la que se reconstruye el rayo,
+   * que es lo que mueve los números. */
+  function difraccionPanelesDetalle(D, zA, zB, cruces, fHz, prof, maxProf) {
+    var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
+    var vacio = { totalDb: 0.0, dominante: null, izquierda: null, derecha: null,
+                  profundidad: p, motivo: null };
+    if (!cruces || !cruces.length) { vacio.motivo = "sin cruces"; return vacio; }
+    if (p >= tope) { vacio.motivo = "tope de recursion (" + tope + ")"; return vacio; }
+    if (D <= 0) { vacio.motivo = "tramo de longitud nula"; return vacio; }
+    var mejorV = -1e9, mejor = -1, mejorS = 0, mejorC = null;
+    for (var i = 0; i < cruces.length; i++) {
+      var cr = cruces[i], sp = cr.senPhi;
+      if (!(sp > 0)) continue;                       // paralelo a la fila: no la cruza
+      var c = cortaPanel(cr.zEje, cr.cuerda, cr.alpha, -cr.s * sp, (D - cr.s) * sp, zA, zB);
+      if (c.wBorde == null) continue;                // paralelo o fuera de la huella
+      var sB = cr.s + c.wBorde / sp;                 // el CANTO, en distancia recorrida
+      if (sB <= 0 || sB >= D) continue;
+      var v = nu(-c.despeje, sB, D - sB, fHz);       // despeje positivo ⇒ ν negativo
+      if (v > mejorV) { mejorV = v; mejor = i; mejorS = sB; mejorC = c; }
+    }
+    if (mejor < 0) { vacio.motivo = "ningun canto cae dentro del tramo"; return vacio; }
+    if (mejorV <= -0.78) {
+      vacio.motivo = "el dominante despeja (nu = " + mejorV.toFixed(3) + " <= -0,78)";
+      return vacio;
+    }
+    var bordeDom = mejorC.borde;
+    var perdidaDom = perdidaFiloDb(mejorV);
+    var izq = [], der = [];
+    for (var k = 0; k < cruces.length; k++) {
+      if (k === mejor) continue;
+      if (cruces[k].s < cruces[mejor].s) izq.push(cruces[k]);
+      else der.push({ s: cruces[k].s - mejorS, zEje: cruces[k].zEje,
+                      cuerda: cruces[k].cuerda, alpha: cruces[k].alpha,
+                      senPhi: cruces[k].senPhi });
+    }
+    var dIzq = difraccionPanelesDetalle(mejorS, zA, bordeDom, izq, fHz, p + 1, tope);
+    var dDer = difraccionPanelesDetalle(D - mejorS, bordeDom, zB, der, fHz, p + 1, tope);
+    return {
+      totalDb: perdidaDom + dIzq.totalDb + dDer.totalDb,
+      dominante: { indice: mejor, s: mejorS, sEje: cruces[mejor].s, nu: mejorV,
+                   perdidaDb: perdidaDom, estado: mejorC.estado,
+                   despeje: mejorC.despeje, borde: bordeDom, wBorde: mejorC.wBorde },
+      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null
+    };
+  }
+
+  function difraccionPanelesDb(D, zA, zB, cruces, fHz, prof, maxProf) {
+    return difraccionPanelesDetalle(D, zA, zB, cruces, fHz, prof, maxProf).totalDb;
+  }
+
   /* HAY UNA SOLA IMPLEMENTACIÓN, y devuelve el DETALLE. `difraccionBandasDb`
    * es una envoltura que se queda con el total.
    *
@@ -640,6 +713,8 @@
     coefReflexion: coefReflexion,
     dosRayosDb: dosRayosDb,
     nu: nu,
+    difraccionPanelesDb: difraccionPanelesDb,
+    difraccionPanelesDetalle: difraccionPanelesDetalle,
     difraccionBandasDb: difraccionBandasDb,
     difraccionBandasDetalle: difraccionBandasDetalle,
     vegetacionDb: vegetacionDb,

@@ -72,6 +72,10 @@ MUTACIONES = {
     # al tapar se pierde la profundidad, SOLO en Python
     "py_tapa_cero":   ("py", r'"despeje": -min\(abs\(h_lo\), abs\(h_hi\)\) if cruza else abs\(h\),',
                               '"despeje": 0 if cruza else abs(h),'),
+    # el Deygout de paneles vuelve a partir en el EJE, SOLO en JS
+    "js_parte_eje":   ("js", r'var sB = cr\.s \+ c\.wBorde / sp;', 'var sB = cr.s;'),
+    # el seno del angulo de cruce se pierde al volver del canto, SOLO en Python
+    "py_sin_senphi":  ("py", r's_b = cr\["s"\] \+ c\["wBorde"\] / sp', 's_b = cr["s"] + c["wBorde"]'),
     # el conductor perfecto vuelve a dar NaN SOLO en Python
     "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
@@ -266,7 +270,25 @@ def casos_antena():
     return out
 
 
+def casos_paneles():
+    """DEYGOUT SOBRE PANELES. Se barre el angulo de cruce -de perpendicular a
+    casi paralelo- porque `senPhi` entra en el `w` de los dos extremos Y en la
+    vuelta del canto a distancia recorrida: si un motor lo aplicara solo en un
+    sitio, la diferencia saldria aqui y no en `corta_panel`."""
+    out = []
+    for D, zA, zB in [(60, 0.805, 0.805), (120, 0.805, 3.15), (24, 0.775, 0.775),
+                      (338, 0.871, 0.871)]:
+        for al in [0, 10, 30, 45, 55]:
+            for sp in [1.0, 0.866, 0.5, 0.1736, 0.05]:
+                for ss in [[0.2], [0.2, 0.5, 0.8], [0.1, 0.3, 0.5, 0.7, 0.9]]:
+                    cr = [{"s": f * D, "zEje": 1.5, "cuerda": 2.382,
+                           "alpha": al, "senPhi": sp} for f in ss]
+                    out.append([D, zA, zB, cr, 2.45e9])
+    return out
+
+
 CASOS = {
+    "paneles": casos_paneles(),
     "banda": casos_banda(), "corta": casos_corta(), "regimen": casos_regimen(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
     "difraccion": casos_difraccion(), "antena": casos_antena(),
@@ -305,6 +327,11 @@ out.escalares = casos.escalares.map(c => {
                         return [g.re, g.im]; }
   }
   throw new Error('caso escalar desconocido: ' + c[0]);
+});
+out.paneles = casos.paneles.map(([D, zA, zB, cr, f]) => {
+  const r = R.difraccionPanelesDetalle(D, zA, zB, cr, f);
+  const d = r.dominante;
+  return [r.totalDb, r.motivo, d === null ? null : [d.s, d.sEje, d.nu, d.perdidaDb, d.estado, d.despeje, d.borde, d.wBorde]];
 });
 out.difraccion = casos.difraccion.map(([D, zA, zB, cr, f]) =>
   R.difraccionBandasDb(D, zA, zB, cr.map(([a, s]) => ({ s: s, banda: bandaDe(a) })), f));
@@ -363,6 +390,12 @@ def corre_python(mod, casos):
             g = mod.coef_reflexion(c[1], c[2], c[3], c[4], c[5])
             out["escalares"].append([g[0], g[1]])
         else: raise SystemExit("caso escalar desconocido: %s" % k)
+    out["paneles"] = []
+    for D, zA, zB, cr, f in casos["paneles"]:
+        r = mod.difraccion_paneles_detalle(D, zA, zB, cr, f)
+        d = r["dominante"]
+        out["paneles"].append([r["totalDb"], r["motivo"], None if d is None else
+            [d["s"], d["sEje"], d["nu"], d["perdidaDb"], d["estado"], d["despeje"], d["borde"], d["wBorde"]]])
     out["difraccion"] = [
         mod.difraccion_bandas_db(D, zA, zB, [{"s": s, "banda": b(a)} for a, s in cr], f)
         for D, zA, zB, cr, f in casos["difraccion"]]

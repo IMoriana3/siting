@@ -325,6 +325,77 @@ def nu(h_tapa, d1, d2, f_hz):
     return h_tapa * math.sqrt((2 * (d1 + d2)) / (longitud_onda(f_hz) * d1 * d2))
 
 
+def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    """Deygout sobre PANELES, que parte en el CANTO y no en el eje. Espejo de
+    `difraccionPanelesDetalle()`.
+
+    El cruce lleva su propia geometria -{s, zEje, cuerda, alpha, senPhi}- en vez
+    de una banda ya resuelta: `s` es la distancia hasta el EJE de esa fila y
+    `senPhi` el seno del angulo enlace-fila. El `w` de cada extremo sale de ahi
+    y el canto vuelve a distancia recorrida como s + wBorde/senPhi.
+
+    SE REPARTE POR EL EJE, no por el canto: el canto de cada cruce depende de
+    las cotas del tramo, que cambian al recursionar, asi que repartir por el
+    daria un reparto distinto en cada nivel. Lo que si va al canto es el punto
+    de corte del tramo y la cota desde la que se reconstruye el rayo."""
+    p = prof or 0
+    tope = 3 if max_prof is None else max_prof
+    vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
+             "derecha": None, "profundidad": p, "motivo": None}
+    if not cruces:
+        vacio["motivo"] = "sin cruces"; return vacio
+    if p >= tope:
+        vacio["motivo"] = "tope de recursion (%d)" % tope; return vacio
+    if D <= 0:
+        vacio["motivo"] = "tramo de longitud nula"; return vacio
+    mejor_v, mejor, mejor_s, mejor_c = -1e9, -1, 0.0, None
+    for i, cr in enumerate(cruces):
+        sp = cr["senPhi"]
+        if not (sp > 0):
+            continue
+        c = corta_panel(cr["zEje"], cr["cuerda"], cr["alpha"],
+                        -cr["s"] * sp, (D - cr["s"]) * sp, zA, zB)
+        if c["wBorde"] is None:
+            continue
+        s_b = cr["s"] + c["wBorde"] / sp
+        if s_b <= 0 or s_b >= D:
+            continue
+        v = nu(-c["despeje"], s_b, D - s_b, f_hz)
+        if v > mejor_v:
+            mejor_v, mejor, mejor_s, mejor_c = v, i, s_b, c
+    if mejor < 0:
+        vacio["motivo"] = "ningun canto cae dentro del tramo"; return vacio
+    if mejor_v <= -0.78:
+        vacio["motivo"] = "el dominante despeja (nu = %.3f <= -0,78)" % mejor_v
+        return vacio
+    borde_dom = mejor_c["borde"]
+    perdida_dom = perdida_filo_db(mejor_v)
+    izq, der = [], []
+    for k, cr in enumerate(cruces):
+        if k == mejor:
+            continue
+        if cr["s"] < cruces[mejor]["s"]:
+            izq.append(cr)
+        else:
+            der.append({"s": cr["s"] - mejor_s, "zEje": cr["zEje"],
+                        "cuerda": cr["cuerda"], "alpha": cr["alpha"],
+                        "senPhi": cr["senPhi"]})
+    d_izq = difraccion_paneles_detalle(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
+    d_der = difraccion_paneles_detalle(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
+    return {
+        "totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
+        "dominante": {"indice": mejor, "s": mejor_s, "sEje": cruces[mejor]["s"],
+                      "nu": mejor_v, "perdidaDb": perdida_dom,
+                      "estado": mejor_c["estado"], "despeje": mejor_c["despeje"],
+                      "borde": borde_dom, "wBorde": mejor_c["wBorde"]},
+        "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
+    }
+
+
+def difraccion_paneles_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    return difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
+
+
 def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
     """Deygout sobre BANDAS, con el DETALLE. Espejo de `difraccionBandasDetalle()`.
 
