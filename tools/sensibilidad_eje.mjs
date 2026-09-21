@@ -8,9 +8,9 @@ import fs from 'fs'; import path from 'path'; import vm from 'vm';
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const R = require(path.join(RAIZ,'radio_pv_model.js'));
-const ZB = require(path.join(RAIZ,'radio_zigbee.js'));
-const RAIZ = path.dirname(new URL('..', import.meta.url).pathname);
+const RAIZ = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const R = require(path.join(RAIZ, 'radio_pv_model.js'));
+const ZB = require(path.join(RAIZ, 'radio_zigbee.js'));
 const GEOJSON = path.join(RAIZ, '..', 'Cobertura-Zigbee', 'elburgo_real.geojson');
 const CUERDA = 2.382, RA = 0.225, CA = 0.50;
 
