@@ -4,3 +4,6 @@ tools/.careo_mutado.mjs
 tools/.probe.mjs
 tools/.estadistica_mutada.mjs
 tools/.muta_*
+
+# los logs del corredor de bancos
+.bancos/

@@ -34,15 +34,21 @@ jobs:
           git clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
-      - name: banco de pruebas
-        run: |
-          set -o pipefail
-          rc=0
-          for f in tests/test_*.js; do
-            echo "── $f ──"
-            node "$f" || rc=1
-          done
-          exit $rc
+      # EL CORREDOR, que ya no mira solo el codigo de salida.
+      #
+      # Antes esto era un `for f in tests/test_*.js; do node "$f" || rc=1; done`
+      # — o sea, el codigo de salida y nada mas. Y el codigo de salida es justo
+      # lo que nos ha mentido dos veces en un dia: cuatro pasos de esta CI
+      # decian «no se ha medido nada» y salian con 0, y en cobertura-zigbee un
+      # banco entraba sin argumentos, daba cero vueltas y llevaba cuatro meses
+      # en verde sin mirar una planta (#741).
+      #
+      # `tests/correr.sh` aplica la regla de factiun-cartera: verde es salir
+      # con 0 **y** sin lineas de fallo **y** publicando al menos PISO
+      # comprobaciones. Trae ademas dos guardias: un banco nuevo sin piso se
+      # pone ROJO, y una exencion sobre un fichero borrado tambien.
+      - name: banco de pruebas (con piso por banco)
+        run: bash tests/correr.sh
 
       # LA HERRAMIENTA DE INFORME, aunque no sea un banco. Extrae `rfRows` y
       # `buildAdjacency` del HTML con una expresión regular, así que se rompe
