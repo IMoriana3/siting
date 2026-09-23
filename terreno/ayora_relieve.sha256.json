@@ -1,0 +1,18 @@
+{
+  "fichero": "ayora_relieve.json",
+  "sha256": "d33263067ac0d3fe9c4c9d390fe1d5d12529bc1b627caf447710db1b9042da80",
+  "bytes": 1632861,
+  "productor": "relieve_de_levantamiento.mjs v1",
+  "tipo": "empalme",
+  "generado": "2026-09-23",
+  "planta": "ayora",
+  "crs": "EPSG:25830",
+  "cE": 659081.75,
+  "cN": 4331506.45,
+  "paso": 6,
+  "nx": 458,
+  "nn": 518,
+  "eje_m": 1.2,
+  "eje_medido": false,
+  "_que_es": "Manifiesto del terreno de esta planta. Viaja con el preset del proyecto; quien consuma el fichero comprueba este sha256 antes de usarlo. El sha se calcula sobre el TEXTO del JSON, byte a byte."
+}

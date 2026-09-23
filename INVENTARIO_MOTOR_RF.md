@@ -352,10 +352,47 @@ Físicamente tampoco es un filo: por debajo de la placa el rayo pasa por una
 único no es el modelo de una ranura.
 
 **Mejor fundada la estructura del canon**, que trata el suelo como obstáculo
-propio y continuo (`relieveDominante`) en vez de colarlo dentro de la banda. Lo
-que hay que absorber de rf-fv **no es el `min`: es haberse dado cuenta**. Con el
-relieve conectado (§4), el canon da la respuesta correcta sin la incoherencia,
-porque Deygout ya elige entre los dos obstáculos por valor de ν.
+propio y continuo en vez de colarlo dentro de la banda. Lo que hay que absorber
+de rf-fv **no es el `min`: es haberse dado cuenta**.
+
+### A4, cerrado — y no como este documento preveía
+
+Este §5 decía «implementado vía `relieveDominante`». **Esa función ya no
+existe**: A3 la sustituyó por la tierra lisa de P.1812, y eso cambió la
+arquitectura por debajo del plan. Así que A4 se volvió a medir con el terreno
+real que ya hay — `tools/a4_suelo_bajo_placa.mjs`, re-ejecutable.
+
+**La observación de rf-fv era correcta, y ahora sí se puede demostrar.** Con
+suelo llano este documento midió «no pasa nunca», y anotó que cambiaría «en
+cuanto entre el DEM». Entró, y pasa:
+
+| planta | cruces de fila | el suelo manda |
+|---|---:|---:|
+| Ayora | 7.056 | **98 (1,39 %)** |
+| San José | 21.265 | **554 (2,61 %)** |
+| **total** | **28.321** | **652 (2,30 %)** |
+
+**Pero A4 NO se implementa**, y el motivo es la misma prueba que decidió A3:
+
+* el suelo **ya es** un obstáculo propio y continuo —el perfil del terreno,
+  medido contra la tierra lisa— y se cobra en su propio término;
+* sobre terreno **llano** ese término da **0 EXACTO**, que es lo correcto: el
+  suelo plano lo modelan los dos rayos;
+* y donde el terreno **sube** —que son justo esos 652 cruces— el relieve ya lo
+  cobra.
+
+Meterlo **además** como filo bajo la placa cobraría **hasta 1,88 dB a 400 m**
+sobre terreno llano que nadie descuenta de los dos rayos. Es el doble conteo
+que A3 vino a quitar —21,66 dB medidos entonces— en pequeño.
+
+Hay dos obstáculos, sí. **Y cada uno está ya en su término.**
+
+**Lo que queda abierto, dicho como incertidumbre y no como tarea**: el relieve
+usa Bullington, un canto equivalente ÚNICO para todo el vano, así que un repecho
+local justo donde el rayo pasa bajo un panel se promedia en ese canto en vez de
+resolverse. Es una propiedad **conocida y elegida** en A3: Deygout lo
+resolvería, pero da 1,10 dB con 2 puntos de perfil y 22,74 con 80. Un relieve
+que depende de cómo se muestreó el DEM no es relieve.
 
 ### La huella: `hw` es código muerto en rf-fv
 
@@ -373,8 +410,9 @@ geometría real de la fila y su orientación.
 
 ### Veredicto de §5
 
-- **ABSORBER**: la conciencia del suelo bajo la placa — implementada como
-  obstáculo propio vía `relieveDominante`, no como el `min` de rf-fv.
+- ~~**ABSORBER**: la conciencia del suelo bajo la placa — implementada como
+  obstáculo propio vía `relieveDominante`, no como el `min` de rf-fv.~~
+  **CERRADO, Y NO COMO SE PREVEÍA. Ver «A4, cerrado» abajo.**
 - **DESCARTAR**: `row_top_elev` y el modelo de muro (#1, #2, #7).
 - **DESCARTAR**: `hw` y `band_clearance` tal cual están.
 - **CONSERVAR**: `banda`/`corta` con sus tres estados nombrados y `bajoSuelo`,
@@ -549,7 +587,7 @@ motivo sí. **DESCARTAR el comentario suelto como único aviso.**
 | A1 | **Cotas de antena reales**: NCU 3,15 · HSU 6,50 · TCU = tubo − 0,725 | `equipos.js:36,44,59`; `seguidor.js:35`; rf-fv `ANTENNAS` | Planos DR_NCU_v0 y FTR.24.00145_5_C; dos módulos independientes coinciden; confirmación de campo ago-2026 | **Sí, mucho.** Es la que más mueve |
 | A2 | **Patrón de antena parametrizable**, empezando por el dipolo λ/2 | rf-fv `dipole_gain_db` | Ficha de la Jinchang JCW435700RA; ganancia plana es optimista y **no es trasladable a sub-GHz** | Poco a 2,4 GHz (≤ 2 dB, y 0,000 con alturas iguales). **Es prerequisito de LoRa/Wi-SUN** |
 | A3 | **Relieve DEM** conectado a `relieveDominante`, en la lista ÚNICA de cruces | `terreno.html:301,889-898` | Teselas Terrarium + levantamiento del cliente con empalme por desfase mediano; validado en Ayora y San José | Sí, en plantas con desnivel |
-| A4 | **Conciencia del suelo bajo la placa** — como obstáculo propio, NO como el `min` | rf-fv `band_clearance` (la idea) | Bajo la placa hay dos obstáculos y manda el cercano | Hoy no; sí con A1 + A3 |
+| A4 | ~~**Conciencia del suelo bajo la placa**~~ **CERRADO: A3 lo hizo innecesario, e implementarlo ahora sería doble conteo.** Medido en `tools/a4_suelo_bajo_placa.mjs` | rf-fv `band_clearance` (la idea) | Bajo la placa hay dos obstáculos y manda el cercano — y ahora cada uno está en su término | No se implementa |
 | A5 | **Conductor perfecto** `eps_r = inf → Γ = +1`, y `epsR` inválido que LANCE | rf-fv `reflection_coefficient` | Cota superior del rebote; hoy el canon da NaN silencioso | No (caso nuevo) |
 | A6 | **El texto que desautoriza los sesgos** | rf-fv `python/zigbee_pv_model.py:281-299` | Vale más que el número y solo existe allí | No |
 

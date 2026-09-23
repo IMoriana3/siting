@@ -53,7 +53,7 @@ tres caminos** y cada uno tarda lo suyo.
 
 | camino | registros | defecto de fábrica | tiempo hasta la orden |
 |---|---|---|---|
-| **alarma de viento** | `WindSpeedAVGperiod_s` (41071) + `WindMidTime_s` (41018) | 0 s + 1 s | **1 s**, o **5 s** con el promediado que el fabricante recomienda para el ultrasónico (4 s) |
+| **alarma de viento** | `WindSpeedAVGperiod_s` (41071, **bits 15..8**) + `WindMidTime_s` (41018) | 0 s + 1 s | **1 s**, o **5 s** con el promediado que el fabricante recomienda para el ultrasónico (4 s) |
 | **nivel de viento** | `WindLevel{N}OnTime_s` (41090–41096) | 10 s (nivel 1) … 5 s (nivel 7) | **5–10 s** |
 | **racha** | `GustyWindowTime_s` 60 s + `GustyWindNumber` 3 + `GustMinimumDuration_s` 1 s | | **hasta 60 s** |
 
@@ -69,9 +69,24 @@ Dos cosas que salen de aquí y son de diseño, no de radio:
   haga la radio. Si el disparo llega por ahí, optimizar la radio no mueve la
   aguja.
 
+> **OJO CON `41071` Y `41057`: SON REGISTROS EMPAQUETADOS**, y esto se
+> descubrió al escribir el volcador, no leyendo el mapa. `41071` lleva DOS
+> campos —velocidad en los bits 15..8 y dirección en los 7..0— y `41057` lleva
+> TRES —ventana de racha en 7..0, número de rachas en 11..8, duración mínima en
+> 15..12—. Leerlos enteros da **1044** y **9020**, que tienen pinta de segundos
+> y no lo son. Quien los lea tiene que despiezarlos.
+
 **NO MEDIDO: los valores CONFIGURADOS en planta.** En los repos sólo están los
 defectos del fabricante. Los `config_tcu_*.json` son de identidad y pendientes,
 no del anemómetro. Hay que leerlos de la NCU por Modbus.
+
+**Y YA HAY CON QUÉ**: `cobertura-zigbee/zigbee_config.ps1` los lee —40 registros
+de viento más el `40022` y el `40029` de cada TCU— y los pone al lado de su
+defecto de fábrica, marcando los que no coinciden. Va en el paquete de «Medir en
+planta». **No escribe nada**: no tiene función de escritura, y
+`tools/test_config_planta.py` lo comprueba sobre el fuente **y** contra una NCU
+de mentira que responde con excepción a cualquier código de función que no sea
+FC03.
 
 ### 2.2 Decisión de la NCU — **NO MEDIDO**
 

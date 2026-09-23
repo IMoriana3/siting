@@ -24,7 +24,7 @@
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
     "ant_h_m": {
       "valor": 1.5,
-      "_fuente": "código: Siting/index.html:2365 `RF_ANT_H=1.5` (modelo antiguo)",
+      "_fuente": "código: Siting/index.html `RF_ANT_H=1.5` (modelo antiguo)",
       "_ojo": [
         "OBSOLETO como altura de antena: se conserva porque el MOTOR ANTIGUO (A) lo usa, y",
         "el selector lo mantiene. El motor nuevo NO lo usa: la antena de la TCU sale de",
@@ -102,12 +102,12 @@
       ],
       "radio_ancla_m": {
         "valor": 0.225,
-        "_fuente": "código: Cobertura-Zigbee/seguidor.js:340 — `m: mT(THREE, D.tcuX-0.16, -0.225, 0)`. La X local es EL EJE DEL TUBO (`tcuX: 1.4`, «TCU desplazada a lo largo del tubo, junto al motor»), así que el radio en el plano perpendicular al giro son los 0,225 m bajo el eje.",
+        "_fuente": "código: Cobertura-Zigbee/seguidor.js — `m: mT(THREE, D.tcuX-0.16, -0.225, 0)`. La X local es EL EJE DEL TUBO (`tcuX: 1.4`, «TCU desplazada a lo largo del tubo, junto al motor»), así que el radio en el plano perpendicular al giro son los 0,225 m bajo el eje.",
         "_ojo": "el giro es `makeRotationX(−alfa)` en el marco canónico — Cobertura-Zigbee/terreno.html:1907."
       },
       "coax_caida_m": {
         "valor": 0.50,
-        "_fuente": "código: Cobertura-Zigbee/seguidor.js:35 — `antHang: 0.50`, «la antena CUELGA 50 cm vertical desde el conector».",
+        "_fuente": "código: Cobertura-Zigbee/seguidor.js — `antHang: 0.50`, «la antena CUELGA 50 cm vertical desde el conector».",
         "_ojo": "el 3D ya lo dibuja así: `aTip = [ax, ay − hang, az]` con (ax,ay,az) el conector YA rotado — terreno.html:1925. El motor usa la misma cuenta a propósito."
       },
       "_holgura_bajo_su_propio_modulo": [
@@ -122,13 +122,13 @@
 
     "antena_ncu_m": {
       "valor": 3.15,
-      "_fuente": "código: Cobertura-Zigbee/equipos.js:44 `ncuAntY: 3.15` — «CENTRO del látigo, en la cabeza del poste». Plano DR_NCU_v0 / «Montaje NCU», poste C 100×60 de 2,95 m (`ncuMastH`, equipos.js:36).",
+      "_fuente": "código: Cobertura-Zigbee/equipos.js `ncuAntY: 3.15` — «CENTRO del látigo, en la cabeza del poste». Plano DR_NCU_v0 / «Montaje NCU», poste C 100×60 de 2,95 m (`ncuMastH` de equipos.js).",
       "_ojo": "coincide con `ANTENNAS.ncu.h` de cobertura-rf-fv. Dos módulos independientes dicen lo mismo, que es la mejor señal que hay aquí."
     },
 
     "antena_hsu_m": {
       "valor": 6.50,
-      "_fuente": "código: Cobertura-Zigbee/equipos.js:59 `hsuAntY: 6.50` — «CENTRO de los látigos, en su brazo». Plano FTR.24.00145_5_C / «Montaje HSU», torre de celosía autoportante de 8 m.",
+      "_fuente": "código: Cobertura-Zigbee/equipos.js `hsuAntY: 6.50` — «CENTRO de los látigos, en su brazo». Plano FTR.24.00145_5_C / «Montaje HSU», torre de celosía autoportante de 8 m.",
       "_ojo": [
         "Los dos látigos van en su propio brazo a MEDIA TORRE, no en la cabeza junto al",
         "ultrasónico. Cota confirmada en campo (ago-2026).",
@@ -180,12 +180,12 @@
     },
     "cuerda_m_defecto": {
       "valor": 2.38,
-      "_fuente": "código: Siting/index.html:2357 `RF_CHORD_M=2.38`",
+      "_fuente": "código: Siting/index.html `RF_CHORD_M=2.38`",
       "_ojo": "solo se usa si el layout de la planta no declara `bifila.cuerda`, que manda sobre esto."
     },
     "pitch_m_defecto": {
       "valor": 12.0,
-      "_fuente": "código: Siting/index.html:2357 `RF_PITCH_M=12.0`",
+      "_fuente": "código: Siting/index.html `RF_PITCH_M=12.0`",
       "_ojo": "ídem: el layout manda."
     },
     "tracker_slew_deg_s": {

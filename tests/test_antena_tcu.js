@@ -98,8 +98,8 @@ function check(msg, cond, extra) {
 }
 const cerca = (a, b, tol) => Math.abs(a - b) < (tol === undefined ? 1e-9 : tol);
 
-const RAD = P.antena_tcu.radio_ancla_m.valor;     // 0,225 m — seguidor.js:340
-const CAI = P.antena_tcu.coax_caida_m.valor;      // 0,50 m  — seguidor.js:35
+const RAD = P.antena_tcu.radio_ancla_m.valor;     // 0,225 m — seguidor.js, el anclaje
+const CAI = P.antena_tcu.coax_caida_m.valor;      // 0,50 m  — seguidor.js `antHang`
 const CUE = P.cuerda_m_defecto.valor;             // 2,38 m
 const F24 = 2.45e9;
 
@@ -107,9 +107,23 @@ const F24 = 2.45e9;
 console.log('\n· los parametros vienen con procedencia');
 check('radio del anclaje = 0,225 m', cerca(RAD, 0.225), RAD);
 check('caida del coax = 0,50 m', cerca(CAI, 0.50), CAI);
-check('los dos citan su fichero y linea',
-      /seguidor\.js:340/.test(P.antena_tcu.radio_ancla_m._fuente) &&
-      /seguidor\.js:35\b/.test(P.antena_tcu.coax_caida_m._fuente));
+/* LA CITA VA POR SIMBOLO, NO POR LINEA, y esta comprobacion cambio por eso.
+   Antes exigia `seguidor.js:340` y `seguidor.js:35` — o sea que vigilaba que
+   HUBIERA un numero, no que fuera el bueno. Y los dos estaban mal: el anclaje
+   vive en la 350 y `antHang` en la 45. Se movieron solos cuando el PR #714
+   anyadio comentarios a ese fichero, y este banco siguio verde citando dos
+   lineas falsas. Ahora se exige el FICHERO y el SIMBOLO, que no se mueven, y
+   `tools/careo_equipos.mjs` comprueba ademas que el valor siga siendo el de
+   alli. */
+check('los dos citan su fichero y su SIMBOLO, no una linea',
+      /seguidor\.js/.test(P.antena_tcu.radio_ancla_m._fuente) &&
+      /tcuX-0\.16/.test(P.antena_tcu.radio_ancla_m._fuente) &&
+      /seguidor\.js/.test(P.antena_tcu.coax_caida_m._fuente) &&
+      /antHang/.test(P.antena_tcu.coax_caida_m._fuente));
+check('y NINGUNA de las dos cita un numero de linea, que es lo que se pudre',
+      !/seguidor\.js\s*:\s*\d/.test(P.antena_tcu.radio_ancla_m._fuente) &&
+      !/seguidor\.js\s*:\s*\d/.test(P.antena_tcu.coax_caida_m._fuente),
+      P.antena_tcu.radio_ancla_m._fuente.slice(0, 80));
 check('la NCU son 3,15 m con su plano DR_NCU_v0',
       cerca(P.antena_ncu_m.valor, 3.15) && /DR_NCU_v0/.test(P.antena_ncu_m._fuente));
 check('la HSU son 6,50 m con su plano FTR.24.00145_5_C',
