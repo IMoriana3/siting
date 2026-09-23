@@ -46,6 +46,10 @@ jobs:
       - name: el informe de relieve por planta arranca (sin hermano, no mide)
         run: node tools/relieve_plantas.mjs
 
+      # Lo mismo: los layouts con meteo viven en el hermano.
+      - name: el informe de antena de la HSU arranca (sin hermano, no mide)
+        run: node tools/antena_hsu.mjs
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
