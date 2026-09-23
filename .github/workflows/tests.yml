@@ -197,6 +197,15 @@ jobs:
       - name: ¿algún paso puede salir verde sin haber medido?
         run: node tools/auditoria_verdes.mjs
 
+      # ¿CORRE LA CI TODAS LAS MUTACIONES QUE HAY? El corredor de abajo lleva
+      # las claves escritas A MANO, banco por banco: exige `rc = 1` exacto —lo
+      # que ya ha cazado anclas caducadas— pero corre las que alguien apuntó,
+      # no las que hay. Encontrado midiéndolo: las CUATRO mutaciones del
+      # picómetro y del punto duplicado, añadidas hoy, estaban definidas y no
+      # se corrían nunca. Sin workflow sale con rc = 2, no con 0.
+      - name: ¿se corren todas las mutaciones que hay?
+        run: node tools/alcance_mutaciones.mjs
+
       - name: vanos muestreados contra enlaces reales
         run: node tools/vanos_muestreados_vs_reales.mjs > /dev/null
 
@@ -264,7 +273,7 @@ jobs:
                                              sinReflejado sueloSinPerdida anguloDirecto \
                                              sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano \
                                              cantoAlMasAlto puntoMudo \
-                                             sinTolerancia toleranciaFloja
+                                             sinTolerancia toleranciaFloja puntoDuplicado
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
@@ -361,7 +370,8 @@ jobs:
           # vez no lo puede producir una mutacion de un solo lado, y lo cubre la
           # comprobacion de clases: probado rompiendo los dos, `relieve` sale OK y
           # la de clases saca 22 cruces.
-          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \ \
+                                                   py_sin_tolerancia js_sin_tolerancia py_punto_duplicado
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \
                                                    py_csqrt_rama \
                                                    js_tol_regimen js_fase_signo \
