@@ -213,35 +213,42 @@ Relacionados, para cuando se lea: `41039` «Motor velocity evaluation time» =
 «Set if the motor moves at a speed lower than expected» — o sea que la TCU ya
 vigila su propia velocidad y sabe decir cuándo va lenta.
 
-**UNA COSA MÁS, QUE NO ES DE LATENCIA PERO SALE DE AQUÍ.** La banda muerta.
+**UNA COSA MÁS, QUE NO ES DE LATENCIA PERO SALE DE AQUÍ: LA BANDA MUERTA, Y
+EL NÚMERO SE RETIRA.**
+
 `41061` «Deadband when backtracking is active and no low capacity alarm active»
-= **45 pulsos**. Para pasarlo a grados hace falta la conversión, y la única que
-hay es una INFERENCIA, no una cita: `41037` «Maximum west tilt angle» = 1.910
-pulsos, y la casa declara el ángulo máximo en **55°** para todas las plantas
-(`montaje_edm.mjs`, «declarado por la casa... coincide con la plantilla TCU de
-El Burgo, west_sw_limit 55»). Si eso es así:
+= **45 pulsos**. Eso es lo único verificado. Para pasarlo a grados hace falta la
+escala pulsos/grado, y **no está en estos repositorios**.
 
-```
-  1.910 pulsos / 55°  =  34,73 pulsos/grado  =  0,0288° por pulso
-  41061  45 pulsos  =  1,296°     banda muerta en backtracking
-  41063  90 pulsos  =  2,592°     idem con baja capacidad de bateria
-  41080   4 pulsos  =  0,115°     resolucion de pulso
-```
+> **RETRACTACIÓN.** Una versión anterior de este documento daba **1,296°**,
+> inferidos de `41037` «Maximum west tilt angle» = 1.910 pulsos suponiendo que
+> fueran los 55° que la casa declara. **Se buscó una segunda fuente y no la
+> hay**: el mapa de la TCU trae ángulos en radianes (`41111`…`41123`, los
+> rangos de inclinación, que salen 35/30/25/20/15/10/5° redondos) y ángulos en
+> pulsos (`41037`, `41061`, `41063`, `41080`), pero **ningún par de la misma
+> magnitud en las dos unidades**.
+>
+> Y hay un motivo concreto para desconfiar de la suposición: los 55° de la casa
+> son un límite de SOFTWARE —la plantilla de la TCU de El Burgo lo dice así,
+> «west_sw_limit 55»— mientras que `41037` se describe como «Maximum west tilt
+> angle» a secas, que en un mapa de registros suele ser el límite de HARDWARE, y
+> ése normalmente es mayor. Si lo fuera, la escala es menor y el número sube:
+>
+> | si 1.910 pulsos son… | 45 pulsos = |
+> |---|---:|
+> | 55° | 1,296° |
+> | 60° | 1,414° |
+> | 65° | 1,531° |
+> | 70° | 1,649° |
+>
+> Además 1.910 = 2 × 5 × 191, con 191 primo, así que 1910/55 = 34,7273
+> pulsos/grado: un número poco propio de un encoder.
 
-Y ahí hay un **cuarto valor** para la banda muerta, igual que con la velocidad:
-
-| origen | ° |
-|---|---:|
-| `CANONICAL_DEADBAND_DEG` del core | 1,00 |
-| medido, lectura del auditor | 0,50 |
-| medido, segunda lectura | 0,90 |
-| **registro 41061 de la propia TCU** | **1,30** |
-
-Ninguna de las dos medidas de campo llega al valor del registro, lo cual es
-raro: una banda muerta APARENTE debería salir mayor o igual que la
-configurada, no menor. **La inferencia de la conversión es lo primero que hay
-que comprobar** —leer 41037 y el recorrido real de la misma TCU—, y sólo
-después mirar si hay hallazgo. Se anota aquí y no se toca el core.
+Lo que **sí** se puede decir: el registro existe, vale 45 pulsos, el de baja
+capacidad vale 90, y la resolución de pulso (`41080`) es 4. Comparar eso con el
+`CANONICAL_DEADBAND_DEG` = 1,00 del core o con los 0,50 / 0,90 medidos en campo
+**exige la escala**, y hasta tenerla no hay comparación que hacer. La escala
+sale del Toolbox o de un registro que este mapa no trae. **No se toca el core.**
 
 ### 2.5 La cadena, junta
 
@@ -249,8 +256,13 @@ después mirar si hay hallazgo. Se anota aquí y no se toca el core.
   detección     1 – 60 s     DECLARADO (defectos de fábrica)
   decisión NCU     ?         NO MEDIDO
   radio            ?         NO MEDIDO  <-- lo que se quiere rankear
-  giro         324 – 825 s   DECLARADO vs MEDIDO, factor 2,6
+  giro         275 – 825 s   DECLARADO vs MEDIDO, factor 3
 ```
+
+El 275 es el techo sin carga que declara la propia TCU (`41067`), o sea el
+límite inferior físico del tramo; el 825 es la segunda lectura de campo. El
+«factor 2,6» del §2.4 es otra cosa y sigue siendo válido: compara la spec de
+catálogo (0,17 °/s) con esa misma segunda lectura, sin meter el techo.
 
 **Ésta es la conclusión que el §6 necesita**: la radio se va a mover en
 segundos dentro de una cadena cuyos otros tramos valen decenas y centenares.
@@ -417,6 +429,26 @@ es una marca de tiempo por transacción.
 ---
 
 ## 6. Veredicto
+
+### La cadena completa va PRIMERO, y no es decoración
+
+Cualquier ranking de radio se lee mal sin esta tabla delante, porque la radio se
+mueve en **segundos** dentro de una cadena cuyos otros tramos valen decenas y
+centenares:
+
+| tramo | cuánto | estado |
+|---|---|---|
+| **detección** | **1 – 60 s** según cuál de los tres caminos dispare | DECLARADO (defectos de fábrica) |
+| **decisión de la NCU** | ? | NO MEDIDO |
+| **radio hasta la última TCU** | ? | NO MEDIDO — *es lo que se quiere rankear* |
+| **giro** | **275 – 825 s** | DECLARADO vs MEDIDO, y no coinciden |
+| *(stow autónomo, si actúa)* | **600 s** por defecto (`40022`) | DECLARADO |
+
+Un ranking que diga «LoRa sale 3 s peor» sin esto delante se lee como si
+decidiera algo, y no decide nada mientras el giro tenga un factor 3 sin
+resolver y la detección pueda costar 60 s ella sola.
+
+### Y el veredicto
 
 **No lo hay todavía, y decir uno sería inventarlo.**
 
