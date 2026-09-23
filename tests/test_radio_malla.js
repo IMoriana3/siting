@@ -34,11 +34,29 @@ const MUTACIONES = {
   // la variante sin sensibilidad se inventa un margen: el fallo que este banco
   // existe para impedir
   sensInventada: ['zigbee', /if \(variante\.rx_sens_dbm == null\) \{/, 'if (false) {'],
+  // el relieve sin perfil vuelve a decir 0 en vez de «no lo he mirado»
+  relieveCallado: ['zigbee', /motivos\.push\("relieve_no_evaluado_sin_perfil"\);/,
+                             'relieve = 0;'],
+  // el perfil que no cubre el vano se confunde con un vano llano
+  relieveCortoCero: ['zigbee', /motivos\.push\("relieve_perfil_no_cubre_el_vano"\);/,
+                               'relieve = 0;'],
+  // las alturas mezcladas se anotan y se sigue, en vez de pararse: el balance
+  // saldria de una antena 739 m bajo tierra y con pinta de bueno
+  mezclaSigue:   ['zigbee', /salidaSinMargen = true;/, 'salidaSinMargen = false;'],
+  // ...o se para SIEMPRE, que pasaria todas las comprobaciones de «no» sin dar
+  // ni un margen bueno. Un «no» universal es tan falso como un «si» universal
+  mezclaSiempre: ['zigbee', /if \(salidaSinMargen\) return salida;/, 'return salida;'],
+  // los dos rayos vuelven a la cota cero en vez de a la tierra lisa: la
+  // referencia de la difraccion y la del rebote dejan de ser la misma
+  dosRayosSinLisa: ['zigbee', /var dosRayos = RPV\.dosRayosDb\(D, htE, hrE, f,/,
+                              'var dosRayos = RPV.dosRayosDb(D, zA, zB, f,'],
   // el modo calibrado se da por hecho aunque no haya campaña
   siempreCalib:  ['zigbee', /if \(!calib\) return \{ lMod: 0, lRoce: 0, offset: 0, modo: TEORICO/,
                             'if (!calib) return { lMod: 0, lRoce: 0, offset: 0, modo: CALIBRADO'],
   // atravesar y rozar dejan de distinguirse: l_mod y l_roce pasan a ser lo mismo
-  rozarEsTapar:  ['zigbee', /else if \(e === "hueco"\) roza\+\+;/, 'else if (e === "hueco") atraviesa++;'],
+  // (ancla movida al cortar contra el plano inclinado: `cuenta` ya no resuelve
+  //  una banda con `corta`, resuelve el panel con `cortaPanel` y mira su estado)
+  rozarEsTapar:  ['zigbee', /else if \(c\.estado === "hueco"\) roza\+\+;/, 'else if (c.estado === "hueco") atraviesa++;'],
   // la vegetación no modelada deja de avisar
   vegCallada:    ['zigbee', /if \(veg === null\) motivos\.push\("vegetacion_no_modelada"\);/, ''],
   // el canal desconocido deja de avisar: la Ptx de la PRO pasaria por buena
@@ -123,10 +141,18 @@ const PROP = {
 // 0,725, que es la altura del ajuste de El Burgo), dos filas en medio de canto.
 console.log('\n· el balance de enlace, y lo que se niega a dar');
 const R = ctx.RadioPV;
+/* LA BANDA VERTICAL YA NO ESTA EN EL MOTOR. Vive en la referencia, con otro
+   nombre, porque el motor no puede tener DOS funciones que den el despeje de
+   una fila. Aqui se usa solo para construir el caso de prueba. */
+const REF = require('./referencia_banda_vertical.js');
+R.banda = REF.banda; R.corta = REF.corta;
+/* EL ENLACE DE PRUEBA, con el contrato nuevo: el cruce trae la geometria de la
+   fila -eje, cuerda, su alfa y el seno del angulo de cruce- y el motor corta
+   contra el plano inclinado. Antes traia una banda vertical ya resuelta. */
 const enlace = {
   D: 60, zA: 0.775, zB: 0.775,
-  cruces: [{ s: 20, banda: R.banda(2.0, 2.38, 90, 0) },
-           { s: 40, banda: R.banda(2.0, 2.38, 90, 0) }]
+  cruces: [{ s: 20, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 1 },
+           { s: 40, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 1 }]
 };
 const pPro = ZB.presupuesto(enlace, PRO, PROP, null);
 const pStd = ZB.presupuesto(enlace, STD, PROP, null);
@@ -166,20 +192,30 @@ console.log('     (medido: PRO ' + pPro.margenDb.toFixed(2) + ' dB de margen · 
 // pasando por debajo. Para que ATRAVIESE hay que subir las antenas dentro de la
 // banda. Los tres casos, a mano.
 console.log('\n· atravesar una mesa no es rozarla por debajo');
-const deCanto  = R.banda(2.0, 2.38, 90, 0);   // 0,810 .. 3,190
-const planas   = R.banda(2.0, 2.38, 0, 0);    // 2,000 .. 2,000
+/* MISMA INTENCION, CONTRATO NUEVO. `cuenta` ya no recibe una banda vertical ya
+   resuelta: recibe la geometria CRUDA de la fila y corta contra el plano
+   inclinado. El cruce es {s, zEje, cuerda, alpha, senPhi}, y `senPhi` hace
+   falta porque el canto vive a ±(c/2)·cos α del eje y hay que llevarlo de `w` a
+   distancia recorrida. Un cruce SIN `senPhi` no es «cero obstaculos»: es un
+   cruce que no se puede resolver, y por eso `cuenta` lo manda a `fuera`. */
+const cruceCanto = (s, al) => ({ s: s, zEje: 2.0, cuerda: 2.38, alpha: al, senPhi: 1 });
+const deCanto = R.banda(2.0, 2.38, 90, 0);   // 0,810 .. 3,190
 check('de canto, la banda va de 0,810 a 3,190', cerca(deCanto.zBot, 0.81) && cerca(deCanto.zTop, 3.19),
       deCanto.zBot.toFixed(3) + '..' + deCanto.zTop.toFixed(3));
-const cCanto = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, banda: deCanto }]);
+const cCanto = ZB.cuenta(60, 0.775, 0.775, [cruceCanto(30, 90)]);
 check('a 0,775 m el rayo ROZA la mesa de canto, no la atraviesa',
       cCanto.roza === 1 && cCanto.atraviesa === 0, JSON.stringify(cCanto));
-const cDentro = ZB.cuenta(60, 2.0, 2.0, [{ s: 30, banda: deCanto }]);
+const cDentro = ZB.cuenta(60, 2.0, 2.0, [cruceCanto(30, 90)]);
 check('a 2,0 m la ATRAVIESA', cDentro.atraviesa === 1 && cDentro.roza === 0, JSON.stringify(cDentro));
-const cPlana = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, banda: planas }]);
+const cPlana = ZB.cuenta(60, 0.775, 0.775, [cruceCanto(30, 0)]);
 check('con las palas planas, a 0,775 m también roza', cPlana.roza === 1, JSON.stringify(cPlana));
-const cEncima = ZB.cuenta(60, 5.0, 5.0, [{ s: 30, banda: deCanto }]);
+const cEncima = ZB.cuenta(60, 5.0, 5.0, [cruceCanto(30, 90)]);
 check('y a 5,0 m pasa por encima, que no es ninguna de las dos',
       cEncima.porEncima === 1 && cEncima.atraviesa === 0 && cEncima.roza === 0, JSON.stringify(cEncima));
+/* Y UN CRUCE QUE NO SE PUEDE RESOLVER SE CUENTA APARTE, no como «no tapa». */
+const cSinPhi = ZB.cuenta(60, 0.775, 0.775, [{ s: 30, zEje: 2.0, cuerda: 2.38, alpha: 90, senPhi: 0 }]);
+check('un cruce sin angulo (enlace paralelo a la fila) va a `fuera`, no a «no tapa»',
+      cSinPhi.fuera === 1 && cSinPhi.roza === 0 && cSinPhi.atraviesa === 0, JSON.stringify(cSinPhi));
 
 // ── UN JSON DE CALIBRACIÓN A MEDIAS LANZA ───────────────────────────────────
 console.log('\n· la calibración, entera o ninguna');
@@ -294,6 +330,79 @@ const anPoda = ML.vecinosViables(enRecta(10), () => ({ viable: true, margenDb: 1
 check('con alcance 15 sobre 45 pares, se podan 36', anPoda.podados === 36,
       anPoda.podados + ' podados / ' + anPoda.evaluados + ' evaluados');
 check('y los evaluados son los 9 pares contiguos', anPoda.evaluados === 9, anPoda.evaluados);
+
+/* ── EL RELIEVE: TRES ESTADOS, Y LA REFERENCIA ES LA TIERRA LISA ─────────
+   Antes eran dos y uno mentia: sin perfil se publicaba `relieveDb: 0`, que se
+   lee igual que «hay terreno y esta llano». Y aunque hubiera perfil, cobrar un
+   filo de cuchillo por cada punto del terreno cuenta DOS VECES el suelo que
+   `dosRayosDb` ya modela — 21,66 dB medidos sobre un perfil PLANO a 100 m.
+
+   Ahora la referencia es la recta de minimos cuadrados (P.1812-6, Anexo 1,
+   Adjunto 1, §5.6.1) y el relieve es lo que el terreno cobra POR ENCIMA. */
+const PERF = (h, D, n) => { const p = []; for (let i = 0; i <= (n || 20); i++)
+  { const s = D * i / (n || 20); p.push([s, h(s)]); } return p; };
+const baseRel = { D: 100, cruces: [] };
+const rSin   = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475, perfil: null }, baseRel), PRO, PROP, null);
+const rCorto = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475, perfil: [[0, 0], [50, 0]] }, baseRel), PRO, PROP, null);
+const rLlano = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475, perfil: PERF(() => 0, 100) }, baseRel), PRO, PROP, null);
+const rAlto  = ZB.presupuesto(Object.assign({ zA: 739.705, zB: 739.705, perfil: PERF(() => 739.23, 100) }, baseRel), PRO, PROP, null);
+const rCerro = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475,
+  perfil: PERF(s => 2 * Math.exp(-Math.pow((s - 50) / (100 / 6), 2)), 100) }, baseRel), PRO, PROP, null);
+
+check('sin perfil el relieve es null, NO cero, y lo dice',
+      rSin.relieveDb === null && rSin.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0,
+      rSin.relieveDb + ' ' + rSin.motivos.join(','));
+check('con un perfil que no cubre el vano, tambien null y con SU motivo',
+      rCorto.relieveDb === null && rCorto.motivos.indexOf('relieve_perfil_no_cubre_el_vano') >= 0,
+      rCorto.relieveDb + ' ' + rCorto.motivos.join(','));
+/* EL REQUISITO, y es EXACTO: un perfil plano no cobra relieve. Ni «casi cero»:
+   cero, porque real y referencia son la misma cuenta. */
+check('con perfil PLANO el relieve es 0 EXACTO, no aproximado',
+      rLlano.relieveDb === 0, rLlano.relieveDb);
+check('y a 739,23 m de cota tambien, que es donde el ajuste pierde precision',
+      rAlto.relieveDb === 0, rAlto.relieveDb);
+check('un cerro de 2 m SI cobra', rCerro.relieveDb > 5, rCerro.relieveDb);
+
+/* LOS DOS RAYOS VAN SOBRE LA MISMA RECTA. Si la referencia de la difraccion y
+   la del rebote fueran distintas, la resta no cancelaria. Se comprueba con la
+   invariancia: subir el terreno 739 m entero no puede mover el balance. */
+check('subir el terreno 739 m no mueve los dos rayos (misma referencia)',
+      Math.abs(rLlano.dosRayosDb - rAlto.dosRayosDb) < 1e-9,
+      rLlano.dosRayosDb + ' vs ' + rAlto.dosRayosDb);
+check('ni la perdida total', Math.abs(rLlano.perdidaTotalDb - rAlto.perdidaTotalDb) < 1e-9);
+check('el relieve no evaluado NO se suma como 0 escondido: la perdida cuadra',
+      Math.abs(rSin.perdidaTotalDb - rSin.dosRayosDb - rSin.difraccionDb) < 1e-9,
+      rSin.perdidaTotalDb + ' vs ' + (rSin.dosRayosDb + rSin.difraccionDb));
+
+/* ── EL CUARTO ESTADO: ALTURAS MEZCLADAS, Y AQUI NO SE ANOTA, SE PARA ─────
+   Los tres de arriba son «no se ha mirado» y se anotan. Este es distinto: el
+   perfil viene en cota ABSOLUTA -739,23 m, Ayora- y las antenas en cota
+   RELATIVA -0,475 a secas-. Eso no estropea solo el relieve: `dosRayosDb`
+   recibiria 739 m como altura sobre el suelo.
+
+   Y LO QUE LO HACE PELIGROSO ES QUE NO SE NOTA. El relieve no sale negativo ni
+   enorme: sale 0,0029 dB, indistinguible de «terreno llano», porque las dos
+   Bullington salen gigantes y casi iguales y la resta se las come. Medido en
+   `tests/test_terreno_planta.js` §9. Un fallo que se disfraza del caso bueno
+   tiene que avisar el.
+
+   Asi que `presupuesto` devuelve SIN MARGEN, como con el balance incompleto. */
+const rMezcla = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475,
+  perfil: PERF(() => 739.23, 100) }, baseRel), PRO, PROP, null);
+check('alturas mezcladas: el relieve es null y lo dice con SU motivo',
+      rMezcla.relieveDb === null &&
+      rMezcla.motivos.indexOf('relieve_antena_bajo_la_tierra_lisa') >= 0,
+      rMezcla.relieveDb + ' ' + rMezcla.motivos.join(','));
+check('alturas mezcladas: NO se da margen, que es lo que separa este del resto',
+      rMezcla.margenDb === null, rMezcla.margenDb);
+check('...y tampoco Prx, para que nadie lo reste a mano',
+      rMezcla.prxDbm === null, rMezcla.prxDbm);
+/* Y EL MISMO VANO CON EL DATO BIEN PUESTO SI DA MARGEN. Sin esto, la guarda
+   podria estar comiendose enlaces sanos y el banco no se enteraria: un «no»
+   universal pasa todas las comprobaciones de «no». */
+check('el MISMO vano con las alturas bien puestas si da margen',
+      rAlto.margenDb !== null && rAlto.relieveDb === 0,
+      rAlto.margenDb + ' / ' + rAlto.relieveDb);
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'
                        : 'TODO OK — ' + ok + ' comprobaciones'));

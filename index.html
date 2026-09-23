@@ -2490,7 +2490,17 @@ function rfObstacles(n,m,rows,conDuenyo){
     const wx=s[0]-n.x, wy=s[1]-n.y;
     const t=(wx*fy-wy*fx)/den;                                         // dónde, sobre el ENLACE
     const u=(wx*ey-wy*ex)/den;                                         // dónde, sobre la FILA
-    if(t>0.001&&t<0.999&&u>=0&&u<=1)obs.push(conDuenyo?{s:t*D,duenyo:s[4]}:[t*D,top]);
+    /* EL CORTE POR `t` YA NO ES 0,001. Era el 0,1 % del enlace -1,2 cm en un
+       salto de 12 m y 33,8 cm en uno de 338-, o sea un radio PROPORCIONAL A D y
+       no una distancia fisica: la misma geometria entraba o salia segun lo
+       largo que fuese el salto. Quien decide si un obstaculo esta demasiado
+       cerca para el filo de cuchillo es `campoCercano`, EN LONGITUDES DE ONDA, y
+       vive en `rfEnlace` porque necesita la frecuencia. Aqui, que es geometria,
+       la frecuencia no se conoce ni debe.
+       `senPhi` = seno del angulo entre el enlace y la fila. Sale gratis de `den`,
+       que ya esta calculado, y lo necesita el corte con el panel inclinado para
+       llevar el canto de `w` a distancia recorrida. */
+    if(t>0&&t<1&&u>=0&&u<=1)obs.push(conDuenyo?{s:t*D,duenyo:s[4],senPhi:Math.abs(den)/(D*Math.hypot(fx,fy))}:[t*D,top]);
   }
   /* Deygout recorre por posición; el orden es parte del contrato, no una
      casualidad del recorrido del índice. Con `conDuenyo` se ordena igual. */
@@ -2533,29 +2543,75 @@ function rfPropagacion(){ const p=rfParamsNuevo(); if(!p)return null;
           polarizacion:p.propagacion.polarizacion.valor, sigma_db:p.propagacion.sigma_db.valor,
           vegetacion:{modelo:p.vegetacion.modelo.valor}}; }
 function rfAngulo(_i){ return rfTilt(); }          // punto 2: por seguidor y por hora
-function rfAlturaAntena(){ const p=rfParamsNuevo(); return p?p.geometria.ant_h_m.valor:RF_ANT_H; }
+/* LA COTA DEL EJE DEL TUBO, POR PLANTA. `alturaEje` lee `eje_m` del `montaje`
+   de la planta y, si no esta, cae al defecto declarado CON MOTIVO —que es lo
+   que pasa en las DOCE, porque nadie lo ha medido—. El motivo viaja hasta la
+   leyenda para que el mapa no presente una cota declarada como medida.
+   El nombre viejo `module_height` ya no se lee: si llega con valor, LANZA. */
+function rfEjeTubo(){ const p=rfParamsNuevo(); if(!p) return null;
+  return RadioPV.alturaEje((S.p&&S.p.montaje)||null, p.geometria.eje_tubo_m.valor); }
+/* Y LA ANTENA SALE DEL EJE, no de una cota propia: cuelga del tubo y GIRA CON EL.
+   Depende del angulo de ESE seguidor, asi que es una funcion de alfa. */
+function rfAlturaAntena(alphaDeg){ const p=rfParamsNuevo(), e=rfEjeTubo();
+  if(!p||!e) return RF_ANT_H;
+  const a=p.geometria.antena_tcu;
+  return RadioPV.alturaAntenaTCU(e.valor, a.radio_ancla_m.valor, a.coax_caida_m.valor,
+                                 alphaDeg==null?rfTilt():alphaDeg); }
 
 /* Las BANDAS que cruza el enlace, cada una con el ángulo de SU seguidor.
    Reutiliza `rfObstacles` para la búsqueda —el índice y su orden por t son
    precondición de Deygout— y sólo cambia qué se construye en cada cruce. */
 function rfCruces(n,m,rows){
   const R=rows||S._rfRows||rfRows();
-  const cu=(S.bifila&&S.bifila.cuerda)||RF_CHORD_M, hA=rfAlturaAntena();
-  return rfObstacles(n,m,R,true).map(o=>({s:o.s, banda:RadioPV.banda(hA,cu,rfAngulo(o.duenyo),0), duenyo:o.duenyo}));
+  const cu=(S.bifila&&S.bifila.cuerda)||RF_CHORD_M, e=rfEjeTubo();
+  const eje=e?e.valor:RF_ANT_H;
+  /* EL CRUCE LLEVA SU GEOMETRIA, no una banda ya resuelta: el eje de SU fila, su
+     cuerda, el angulo de ESE seguidor y el seno del angulo de cruce. De ahi sale
+     el corte con el plano inclinado, que pone el canto donde esta -a ±(c/2)·cos α
+     del eje- y no colapsado en el eje. */
+  return rfObstacles(n,m,R,true).map(o=>({s:o.s, zEje:eje, cuerda:cu,
+    alpha:rfAngulo(o.duenyo), senPhi:o.senPhi, duenyo:o.duenyo}));
 }
 
 function rfEnlace(n,m,rows){
   const P=rfPropagacion(), V=rfVariante();
   if(!P||!V) return {margenDb:null, motivos:["parametros_no_cargados"], cruces:[], D:0};
   const D=Math.hypot(m.x-n.x,m.y-n.y);
-  const hA=rfAlturaAntena();
+  /* CADA EXTREMO A SU PROPIO ANGULO. Antes las dos antenas iban a la misma cota
+     fija, y con eso la elevacion del enlace era siempre 0 y la banda degeneraba
+     al filo del modelo antiguo. Ahora la de cada TCU sale del eje de SU fila con
+     el alfa de ESE seguidor. */
+  /* OJO: el angulo POR EXTREMO necesita el indice del seguidor, y el raster
+     pasa el punto de destino como un {x,y} pelado. Mientras `rfAngulo` devuelva
+     el tilt global esto da igual; cuando el angulo sea por seguidor y por hora
+     -punto 2 de la fase 4- hay que pasar el indice de los DOS extremos. */
+  const zA=rfAlturaAntena(rfAngulo(n.i)), zB=rfAlturaAntena(rfAngulo(m.i));
   const cruces=rfCruces(n,m,rows);
-  const pr=RadioZigbee.presupuesto({D:D, zA:hA, zB:hA, cruces:cruces}, V, P, S._radioCalib||null);
+  /* EL CAMPO CERCANO SE DECIDE AQUI, que es donde se conoce la frecuencia, y en
+     LONGITUDES DE ONDA. Un canto a menos de un par de lambdas de una antena no
+     es un filo de cuchillo: es una antena debajo de una placa, y P.526 no vale.
+     Se devuelve ESTADO CON MOTIVO, no un dB inventado. */
+  const _pg=rfParamsNuevo();
+  const lam=_pg?_pg.geometria.campo_cercano_lambdas.valor:2;
+  let cerca=null;
+  for(const c of cruces){
+    if(!(c.senPhi>0)) continue;
+    const q=RadioPV.cortaPanel(c.zEje,c.cuerda,c.alpha,-c.s*c.senPhi,(D-c.s)*c.senPhi,zA,zB);
+    if(q.wBorde==null) continue;
+    const sB=c.s+q.wBorde/c.senPhi;
+    if(sB<=0||sB>=D) continue;
+    const k=RadioPV.campoCercano(sB,D-sB,V.f_hz,lam);
+    if(k.cerca&&(cerca===null||k.lambdas<cerca.lambdas)) cerca=k;
+  }
+  if(cerca) return {margenDb:null, motivos:["canto_en_campo_cercano_"+cerca.lambdas.toFixed(2)+"_lambdas"],
+                    cruces:cruces, D:D, zA:zA, zB:zB, campoCercano:cerca, variante:V.nombre||null};
+  const pr=RadioZigbee.presupuesto({D:D, zA:zA, zB:zB, cruces:cruces}, V, P, S._radioCalib||null);
   /* el DETALLE de Deygout sale de la MISMA llamada que el total: `presupuesto`
-     usa `difraccionBandasDb`, que es la envoltura de `difraccionBandasDetalle`.
+     usa `difraccionPanelesDb`, que es la envoltura de `difraccionPanelesDetalle`.
      Pedirlo aparte no recalcula nada distinto, es la misma función. */
-  pr.detalle=RadioPV.difraccionBandasDetalle(D,hA,hA,cruces,V.f_hz);
-  pr.cruces=cruces; pr.D=D; pr.zA=hA; pr.zB=hA; pr.variante=V.nombre||null;
+  pr.detalle=RadioPV.difraccionPanelesDetalle(D,zA,zB,cruces,V.f_hz);
+  pr.cruces=cruces; pr.D=D; pr.zA=zA; pr.zB=zB; pr.variante=V.nombre||null;
+  const e=rfEjeTubo(); if(e&&e.motivo) pr.motivos=(pr.motivos||[]).concat([e.motivo]);
   return pr;
 }
 

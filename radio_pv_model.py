@@ -17,6 +17,10 @@ toca una fórmula aquí y no allí —o al revés—, el banco lo dice. Es el mi
 mecanismo con el que SolarGPTfull tiene pinchado el modelo antiguo contra
 `factiun_core.rf` a 0,000000 dB.
 
+UNA SOLA FUNCIÓN DE DESPEJE. El despeje de una fila lo da `corta_panel` y nadie
+más. La banda vertical —`banda`/`corta`— ya no vive aquí: está en
+`tests/referencia_banda_vertical.js`, con otro nombre y sólo para carearla.
+
 QUÉ NO HAY AQUÍ. Ningún sesgo global, ningún número de potencia, sensibilidad
 ni regulación: eso vive en `radio_params.json`, con su procedencia. Esto son
 solo geometría y ecuaciones de pérdida.
@@ -34,25 +38,22 @@ import math
 GRADO = math.pi / 180
 
 
-def banda(eje, cuerda_m, alpha_deg, suelo_m=None):
-    """Banda vertical que ocupa un seguidor inclinado `alpha_deg`.
+def bajo_tierra(eje_m, cuerda_m, alpha_deg, suelo_m=None):
+    """Espejo de `bajoTierra()`. Con el eje a 1,20 el borde bajo se acerca al
+    suelo: 1,20 − (c/2)·sen alfa. No toca en el rango de trabajo, pero con
+    cuerda 2,411 cruza el cero a 84,52 grados y el barrido llega a 90.
 
-        zTop = eje + (c/2)·|sen α|
-        zBot = eje − (c/2)·|sen α|
-
-    y por debajo de zBot hay HUECO hasta el suelo. Ése es el cambio de fondo
-    frente al modelo antiguo, que subía un filo de cuchillo desde el suelo
-    hasta el borde superior y por tanto daba por tapado lo que pasa por debajo
-    del panel. Espejo de `banda()` en radio_pv_model.js."""
-    semi = (cuerda_m / 2) * abs(math.sin(alpha_deg * GRADO))
+    Se DEVUELVE el diagnostico, no se corrige: taparlo subiendo el borde al
+    suelo daria un numero plausible sobre una planta que no existe."""
     suelo = 0.0 if suelo_m is None else suelo_m
+    z_bot = eje_m - (cuerda_m / 2.0) * abs(math.sin(alpha_deg * GRADO))
+    r = 2.0 if suelo == eje_m else (eje_m - suelo) / (cuerda_m / 2.0)
     return {
-        "eje": eje,
-        "semi": semi,
-        "zBot": eje - semi,
-        "zTop": eje + semi,
-        "suelo": suelo,
-        "hueco": max(0.0, eje - semi - suelo),
+        "zBot": z_bot,
+        "bajoTierra": z_bot < suelo,
+        "hundimientoM": (suelo - z_bot) if z_bot < suelo else 0,
+        "alphaCorteDeg": None if r >= 1 else math.asin(r) / GRADO,
+        "motivo": "borde_del_modulo_bajo_el_suelo" if z_bot < suelo else None,
     }
 
 
@@ -63,21 +64,117 @@ def altura_rayo(zA, zB, D, s):
     return zA + (zB - zA) * (s / D)
 
 
-def corta(b, z_rayo):
-    """Espejo de `corta()`: "tapado" / "hueco" / "libre", con el despeje CON
-    SIGNO respecto al borde MÁS PRÓXIMO.
+def altura_eje(montaje, defecto_m):
+    """Espejo de `alturaEje()`. LA ALTURA DEL EJE ES POR PLANTA, nunca una
+    constante global escondida: si la planta no la declara se cae al defecto
+    CON MOTIVO, para poder rotular la salida como «declarada».
 
-    En "hueco" el borde que cuenta es zBot, no el suelo: un rayo que pasa
-    rozando por debajo del panel difracta en el CANTO INFERIOR del módulo."""
-    if z_rayo > b["zTop"]:
-        return {"estado": "libre", "despeje": z_rayo - b["zTop"], "borde": b["zTop"]}
-    if z_rayo < b["zBot"]:
-        return {"estado": "hueco", "despeje": b["zBot"] - z_rayo, "borde": b["zBot"],
-                "bajoSuelo": z_rayo < b["suelo"]}
-    d_top = b["zTop"] - z_rayo
-    d_bot = z_rayo - b["zBot"]
-    borde = b["zTop"] if d_top <= d_bot else b["zBot"]
-    return {"estado": "tapado", "despeje": -min(d_top, d_bot), "borde": borde}
+    El hueco por planta ya existe y esta vacio: `eje_m` en plantas_indice.json,
+    generado hoy todavia con el nombre viejo `module_height` y a null en las
+    diez plantas que lo traen.
+
+    Y lo que decide esta cota, medido: NO donde cae el canto respecto a la
+    antena -subir el eje sube la banda y la antena a la vez, difraccion
+    invariante, 0,00e+0 dB- sino el REBOTE EN EL SUELO, 4,8-5,8 dB por enlace."""
+    # CERRADO: EL NOMBRE ES `eje_m`, Y SOLO ESE. Habia dos para la misma cota.
+    # `module_height` viene de pvlib, donde significa la altura del MODULO, y
+    # aqui se usaba para la del TUBO -lo dice su propia procedencia en
+    # `montaje_edm.mjs:133`-: el mismo enredo que `HEJE` en terreno.html.
+    #
+    # No mueve ningun numero: vale null en las diez plantas que lo traen y
+    # nadie lo puebla. Y NO se ignora callando: si llega PUESTO, lanza, porque
+    # descartar en silencio la unica medida real de un tubo seria peor.
+    m = montaje or {}
+    if m.get("module_height") is not None:
+        raise ValueError(
+            "radio_pv_model: `module_height` ya no se lee; la altura del eje se "
+            "declara como `eje_m`. Viene con valor %r, y descartarlo en silencio "
+            "perderia una medida." % (m.get("module_height"),))
+    v = m.get("eje_m")
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0:
+        return {"valor": float(v), "medida": True, "motivo": None}
+    if not (defecto_m and defecto_m > 0):
+        raise ValueError("radio_pv_model: falta la altura del eje y no hay defecto declarado")
+    return {"valor": defecto_m, "medida": False,
+            "motivo": "altura_de_eje_declarada_no_medida_en_esta_planta"}
+
+
+def corta_panel(z_eje, cuerda_m, alpha_deg, wA, wB, zA, zB):
+    """Espejo de `cortaPanel()`. EL PANEL DE VERDAD ES UN PLANO INCLINADO.
+
+    `banda()` proyecta el panel como segmento VERTICAL sobre el eje. Para una
+    fila lejana da igual; para la fila PROPIA es falso: la antena está a
+    0,113 m del eje y el panel llega a ±1,19·cos alfa, diez veces más lejos.
+
+    Con w = distancia perpendicular con signo al eje (positiva hacia el borde
+    ALTO), el panel es z(w) = z_eje + w·tan alfa para |w| <= (c/2)·cos alfa, y
+    el rayo es otra recta en (w, z). El ángulo de cruce entra solo: quien llama
+    pasa wA/wB medidos con la perpendicular a ESA fila.
+
+    El VEREDICTO coincide con el de la banda —comprobado—; lo que NO coincide
+    es `wBorde`, la posición del borde difractante: la banda lo pone en w = 0 y
+    el panel en w = ±(c/2)·cos alfa."""
+    a = alpha_deg * GRADO
+    semi_w = (cuerda_m / 2.0) * math.cos(a)
+    dw = wB - wA
+    if abs(dw) < 1e-12:
+        return {"estado": "paralelo", "despeje": None, "borde": None,
+                "wBorde": None, "motivo": "enlace_paralelo_a_la_fila"}
+    w0, w1 = min(wA, wB), max(wA, wB)
+    lo, hi = max(w0, -semi_w), min(w1, semi_w)
+    if lo > hi:
+        return {"estado": "fuera", "despeje": None, "borde": None,
+                "wBorde": None, "motivo": "el_enlace_no_pisa_la_huella"}
+
+    def hueco(w):
+        zr = zA + (zB - zA) * ((w - wA) / dw)
+        return zr - (z_eje + w * math.tan(a))
+
+    h_lo, h_hi = hueco(lo), hueco(hi)
+    # El canto por el que difracta es el que deja MENOS hueco, y el despeje va
+    # CON SIGNO respecto a el: mismo convenio que `corta()`. Atravesar se
+    # detecta por el CAMBIO DE SIGNO, no por el despeje.
+    # FALLO CORREGIDO: la primera version devolvia despeje 0 al tapar, o sea
+    # nu = 0 y 6,03 dB fijos tapara lo que tapara.
+    cruza = (h_lo > 0) != (h_hi > 0)
+    if abs(h_lo) <= abs(h_hi):
+        w_b, h = lo, h_lo
+    else:
+        w_b, h = hi, h_hi
+    return {"estado": "tapado" if cruza else ("libre" if h > 0 else "hueco"),
+            # MISMO SIGNO QUE `corta()`: positivo = el rayo pasa por FUERA.
+            "despeje": -min(abs(h_lo), abs(h_hi)) if cruza else abs(h),
+            "borde": z_eje + w_b * math.tan(a), "wBorde": w_b, "motivo": None}
+
+
+def ancla_antena(radio_m, alpha_deg):
+    """Espejo de `anclaAntena()`. El conector de la TCU GIRA CON EL TUBO: no es
+    una cota fija. Rotación de (0, −r, 0) alrededor del eje del tubo por −α, o
+    sea y' = −r·cos α y z' = +r·sen α.
+
+    Procedencia: anclaje en (tcuX−0,16, −0,225, 0) —Cobertura-Zigbee
+    seguidor.js:340, con la X local siendo EL EJE DEL TUBO—, giro
+    `makeRotationX(−α)` —terreno.html:1907— y el 3D ya lo dibuja así en `aTip`
+    —terreno.html:1925—."""
+    a = alpha_deg * GRADO
+    return {"dz": -radio_m * math.cos(a), "lateral": radio_m * math.sin(a)}
+
+
+def altura_antena_tcu(eje_m, radio_m, caida_m, alpha_deg):
+    """Espejo de `alturaAntenaTCU()`: anclaje girado, más la caída del coax."""
+    return eje_m + ancla_antena(radio_m, alpha_deg)["dz"] - caida_m
+
+
+def holgura_bajo_modulo(radio_m, caida_m, cuerda_m, alpha_deg):
+    """Espejo de `holguraBajoModulo()`. Positivo = la antena cuelga en el hueco;
+    negativo = el látigo está DENTRO de la banda que barre su propio panel.
+
+    Cambia de signo en α ≈ 35,1° con cuerda 2,380 m, y los seguidores trabajan
+    hasta 55–60°."""
+    a = alpha_deg * GRADO
+    z_ant = ancla_antena(radio_m, alpha_deg)["dz"] - caida_m
+    z_bot = -(cuerda_m / 2.0) * abs(math.sin(a))
+    return z_bot - z_ant
 
 
 def regimen(dx_enlace, dy_enlace, dx_fila, dy_fila, tol_grados=None):
@@ -92,18 +189,234 @@ def regimen(dx_enlace, dy_enlace, dx_fila, dy_fila, tol_grados=None):
     return {"tipo": "pasillo" if ang <= tol else "cruza", "anguloDeg": ang}
 
 
-def relieve_dominante(zA, zB, D, perfil):
-    """Espejo de `relieveDominante()`: el punto de terreno que más invade."""
-    if not perfil:
+def _fix3(v):
+    """`toFixed(3)` de JS, para que los motivos salgan IDENTICOS en los dos."""
+    return ("%.3f" % v)
+
+
+def tierra_lisa(perfil):
+    """Espejo de `tierraLisa()`. ITU-R P.1812-6, Anexo 1, Adjunto 1, §5.6.1,
+    ecuaciones (85)-(88), mas las cotas modificadas (89)-(91) y el recorte (92).
+
+    Cita verificada contra la implementacion de referencia de la UIT
+    (`eeveetza/p1812`, `private/smooth_earth_heights.m`), no de memoria."""
+    if not perfil or len(perfil) < 2:
         return None
-    peor = None
-    for s, z_suelo in perfil:
+    n = len(perfil)
+    D = perfil[n - 1][0] - perfil[0][0]
+    if not (D > 0):
+        return None
+    # SE CENTRA ANTES DE AJUSTAR y se descentra al final: con cotas absolutas
+    # grandes el ajuste pierde precision y el caso PLANO deja de dar cero
+    # exacto (medido a 739,23 m: 1,44e-12 dB de residuo). Centrando, el perfil
+    # plano tiene cotas CERO exactas y el cero pasa a ser por construccion.
+    d_ref, h_ref = perfil[0][0], perfil[0][1]
+    v1 = 0.0
+    v2 = 0.0
+    for i in range(1, n):
+        d0 = perfil[i - 1][0] - d_ref
+        h0 = perfil[i - 1][1] - h_ref
+        d1 = perfil[i][0] - d_ref
+        h1 = perfil[i][1] - h_ref
+        dd = d1 - d0
+        v1 += dd * (h1 + h0)                                         # (85)
+        v2 += dd * (h1 * (2 * d1 + d0) + h0 * (d1 + 2 * d0))         # (86)
+    hst = (2 * v1 * D - v2) / (D * D)                                # (87)
+    hsr = (v2 - v1 * D) / (D * D)                                    # (88)
+    h_ini, hNe = 0.0, perfil[n - 1][1] - h_ref
+    hobs = -math.inf
+    a_obt = -math.inf
+    a_obr = -math.inf
+    for j in range(1, n - 1):
+        dj = perfil[j][0] - d_ref
+        HH = (perfil[j][1] - h_ref) - (hst * (D - dj) + hsr * dj) / D
+        if HH > hobs:
+            hobs = HH                                                # (89a)
+        if dj > 0 and HH / dj > a_obt:
+            a_obt = HH / dj                                          # (89b)
+        if D - dj > 0 and HH / (D - dj) > a_obr:
+            a_obr = HH / (D - dj)                                    # (89c)
+    if not (hobs > 0):
+        hstp, hsrp = hst, hsr                                        # (90a,b)
+    else:
+        suma = a_obt + a_obr
+        gt = 0.5 if suma == 0 else a_obt / suma                      # (90e)
+        gr = 0.5 if suma == 0 else a_obr / suma                      # (90f)
+        hstp = hst - hobs * gt                                       # (90c)
+        hsrp = hsr - hobs * gr                                       # (90d)
+    hstd = h_ini if hstp >= h_ini else hstp                          # (91a,b)
+    hsrd = hNe if hsrp > hNe else hsrp                               # (91c,d)
+    return {"hst": min(hst, h_ini) + h_ref,                          # (92a)
+            "hsr": min(hsr, hNe) + h_ref,                            # (92b)
+            "hstd": hstd + h_ref, "hsrd": hsrd + h_ref,
+            "hobs": None if hobs == -math.inf else hobs,
+            "hstBruto": hst + h_ref, "hsrBruto": hsr + h_ref,
+            "v1": v1, "v2": v2, "D": D}
+
+
+def difraccion_cantos_detalle(D, zA, zB, cantos, f_hz, prof=0, max_prof=None):
+    """Espejo de `difraccionCantosDetalle()`: Deygout sobre cantos sueltos."""
+    p = prof or 0
+    tope = 3 if max_prof is None else max_prof
+    vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
+             "derecha": None, "profundidad": p, "motivo": None}
+    if not cantos:
+        vacio["motivo"] = "sin cantos"
+        return vacio
+    if p >= tope:
+        vacio["motivo"] = "tope de recursion (%d)" % tope
+        return vacio
+    if D <= 0:
+        vacio["motivo"] = "tramo de longitud nula"
+        return vacio
+    mejor_v, mejor = -1e9, -1
+    for i, c in enumerate(cantos):
+        s = c["s"]
         if s <= 0 or s >= D:
             continue
-        invade = z_suelo - altura_rayo(zA, zB, D, s)
-        if peor is None or invade > peor["invade"]:
-            peor = {"s": s, "zSuelo": z_suelo, "invade": invade}
-    return peor
+        v = nu(c["z"] - altura_rayo(zA, zB, D, s), s, D - s, f_hz)
+        if v > mejor_v:
+            mejor_v, mejor = v, i
+    if mejor < 0:
+        vacio["motivo"] = "ningun canto cae dentro del tramo"
+        return vacio
+    if mejor_v <= -0.78:
+        vacio["motivo"] = "el dominante despeja (nu = %s <= -0,78)" % _fix3(mejor_v)
+        return vacio
+    s_dom, z_dom = cantos[mejor]["s"], cantos[mejor]["z"]
+    perdida_dom = perdida_filo_db(mejor_v)
+    izq, der = [], []
+    for k, c in enumerate(cantos):
+        if k == mejor:
+            continue
+        if c["s"] < s_dom:
+            izq.append({"s": c["s"], "z": c["z"]})
+        else:
+            der.append({"s": c["s"] - s_dom, "z": c["z"]})
+    d_izq = difraccion_cantos_detalle(s_dom, zA, z_dom, izq, f_hz, p + 1, tope)
+    d_der = difraccion_cantos_detalle(D - s_dom, z_dom, zB, der, f_hz, p + 1, tope)
+    return {"totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
+            "dominante": {"indice": mejor, "s": s_dom, "z": z_dom,
+                          "nu": mejor_v, "perdidaDb": perdida_dom},
+            "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None}
+
+
+def bullington_db(D, zA, zB, cantos, f_hz):
+    """Espejo de `bullingtonDb()`: UN filo equivalente, sin recursion.
+
+    El terreno va con esto y no con Deygout porque Deygout sobre perfil denso
+    da un numero que depende del muestreo (1,10 dB con 2 puntos, 22,74 con 80)
+    y del tope de recursion (1,10 con tope 1, 42,81 con tope 6). Medido."""
+    if not cantos or not (D > 0):
+        return 0.0
+    s_tim = -math.inf
+    s_tr = (zB - zA) / D
+    for c in cantos:
+        s = c["s"]
+        if not (s > 0) or not (s < D):
+            continue
+        pend = (c["z"] - zA) / s
+        if pend > s_tim:
+            s_tim = pend
+    if s_tim == -math.inf:
+        return 0.0
+    if s_tim < s_tr:
+        v_max = -math.inf
+        for c in cantos:
+            s = c["s"]
+            if not (s > 0) or not (s < D):
+                continue
+            w = nu(c["z"] - altura_rayo(zA, zB, D, s), s, D - s, f_hz)
+            if w > v_max:
+                v_max = w
+        v = v_max
+    else:
+        s_rim = -math.inf
+        for c in cantos:
+            s = c["s"]
+            if not (s > 0) or not (s < D):
+                continue
+            q = (c["z"] - zB) / (D - s)
+            if q > s_rim:
+                s_rim = q
+        den = s_tim + s_rim
+        if not (abs(den) > 1e-12):
+            return 0.0
+        s_b = (zB - zA + s_rim * D) / den
+        if not (s_b > 0) or not (s_b < D):
+            return 0.0
+        z_bull = zA + s_tim * s_b
+        v = nu(z_bull - altura_rayo(zA, zB, D, s_b), s_b, D - s_b, f_hz)
+    return perdida_filo_db(v) if v > -0.78 else 0.0
+
+
+def recorta_perfil(perfil, D):
+    """Espejo de `recortaPerfil()`: el perfil, recortado AL VANO."""
+    if not perfil or len(perfil) < 2 or not (D > 0):
+        return None
+    d0 = perfil[0][0]
+    n = len(perfil)
+    if perfil[n - 1][0] - d0 < D:
+        return None
+
+    def altura(s):
+        for i in range(1, n):
+            a = perfil[i - 1][0] - d0
+            b = perfil[i][0] - d0
+            if s <= b:
+                if b == a:
+                    return perfil[i][1]
+                return perfil[i - 1][1] + (perfil[i][1] - perfil[i - 1][1]) * (s - a) / (b - a)
+        return perfil[n - 1][1]
+
+    out = [[0, altura(0)]]
+    for j in range(n):
+        s = perfil[j][0] - d0
+        if 0 < s < D:
+            out.append([s, perfil[j][1]])
+    out.append([D, altura(D)])
+    return out
+
+
+def relieve_delta_db(D, zA, zB, perfil, f_hz):
+    """Espejo de `relieveDeltaDb()`: lo que el terreno cobra POR ENCIMA de la
+    tierra lisa. Con perfil plano o en rampa sale 0 EXACTO, sin umbral."""
+    rec = recorta_perfil(perfil, D)
+    if rec is None:
+        return None
+    perfil = rec
+    L = tierra_lisa(perfil)
+    if L is None:
+        return None
+    d0 = perfil[0][0]
+    pend = (L["hsr"] - L["hst"]) / L["D"]
+    real, liso = [], []
+    for punto in perfil:
+        s = punto[0] - d0
+        if s <= 0 or s >= D:
+            continue
+        real.append({"s": s, "z": punto[1]})
+        liso.append({"s": s, "z": L["hst"] + pend * s})
+    ht_e = zA - L["hst"]
+    hr_e = zB - L["hsr"]
+    # ANTENA BAJO SU PROPIA TIERRA LISA: quien llama ha mezclado alturas
+    # absolutas con relativas. Con la ec. (92) puesta, `hst <= h[0]`, asi que
+    # `htE >= altura de antena > 0` siempre que `zA` venga en el dato del
+    # perfil. Medido: un cerro de 3 m sobre terreno a 739,23 m da 13,3297 dB con
+    # el dato bueno y 0,0029 dB con el mezclado -casi cero, indistinguible de
+    # llano- con htE = -739,161. Se devuelve `db: None` con motivo, igual que el
+    # JS. Ver el comentario largo en `radio_pv_model.js`.
+    if not (ht_e > 0) or not (hr_e > 0):
+        return {"db": None, "motivo": "antena_bajo_la_tierra_lisa", "bruto": None,
+                "real": None, "liso": None,
+                "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
+                "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
+    a = bullington_db(D, zA, zB, real, f_hz)
+    b = bullington_db(D, zA, zB, liso, f_hz)
+    d = a - b
+    return {"db": d if d > 0 else 0.0, "motivo": None, "bruto": d, "real": a, "liso": b,
+            "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
+            "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
 
 
 # ═══ TECNOLOGÍA ════════════════════════════════════════════════════════════
@@ -176,7 +489,16 @@ def _cexp(z):
 
 
 def coef_reflexion(theta, eps_r, sigma, f_hz, pol=None):
-    """Coeficiente de reflexión de Fresnel en el suelo. Espejo de `coefReflexion()`."""
+    """Coeficiente de reflexión de Fresnel en el suelo. Espejo de `coefReflexion()`.
+
+    eps_r = inf -> CONDUCTOR PERFECTO, Gamma = +1, sin dependencia del ángulo:
+    la cota superior del rebote. Sin esto el canon no fallaba, MENTÍA: daba NaN
+    y ese NaN viajaba hasta el margen sin que nada lo dijera."""
+    if eps_r == math.inf:
+        return _cx(1.0, 0.0)
+    if not (eps_r > 0):
+        raise ValueError("radio_pv_model: epsR inválido (%r). "
+                         "Use math.inf para conductor perfecto." % (eps_r,))
     lam = longitud_onda(f_hz)
     eps = _cx(eps_r, -60.0 * lam * sigma)
     s = math.sin(theta)
@@ -218,13 +540,19 @@ def nu(h_tapa, d1, d2, f_hz):
     return h_tapa * math.sqrt((2 * (d1 + d2)) / (longitud_onda(f_hz) * d1 * d2))
 
 
-def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
-    """Deygout sobre BANDAS, con el DETALLE. Espejo de `difraccionBandasDetalle()`.
+def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    """Deygout sobre PANELES, que parte en el CANTO y no en el eje. Espejo de
+    `difraccionPanelesDetalle()`.
 
-    HAY UNA SOLA IMPLEMENTACIÓN y `difraccion_bandas_db` es una envoltura que se
-    queda con el total: el panel de perfil del visor necesita saber cuál fue el
-    obstáculo dominante y cómo se partió el enlace, y calcularlo por un segundo
-    camino sería tener dos Deygout que se separan solos."""
+    El cruce lleva su propia geometria -{s, zEje, cuerda, alpha, senPhi}- en vez
+    de una banda ya resuelta: `s` es la distancia hasta el EJE de esa fila y
+    `senPhi` el seno del angulo enlace-fila. El `w` de cada extremo sale de ahi
+    y el canto vuelve a distancia recorrida como s + wBorde/senPhi.
+
+    SE REPARTE POR EL EJE, no por el canto: el canto de cada cruce depende de
+    las cotas del tramo, que cambian al recursionar, asi que repartir por el
+    daria un reparto distinto en cada nivel. Lo que si va al canto es el punto
+    de corte del tramo y la cota desde la que se reconstruye el rayo."""
     p = prof or 0
     tope = 3 if max_prof is None else max_prof
     vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
@@ -235,48 +563,89 @@ def difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
         vacio["motivo"] = "tope de recursion (%d)" % tope; return vacio
     if D <= 0:
         vacio["motivo"] = "tramo de longitud nula"; return vacio
-    mejor_v, mejor, mejor_s = -1e9, -1, 0.0
+    mejor_v, mejor, mejor_s, mejor_c = -1e9, -1, 0.0, None
     for i, cr in enumerate(cruces):
-        s = cr["s"]
-        if s <= 0 or s >= D:
+        sp = cr["senPhi"]
+        if not (sp > 0):
             continue
-        z = altura_rayo(zA, zB, D, s)
-        c = corta(cr["banda"], z)
-        v = nu(-c["despeje"], s, D - s, f_hz)
+        c = corta_panel(cr["zEje"], cr["cuerda"], cr["alpha"],
+                        -cr["s"] * sp, (D - cr["s"]) * sp, zA, zB)
+        if c["wBorde"] is None:
+            continue
+        s_b = cr["s"] + c["wBorde"] / sp
+        if s_b <= 0 or s_b >= D:
+            continue
+        v = nu(-c["despeje"], s_b, D - s_b, f_hz)
         if v > mejor_v:
-            mejor_v, mejor, mejor_s = v, i, s
+            mejor_v, mejor, mejor_s, mejor_c = v, i, s_b, c
     if mejor < 0:
-        vacio["motivo"] = "ningun cruce cae dentro del tramo"; return vacio
+        vacio["motivo"] = "ningun canto cae dentro del tramo"; return vacio
     if mejor_v <= -0.78:
         vacio["motivo"] = "el dominante despeja (nu = %.3f <= -0,78)" % mejor_v
         return vacio
-    z_dom = altura_rayo(zA, zB, D, mejor_s)
-    c_dom = corta(cruces[mejor]["banda"], z_dom)
-    borde_dom = c_dom["borde"]
+    borde_dom = mejor_c["borde"]
     perdida_dom = perdida_filo_db(mejor_v)
     izq, der = [], []
     for k, cr in enumerate(cruces):
         if k == mejor:
             continue
-        if cr["s"] < mejor_s:
+        if cr["s"] < cruces[mejor]["s"]:
             izq.append(cr)
         else:
-            der.append({"s": cr["s"] - mejor_s, "banda": cr["banda"]})
-    d_izq = difraccion_bandas_detalle(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
-    d_der = difraccion_bandas_detalle(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
+            der.append({"s": cr["s"] - mejor_s, "zEje": cr["zEje"],
+                        "cuerda": cr["cuerda"], "alpha": cr["alpha"],
+                        "senPhi": cr["senPhi"]})
+    d_izq = difraccion_paneles_detalle(mejor_s, zA, borde_dom, izq, f_hz, p + 1, tope)
+    d_der = difraccion_paneles_detalle(D - mejor_s, borde_dom, zB, der, f_hz, p + 1, tope)
     return {
         "totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
-        "dominante": {"indice": mejor, "s": mejor_s, "zRayo": z_dom, "nu": mejor_v,
-                      "perdidaDb": perdida_dom, "estado": c_dom["estado"],
-                      "despeje": c_dom["despeje"], "borde": borde_dom,
-                      "banda": cruces[mejor]["banda"]},
+        "dominante": {"indice": mejor, "s": mejor_s, "sEje": cruces[mejor]["s"],
+                      "nu": mejor_v, "perdidaDb": perdida_dom,
+                      "estado": mejor_c["estado"], "despeje": mejor_c["despeje"],
+                      "borde": borde_dom, "wBorde": mejor_c["wBorde"]},
         "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
     }
 
 
-def difraccion_bandas_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
-    """Espejo de `difraccionBandasDb()`: el total del detalle."""
-    return difraccion_bandas_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
+def difraccion_paneles_db(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
+    return difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof, max_prof)["totalDb"]
+
+
+def ganancia_patron_db(elev_rad, patron=None):
+    """Espejo de `gananciaPatronDb()`. Diagrama del dipolo de media onda, en dB
+    RELATIVOS a su máximo:
+
+        F(e) = cos((pi/2)·sen e) / cos e
+
+    Normalizado a F(0) = 1, así que SOLO RESTA. A 2,45 GHz apenas mueve nada
+    —cero exacto en todo el careo, donde las dos antenas van a la misma
+    altura—; entra porque una ganancia escalar no se puede llevar a sub-GHz.
+
+    Se aplica POR RAYO, no por enlace: cobertura-rf-fv lo aplica una vez con la
+    elevación del rayo directo y luego suma un dos rayos cuyo reflejado sale
+    con otro ángulo, lo cual es incoherente con su propio modelo."""
+    p = "iso" if patron is None else str(patron)
+    if p == "iso":
+        return 0.0
+    if p != "dipolo":
+        raise ValueError("radio_pv_model: patrón de antena «%s» no implementado" % p)
+    c = math.cos(elev_rad)
+    if abs(c) < 1e-9:
+        return -60.0
+    f = math.cos((math.pi / 2) * math.sin(elev_rad)) / c
+    return 20.0 * math.log10(max(abs(f), 1e-3))
+
+
+def campo_cercano(d1, d2, f_hz, umbral_lambdas=None):
+    """Espejo de `campoCercano()`. P.526 supone el obstáculo lejos de los dos
+    extremos en longitudes de onda; cerca no hay «filo», hay una antena metida
+    debajo de una placa. El corte va en lambdas, NO en `t`: el `t > 0,001` de
+    antes es el 0,1 % del enlace, o sea 1,2 cm a 12 m y 33,8 cm a 338."""
+    lam = longitud_onda(f_hz)
+    u = 2.0 if umbral_lambdas is None else umbral_lambdas
+    d = min(d1, d2)
+    return {"cerca": d < u * lam, "distanciaM": d, "lambdas": d / lam,
+            "umbralLambdas": u}
 
 
 def vegetacion_db(espesor_m, f_hz, modelo=None):

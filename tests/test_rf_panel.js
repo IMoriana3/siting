@@ -44,8 +44,10 @@ const MUTACIONES = {
   // mutacion salia INERTE, porque `ant_h_m` del JSON vale justo 1,5: escribia
   // el mismo numero. Se usa 0,775 —la altura del ajuste de El Burgo— que si es
   // distinta. Una mutacion que coincide con el valor real no prueba nada.)
-  detalleOtraH:  ['html', /pr\.detalle=RadioPV\.difraccionBandasDetalle\(D,hA,hA,cruces,V\.f_hz\);/,
-                  'pr.detalle=RadioPV.difraccionBandasDetalle(D,0.775,0.775,cruces,V.f_hz);'],
+  // (ancla movida al cablear el plano inclinado: las cotas de los dos extremos
+  //  ya no son la misma `hA` fija, son zA y zB, cada una del alfa de SU seguidor)
+  detalleOtraH:  ['html', /pr\.detalle=RadioPV\.difraccionPanelesDetalle\(D,zA,zB,cruces,V\.f_hz\);/,
+                  'pr.detalle=RadioPV.difraccionPanelesDetalle(D,0.775,0.775,cruces,V.f_hz);'],
   // el motor sale de la firma del raster: cambiar de motor dejaria el mapa
   // anterior en pantalla sin repintar
   firmaSinMotor: ['html', /\+"\|"\+rfMotor\(\)\+"\|"\+\(S\.rf&&S\.rf\.variante\|\|""\)\+"\|"\+\(S\._radioParams\?"p":"-"\);/,
@@ -55,8 +57,8 @@ const MUTACIONES = {
                   'if(!P||!V) return {margenDb:0, motivos:[], cruces:[], D:0};'],
   // el detalle de Deygout se calcula con OTRO tope de recursion: deja de ser
   // la misma llamada que el total
-  detalleOtroTope:['html', /pr\.detalle=RadioPV\.difraccionBandasDetalle\(D,hA,hA,cruces,V\.f_hz\);/,
-                  'pr.detalle=RadioPV.difraccionBandasDetalle(D,hA,hA,cruces,V.f_hz,0,1);'],
+  detalleOtroTope:['html', /pr\.detalle=RadioPV\.difraccionPanelesDetalle\(D,zA,zB,cruces,V\.f_hz\);/,
+                  'pr.detalle=RadioPV.difraccionPanelesDetalle(D,zA,zB,cruces,V.f_hz,0,1);'],
   // El orden por t se pierde en el camino del panel. MEDIDO: el NUMERO de
   // Deygout no depende del orden -0 diferencias en 3.000 enlaces comparando la
   // lista ordenada contra invertida y barajada, porque el algoritmo elige el
@@ -92,9 +94,14 @@ check('el bloque RF no define su propia difraccion ni su propio dos rayos',
       !/function\s+(rfDifrac|rfDosRayos|rfFresnel|rfKnife)/.test(bloque[0]));
 check('el presupuesto sale de RadioZigbee, no de una copia local',
       /RadioZigbee\.presupuesto\(/.test(bloque[0]) && !/function\s+rfPresupuesto/.test(bloque[0]));
+/* MISMA INTENCION, CONTRATO NUEVO: el detalle sale del motor y no de un segundo
+   recorrido de la pagina. Lo que cambia es CUAL, porque el Deygout de bandas
+   -que partia en el eje- ya no esta en el camino de calculo: parte en el CANTO. */
 check('el detalle de Deygout sale del motor, no de un segundo recorrido',
-      /RadioPV\.difraccionBandasDetalle\(/.test(bloque[0]) &&
+      /RadioPV\.difraccionPanelesDetalle\(/.test(bloque[0]) &&
       !/function\s+rfDeygout/.test(bloque[0]));
+check('y NO queda rastro del Deygout de bandas en la pagina',
+      !/difraccionBandas/.test(bloque[0]));
 check('los parametros se CARGAN del JSON, no van incrustados en la pagina',
       /fetch\("radio_params\.json"/.test(html) && !/rx_sens_dbm\s*:/.test(bloque[0]));
 
@@ -184,12 +191,36 @@ console.log('\n· lo que el panel puede ensenar');
   check('el enlace de prueba cruza filas', e.cruces.length > 3, e.cruces.length);
   check('trae la distancia, las alturas y la variante',
         typeof e.D === 'number' && typeof e.zA === 'number' && !!e.variante, e.variante);
+  /* EL RELIEVE VA COMO LA VEGETACION, y antes no. Este check exigia
+     `typeof relieveDb === 'number'` mientras a la vegetacion solo le pedia
+     estar presente, y esa asimetria ERA el defecto: el relieve siempre traia
+     un numero porque sin perfil devolvia un 0 callado. Ahora los dos pueden
+     ser `null` -no evaluado- y los dos tienen que DECIRLO con un motivo.
+     Se aprieta, no se afloja: antes no se comprobaba ningun motivo. */
   check('trae el desglose: dos rayos, difraccion, relieve y vegetacion por separado',
         typeof e.dosRayosDb === 'number' && typeof e.difraccionDb === 'number' &&
-        typeof e.relieveDb === 'number' && 'vegetacionDb' in e);
-  check('cada cruce trae SU banda, con su hueco inferior',
-        e.cruces.every(c => c.banda && typeof c.banda.zBot === 'number' &&
-                            typeof c.banda.zTop === 'number' && typeof c.banda.hueco === 'number'));
+        'relieveDb' in e && 'vegetacionDb' in e);
+  check('y lo que NO se ha evaluado va a null CON su motivo, nunca a cero callado',
+        (e.relieveDb !== null || e.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0) &&
+        (e.vegetacionDb !== null || e.motivos.indexOf('vegetacion_no_modelada') >= 0),
+        'relieve=' + e.relieveDb + ' veg=' + e.vegetacionDb + ' motivos=' + e.motivos.join(','));
+  /* Y que el panel de HOY cae en ese caso: `rfEnlace` no pasa perfil ninguno,
+     asi que el relieve de todo el mapa esta sin evaluar. Si algun dia se
+     conecta el DEM esto se pondra rojo, y entonces habra que venir a mirarlo
+     -que es justo lo que se quiere: que el cambio no pase desapercibido-. */
+  check('y HOY el relieve del mapa esta sin evaluar, porque nadie pasa perfil',
+        e.relieveDb === null && e.motivos.indexOf('relieve_no_evaluado_sin_perfil') >= 0,
+        e.relieveDb + ' / ' + e.motivos.join(','));
+  /* MISMA INTENCION: el cruce tiene que traer lo bastante para que el panel
+     dibuje SU geometria sin recalcular nada. Lo que cambia es QUE: ya no una
+     banda vertical ya resuelta, sino la geometria cruda de la fila -eje, cuerda,
+     su angulo y el seno del angulo de cruce-, de la que sale el plano inclinado
+     y el canto donde esta de verdad. */
+  check('cada cruce trae SU geometria: eje, cuerda, su alfa y el seno del cruce',
+        e.cruces.every(c => typeof c.zEje === 'number' && typeof c.cuerda === 'number' &&
+                            typeof c.alpha === 'number' && typeof c.senPhi === 'number'));
+  check('y NINGUN cruce trae ya una banda vertical resuelta',
+        e.cruces.every(c => c.banda === undefined));
   check('y de que seguidor es, para poder darle SU angulo',
         e.cruces.every(c => Number.isInteger(c.duenyo)));
   /* EN ORDEN POR POSICION. El panel los dibuja de izquierda a derecha, asi que

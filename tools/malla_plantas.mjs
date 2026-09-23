@@ -209,7 +209,9 @@ function bandasQueCruza(n, m, R, cuerda, tilt) {
          `tilt` puede ser un número (uno para toda la planta) o una función del
          índice del segmento, que es como entra el ángulo por seguidor. */
       const al = typeof tilt === 'function' ? tilt(k) : tilt;
-      cruces.push({ s: t * D, banda: RPV.banda(ANT_H, cuerda, al, 0) });
+      /* CONTRATO NUEVO: geometria de la fila, no una banda ya resuelta. */
+      const senPhi = Math.abs(den) / (D * Math.hypot(fx, fy));
+      cruces.push({ s: t * D, zEje: ANT_H, cuerda: cuerda, alpha: al, senPhi: senPhi });
     }
   }
   cruces.sort((a, b) => a.s - b.s);

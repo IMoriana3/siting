@@ -178,7 +178,12 @@ function cruces(a, b, D, tilt, ant) {
     const t = (wx * fy - wy * fx) / den, u = (wx * ey - wy * ex) / den;
     if (t > 0.001 && t < 0.999 && u >= 0 && u <= 1) {
       const al = typeof tilt === 'function' ? tilt(k) : tilt;
-      out.push({ s: t * D, banda: R.banda(ant, CUERDA, al, 0) });
+      /* CONTRATO NUEVO: el cruce trae la geometria de la fila y el motor corta
+         contra el plano inclinado. `ant` es ahora el EJE del tubo, no la cota de
+         la antena: las dos eran la misma cosa por error y de ahi venia que la
+         banda degenerase al filo del modelo antiguo. */
+      const senPhi = Math.abs(den) / (D * Math.hypot(fx, fy));
+      out.push({ s: t * D, zEje: ant, cuerda: CUERDA, alpha: al, senPhi: senPhi });
     }
   }
   out.sort((p, q) => p.s - q.s);

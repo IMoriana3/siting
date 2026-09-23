@@ -60,24 +60,32 @@
   /* CUÁNTAS MESAS ATRAVIESA Y CUÁNTAS ROZA. La distinción no es cosmética: es
    * la que separa `l_mod_db` de `l_roce_db`, y el ajuste sólo las puede separar
    * si alguien midió los mismos pares con las palas planas y de canto. Aquí
-   * sale gratis, porque `corta()` ya lo sabe: "tapado" es atravesar y "hueco"
-   * es rozar por debajo. */
+   * sale gratis, porque `cortaPanel()` ya lo sabe: "tapado" es atravesar y
+   * "hueco" es rozar por debajo.
+   *
+   * SOBRE EL PANEL REAL, no sobre la banda vertical. El cruce trae su propia
+   * geometria -{s, zEje, cuerda, alpha, senPhi}- y el corte se resuelve con el
+   * plano inclinado, que es donde esta el canto de verdad. */
   function cuenta(D, zA, zB, cruces) {
-    var atraviesa = 0, roza = 0, porEncima = 0;
+    var atraviesa = 0, roza = 0, porEncima = 0, fuera = 0;
     for (var i = 0; i < cruces.length; i++) {
-      var s = cruces[i].s;
-      if (s <= 0 || s >= D) continue;
-      var e = RPV.corta(cruces[i].banda, RPV.alturaRayo(zA, zB, D, s)).estado;
-      if (e === "tapado") atraviesa++;
-      else if (e === "hueco") roza++;
+      var cr = cruces[i], sp = cr.senPhi;
+      if (!(sp > 0)) { fuera++; continue; }
+      var c = RPV.cortaPanel(cr.zEje, cr.cuerda, cr.alpha,
+                             -cr.s * sp, (D - cr.s) * sp, zA, zB);
+      if (c.wBorde == null) { fuera++; continue; }
+      var sB = cr.s + c.wBorde / sp;
+      if (sB <= 0 || sB >= D) { fuera++; continue; }
+      if (c.estado === "tapado") atraviesa++;
+      else if (c.estado === "hueco") roza++;
       else porEncima++;
     }
-    return { atraviesa: atraviesa, roza: roza, porEncima: porEncima };
+    return { atraviesa: atraviesa, roza: roza, porEncima: porEncima, fuera: fuera };
   }
 
   /* EL BALANCE DE UN ENLACE.
    *
-   *   Prx = Ptx + Gtx + Grx − (dos rayos + difracción por bandas + vegetación
+   *   Prx = Ptx + Gtx + Grx − (dos rayos + difracción por PANELES + vegetación
    *                            + l_mod·atraviesa + l_roce·roza + offset)
    *   margen = Prx − sensibilidad
    *
@@ -95,25 +103,81 @@
     var cruces = enlace.cruces || [];
     var n = cuenta(D, zA, zB, cruces);
 
-    var dosRayos = RPV.dosRayosDb(D, zA, zB, f, propagacion.eps_r_suelo,
-                                  propagacion.sigma_suelo_s_m, propagacion.polarizacion);
-    var difrac = RPV.difraccionBandasDb(D, zA, zB, cruces, f);
+    var difrac = RPV.difraccionPanelesDb(D, zA, zB, cruces, f);
 
-    /* EL RELIEVE VA APARTE de las bandas, y suma. Un cerro entre dos nodos no
-       es una mesa: es terreno, es continuo y no tiene hueco por debajo. */
-    var relieve = 0, relieveDom = RPV.relieveDominante(zA, zB, D, enlace.perfil);
-    if (relieveDom && relieveDom.invade > -1e9) {
-      var v = RPV.nu(relieveDom.invade, relieveDom.s, D - relieveDom.s, f);
-      relieve = RPV.perdidaFiloDb(v);
+    /* EL RELIEVE, CONTRA LA TIERRA LISA.
+     *
+     * SIN PERFIL NO SE DICE 0, SE DICE QUE NO SE HA MIRADO. Tres estados:
+     *
+     *   perfil AUSENTE   nadie ha mirado el terreno. Es el caso de TODOS los
+     *                    enlaces del mapa hoy: `index.html` pasa `perfil: null`.
+     *   perfil que NO PISA el vano   tampoco se ha mirado nada.
+     *   perfil DENTRO del vano       un numero, y si sale 0 ese 0 SI significa
+     *                    «llano», porque es exacto por construccion.
+     *
+     * Misma disciplina que la vegetacion de abajo. Un cero callado es la forma
+     * mas barata de mentir en un balance.
+     *
+     * ───────────────────────────────────────────────────────────────────────
+     * POR QUE CONTRA LA TIERRA LISA Y NO CONTRA LA COTA CERO. Porque
+     * `dosRayosDb` YA supone un plano reflectante debajo y modela su efecto
+     * entero. Pasarle el terreno como cotas absolutas a un filo de cuchillo
+     * cobra OTRA VEZ ese mismo plano. Medido, antena a 0,475 m (eje 1,20) y
+     * perfil PLANO a cota 0, con 11 puntos de perfil: 21,66 dB de doble conteo
+     * a 100 m. Con un solo punto medio eran 2,84. Ni uno ni otro es terreno:
+     * es el suelo que los dos rayos ya tienen puesto.
+     *
+     * La referencia es la RECTA DE MINIMOS CUADRADOS del perfil -ITU-R
+     * P.1812-6, Anexo 1, Adjunto 1, §5.6.1, ec. (85)-(88)- y el relieve es lo
+     * que el terreno real cobra POR ENCIMA de esa recta. Con perfil plano o en
+     * rampa, real y referencia son la misma cuenta y sale 0 EXACTO, sin umbral.
+     *
+     * Y LAS ALTURAS DE ANTENA DE LOS DOS RAYOS VAN SOBRE ESA MISMA RECTA
+     * (`htE`, `hrE`, ec. (94)), no sobre la cota cero: si la referencia de la
+     * difraccion y la del rebote fueran distintas, la resta no cancelaria. */
+    var relieve = null, relieveDet = null;   // `null` = no evaluado, como la vegetacion
+    var salidaSinMargen = false;             // dato mezclado: se para, ver abajo
+    var htE = zA, hrE = zB;                  // sin perfil, el suelo es la cota 0
+    if (!enlace.perfil || !enlace.perfil.length) {
+      motivos.push("relieve_no_evaluado_sin_perfil");
+    } else {
+      relieveDet = RPV.relieveDeltaDb(D, zA, zB, enlace.perfil, f);
+      if (relieveDet === null) {
+        /* El perfil no cubre el vano entero -o tiene menos de dos puntos-. No
+           se ha mirado nada, y eso NO es un 0: se dice, igual que la ausencia. */
+        motivos.push("relieve_perfil_no_cubre_el_vano");
+      } else if (relieveDet.db === null) {
+        /* ALTURAS MEZCLADAS, Y AQUI SE PARA EL BALANCE ENTERO.
+         *
+         * `relieveDeltaDb` ha visto la antena por debajo de su propia tierra
+         * lisa, o sea que `zA`/`zB` no vienen en el dato del perfil. Eso no
+         * estropea solo el relieve: `dosRayosDb` recibiria como altura sobre el
+         * suelo una cota sobre el nivel del mar -739 m en Ayora-, y el resultado
+         * seria un margen con pinta de bueno salido de una antena enterrada.
+         *
+         * Asi que se devuelve SIN MARGEN, con el motivo, igual que se hace sin
+         * sensibilidad y con el balance incompleto. Es el unico sitio del
+         * relieve donde no vale con anotar y seguir, porque el dato malo se
+         * propaga al rebote y no se queda en su termino. */
+        motivos.push("relieve_" + relieveDet.motivo);
+        salidaSinMargen = true;
+      } else {
+        relieve = relieveDet.db;
+        htE = relieveDet.htE;
+        hrE = relieveDet.hrE;
+      }
     }
+
+    var dosRayos = RPV.dosRayosDb(D, htE, hrE, f, propagacion.eps_r_suelo,
+                                  propagacion.sigma_suelo_s_m, propagacion.polarizacion);
 
     /* VEGETACIÓN: `null` si no hay modelo. NO se suma como 0 callando. */
     var veg = RPV.vegetacionDb(enlace.vegetacionM || 0, f,
                                (propagacion.vegetacion && propagacion.vegetacion.modelo) || null);
     if (veg === null) motivos.push("vegetacion_no_modelada");
 
-    var perdida = dosRayos + difrac + relieve + c.lMod * n.atraviesa + c.lRoce * n.roza + c.offset
-                + (veg || 0);
+    var perdida = dosRayos + difrac + (relieve || 0) + c.lMod * n.atraviesa + c.lRoce * n.roza
+                + c.offset + (veg || 0);
 
     var salida = {
       modo: c.modo, variante: variante.nombre || null,
@@ -123,6 +187,11 @@
       prxDbm: null, margenDb: null, pEnlace: null, motivos: motivos,
       calibracion: c.modo === CALIBRADO ? { version: c.version, campana: c.campana } : null
     };
+
+    /* Antes que nada: si las alturas venian mezcladas, no hay balance que dar.
+       Va aqui y no arriba para que `salida` lleve igualmente los terminos
+       calculados y el motivo, que es lo que se necesita para diagnosticarlo. */
+    if (salidaSinMargen) return salida;
 
     if (variante.ptx_dbm == null || variante.gtx_dbi == null || variante.grx_dbi == null) {
       motivos.push("balance_incompleto");

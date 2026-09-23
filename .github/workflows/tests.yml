@@ -30,6 +30,26 @@ jobs:
       - name: la herramienta de malla arranca sobre una planta real
         run: node tools/malla_plantas.mjs --planta BURGO > /dev/null
 
+      # EL CAREO CONTRA EL 3D NO PUEDE CORRER AQUI —necesita cobertura-zigbee, y
+      # un banco que dependa del repo hermano sale verde en una maquina y rojo
+      # en la otra; ya paso en este repo—. Pero SI arranca, y eso es justo lo
+      # que habria cazado el `require('/home/user/Siting/...')` absoluto que
+      # llevaba dentro uno de los utiles que nadie corria. Sin hermano carga el
+      # motor, comprueba que la API que usa sigue existiendo, dice que no ha
+      # comprobado nada y sale con 0.
+      - name: el careo de terreno contra el 3D arranca (sin hermano, no carea)
+        run: node tools/careo_terreno_3d.mjs
+
+      # Igual que el de arriba: necesita los levantamientos de ayora y sanjose,
+      # que viven en el hermano. Aqui solo se comprueba que arranca y que la
+      # API del motor que usa sigue existiendo.
+      - name: el informe de relieve por planta arranca (sin hermano, no mide)
+        run: node tools/relieve_plantas.mjs
+
+      # Lo mismo: los layouts con meteo viven en el hermano.
+      - name: el informe de antena de la HSU arranca (sin hermano, no mide)
+        run: node tools/antena_hsu.mjs
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
@@ -91,18 +111,44 @@ jobs:
           }
           rojo node tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
                                              sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba \
-                                             sinReflejado sueloSinPerdida anguloDirecto
+                                             sinReflejado sueloSinPerdida anguloDirecto \
+                                             sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
           # verde, que es exactamente la avería que esto vigila.
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
-                                              canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol
+                                              canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
+                                              relieveCallado relieveCortoCero dosRayosSinLisa \
+                                              mezclaSigue mezclaSiempre
+
+          # EL TERRENO DE LA PLANTA. `terreno_planta.js` lee el MISMO
+          # `<planta>_relieve.json` que consume el 3D de cobertura-zigbee, y de
+          # ahi sale el perfil con el que el motor calcula el relieve.
+          #
+          # `sinBordeMalla` salio DORMIDA la primera vez y merece la nota: al
+          # pasarse por arriba de la malla, `z[...]` da `undefined`, y en JS
+          # `undefined == null`, asi que el control de esquinas la tapaba. Pero
+          # en la ULTIMA COLUMNA el indice no se sale del array — cae en la
+          # PRIMERA COLUMNA DE LA FILA SIGUIENTE, en rango y equivocada. Con el
+          # caso bueno puesto, `cotaEn(25,5)` devuelve 2,5 m del otro extremo de
+          # la planta en vez de null.
+          rojo node tests/test_terreno_planta.js sinBordeMalla huecoRelleno bilinealPlana \
+                                                 sinExtremo pasoFijo motivoAlReves sueloCero \
+                                                 validaFloja coberturaCiega antenaEnterrada
 
           rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
                                             detalleOtroTope sinOrdenT
 
           rojo node tests/test_rf_indice.js sinIndice ddaSinY sinDedupe selloFijo celdaEnorme
+
+          # La antena de la TCU: gira con el tubo, se desplaza en LATERAL, y a
+          # partir de ~35° queda dentro de la banda de su propio modulo.
+          rojo node tests/test_antena_tcu.js anclaFija sinLateral holguraAlSuelo \
+                                             cercaSinLambda patronPlano conductorNaN \
+                                             panelAlEje panelSinHuella \
+                                             ejeMiente ejeGlobal tapaSinFondo \
+                                             tierraCallada ejeNombreViejo
 
           rojo node tests/test_estadistica.js sigmaPoblacional empatesSinMedia pUnaCola glMalos \
                                               sinInterpolar nanCallado
@@ -111,9 +157,45 @@ jobs:
                                                 sinSupuestas sinRotulo sinSignificativa sinSigma \
                                                 anguloConstante
 
-          rojo python3 tests/test_paridad_radio.py py_sin_hueco py_borde_top py_fspl_001 py_refl_pol \
-                                                   py_csqrt_rama js_semi_cuerda js_borde_top \
-                                                   js_tol_regimen js_fase_signo
+          # LOS DOS UTILES QUE NO VIGILABA NADIE. `careo_elburgo.mjs` si lo
+          # corre su banco de punta a punta; `sensibilidad_eje.mjs` y
+          # `sin_dato_horas.mjs` no los corria nada, y se notaba: el segundo
+          # llevaba `/home/user/Siting/...` a pelo, o sea que no arrancaba en
+          # ninguna otra maquina. Este banco los EJECUTA contra fixtures, con
+          # los numeros calculados a mano.
+          rojo node tests/test_utiles_rf.js ejeSinAntena vegPlana cantoAlEje \
+                                            corteFijo rotuloFijo sinSenPhi
+
+          # LA PUERTA DE LA HOLGURA UNICA. No compara numeros: lee el fuente de
+          # los dos motores y cuenta cuantas funciones dan el despeje de una
+          # fila. Tiene que ser UNA. La banda vertical y el plano inclinado
+          # daban el mismo despeje -0,000000 m- y distinto CANTO, asi que un
+          # banco de numeros no podia cazar que convivieran; este si.
+          rojo node tests/test_una_holgura.js segundaHolgura segundaHolguraPy bandaDeVuelta \
+                                              refEnLaApp nombresDistintos refHuerfana \
+                                              segundaLisa segundaLisaPy relieveViejo
+
+          # `py_sin_hueco`, `py_borde_top`, `js_semi_cuerda` y `js_borde_top`
+          # se han ido con las familias de banda: esas funciones ya no existen
+          # en ningun motor, asi que sus mutaciones no tendrian que mutar.
+          # LAS TRES DE LA GEOMETRIA IMPOSIBLE. La paridad estuvo VERDE con once
+          # casos que llevaban la antena bajo tierra, porque los dos motores se
+          # equivocaban IGUAL. `py_sin_guarda`/`js_sin_guarda` tumban la guarda por
+          # un lado -y entonces la familia `relieve` ya discrepa-, y
+          # `js_guarda_todo` prueba el otro extremo: un «no» universal, que pasaria
+          # todas las comprobaciones de «no». El caso de los DOS motores rotos a la
+          # vez no lo puede producir una mutacion de un solo lado, y lo cubre la
+          # comprobacion de clases: probado rompiendo los dos, `relieve` sale OK y
+          # la de clases saca 22 cruces.
+          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+                                                   py_sin_guarda js_sin_guarda js_guarda_todo \
+                                                   py_csqrt_rama \
+                                                   js_tol_regimen js_fase_signo \
+                                                   py_ancla_fija js_sin_lateral py_patron_iso \
+                                                   js_cerca_fija py_conductor \
+                                                   js_panel_eje py_panel_huella \
+                                                   py_eje_medida js_eje_cero py_tapa_cero \
+                                                   js_parte_eje py_sin_senphi py_tierra_muda
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.

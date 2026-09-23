@@ -32,21 +32,42 @@ sys.path.insert(0, RAIZ)
 # no estaba comparando ese trozo. Se aplican sobre una COPIA: los ficheros del
 # repo no se tocan.
 MUTACIONES = {
-    # el hueco bajo el panel desaparece SOLO en Python
-    "py_sin_hueco":   ("py", r'if z_rayo < b\["zBot"\]:', 'if False:'),
-    # el borde más próximo se sustituye por el de arriba, SOLO en Python
-    "py_borde_top":   ("py", r'borde = b\["zTop"\] if d_top <= d_bot else b\["zBot"\]',
-                              'borde = b["zTop"]'),
-    # media cuerda SOLO en JS
-    "js_semi_cuerda": ("js", r'var semi = \(cuerdaM / 2\)', 'var semi = (cuerdaM / 4)'),
-    # el Deygout del JS deja de relanzar desde el borde que toca
-    # (ancla movida al partir `difraccionBandasDetalle`: ver la nota gemela en
-    #  test_radio_geom.js. Las dos anclaban la MISMA linea de JS.)
-    "js_borde_top":   ("js", r'var bordeDom = cDom\.borde;',
-                              'var bordeDom = cruces[mejor].banda.zTop;'),
     # la constante de espacio libre se desvía 0,01 dB en Python: el banco tiene
     # que cazar incluso una diferencia que a ojo no se ve
     "py_fspl_001":    ("py", r'- 147\.55$', '- 147.56'),
+    # ── LA ANTENA DE LA TCU, por los dos lados ──────────────────────────────
+    # el anclaje deja de girar SOLO en Python: vuelve la cota fija
+    "py_ancla_fija":  ("py", r'return \{"dz": -radio_m \* math\.cos\(a\), "lateral": radio_m \* math\.sin\(a\)\}',
+                              'return {"dz": -radio_m, "lateral": 0.0}'),
+    # el lateral se pierde SOLO en JS: es el que decide por que lado sale el rayo
+    "js_sin_lateral": ("js", r'lateral: r \* Math\.sin\(a\)', 'lateral: 0'),
+    # el patron se aplana SOLO en Python
+    "py_patron_iso":  ("py", r'f = math\.cos\(\(math\.pi / 2\) \* math\.sin\(elev_rad\)\) / c',
+                              'f = 1.0'),
+    # el campo cercano deja de depender de lambda SOLO en JS: a 868 MHz la misma
+    # geometria esta MAS cerca en longitudes de onda, y eso es justo lo que no
+    # se puede perder al bajar de banda
+    "js_cerca_fija":  ("js", r'return \{ cerca: d < u \* lam,', 'return { cerca: d < u * 0.1224,'),
+    # el corte con el panel colapsa a la banda SOLO en JS: el borde vuelve al eje
+    "js_panel_eje":   ("js", r'borde: zEje \+ wB2 \* Math\.tan\(a\),', 'borde: zEje,'),
+    # la huella del panel se ignora SOLO en Python: cualquier cruce vale
+    "py_panel_huella":("py", r'lo, hi = max\(w0, -semi_w\), min\(w1, semi_w\)', 'lo, hi = w0, w1'),
+    # la altura del eje deja de decir que NO esta medida, SOLO en Python: una
+    # cota declarada que se presenta como medida es el falso verde de siempre
+    "py_eje_medida":  ("py", r'return \{"valor": defecto_m, "medida": False,', 'return {"valor": defecto_m, "medida": True,'),
+    # y SOLO en JS, un eje_m a cero cuela como medida
+    "js_eje_cero":    ("js", r'if \(typeof v === "number" && isFinite\(v\) && v > 0\)', 'if (typeof v === "number")'),
+    # al tapar se pierde la profundidad, SOLO en Python
+    "py_tapa_cero":   ("py", r'"despeje": -min\(abs\(h_lo\), abs\(h_hi\)\) if cruza else abs\(h\),',
+                              '"despeje": 0 if cruza else abs(h),'),
+    # el Deygout de paneles vuelve a partir en el EJE, SOLO en JS
+    "js_parte_eje":   ("js", r'var sB = cr\.s \+ c\.wBorde / sp;', 'var sB = cr.s;'),
+    # el seno del angulo de cruce se pierde al volver del canto, SOLO en Python
+    "py_sin_senphi":  ("py", r's_b = cr\["s"\] \+ c\["wBorde"\] / sp', 's_b = cr["s"] + c["wBorde"]'),
+    # la geometria bajo tierra se calla, SOLO en Python
+    "py_tierra_muda": ("py", r'"bajoTierra": z_bot < suelo,', '"bajoTierra": False,'),
+    # el conductor perfecto vuelve a dar NaN SOLO en Python
+    "py_conductor":   ("py", r'if eps_r == math\.inf:\n        return _cx\(1\.0, 0\.0\)', 'if False:\n        pass'),
     # la tolerancia del régimen cambia SOLO en JS
     "js_tol_regimen": ("js", r'var tol = tolGrados == null \? 10 : tolGrados;',
                               'var tol = tolGrados == null ? 20 : tolGrados;'),
@@ -60,6 +81,22 @@ MUTACIONES = {
     # la rama de la raíz compleja pierde el signo, SOLO en Python. `eps` tiene
     # parte imaginaria negativa siempre (−60·λ·σ), así que esto actúa seguro
     "py_csqrt_rama":  ("py", r'if z\[1\] < 0:\n        im = -im', 'if False:\n        im = -im'),
+
+    # ── LA GEOMETRIA IMPOSIBLE, por los dos lados ───────────────────────────
+    # LAS DOS SON DEL MOTOR, NO DEL BANCO, y es deliberado: lo que hay que
+    # impedir es que la paridad vuelva a estar verde con las dos copias
+    # equivocadas igual. Si la guarda se cae en UN solo motor, la familia
+    # `relieve` ya discrepa; si se cayera en los dos a la vez —el caso que
+    # ninguna comparacion js-contra-py puede ver— lo caza la comprobacion de
+    # clases, que no pregunta a ningun motor.
+    # la guarda se cae SOLO en Python: los once casos enterrados vuelven a dar
+    # numero alli y None aqui
+    "py_sin_guarda":  ("py", r'if not \(ht_e > 0\) or not \(hr_e > 0\):', 'if False:'),
+    # y SOLO en JS
+    "js_sin_guarda":  ("js", r'if \(!\(htE > 0\) \|\| !\(hrE > 0\)\) \{', 'if (false) {'),
+    # la guarda se pasa de frenada SOLO en JS y se come geometrias sanas: un
+    # «no» universal pasa todas las comprobaciones de «no»
+    "js_guarda_todo": ("js", r'if \(!\(htE > 0\) \|\| !\(hrE > 0\)\) \{', 'if (true) {'),
 }
 MUTA = os.environ.get("MUTA")
 
@@ -86,23 +123,8 @@ def check(nombre, cond, extra=None):
 F = [2.45e9, 868e6, 915e6, 2.4e9]
 
 
-def casos_banda():
-    out = []
-    for eje in (1.4, 2.0, 2.6, 3.15):
-        for cuerda in (2.38, 2.384, 4.0):
-            for alpha in (0, 5, 17.5, 30, 45, 55, 60, 90, -30, -55):
-                for suelo in (0.0, 0.4, 1.9):
-                    out.append([eje, cuerda, alpha, suelo])
-    return out
 
 
-def casos_corta():
-    out = []
-    for b in ([2.0, 2.38, 30, 0.0], [2.6, 2.38, 90, 0.0], [1.4, 2.38, 0, 0.0],
-              [3.15, 4.0, 55, 1.9], [2.0, 2.38, 5, 0.4]):
-        for z in (-0.5, 0.0, 0.775, 1.0, 1.405, 1.5, 2.0, 2.595, 3.0, 5.2, 9.9):
-            out.append([b, z])
-    return out
 
 
 def casos_regimen():
@@ -116,15 +138,76 @@ def casos_regimen():
 
 
 def casos_relieve():
+    """El relieve contra la TIERRA LISA. Los perfiles cubren los casos que el
+    motor tiene que distinguir: plano a varias cotas -donde el resultado es 0
+    EXACTO-, rampas, cerros, vaguadas, muestreo irregular, y perfiles que NO
+    cubren el vano (que dan None, no 0)."""
+    def rej(h, D, n=12):
+        return [[D * i / n, h(D * i / n)] for i in range(n + 1)]
     perfiles = [
-        [], [[50, 1.0]], [[30, 0.5], [50, 2.2], [70, 1.1]],
-        [[10, -0.3], [90, -0.9]], [[0, 5.0], [200, 5.0]],
-        [[25, 1.9], [50, 1.9], [75, 1.9]],
+        [],                                            # vacio
+        [[0, 0.0], [50, 0.0]],                         # NO cubre un vano de 100
+        rej(lambda s: 0.0, 200),                       # plano a 0
+        rej(lambda s: 739.23, 200),                    # plano a cota de Ayora
+        rej(lambda s: -12.75, 200),                    # plano bajo el cero
+        rej(lambda s: 0.05 * s, 200),                  # rampa
+        rej(lambda s: -0.15 * s, 200),                 # rampa al reves
+        rej(lambda s: 2.0 * math.exp(-((s - 100) / 30.0) ** 2), 200),    # cerro
+        rej(lambda s: -2.0 * math.exp(-((s - 100) / 30.0) ** 2), 200),   # vaguada
+        [[0, 0.0], [1, 0.05], [3, 0.4], [97, 1.1], [150, 0.2], [200, 0.0]],  # irregular
+        [[0, 5.0], [200, 5.0]],                        # solo dos puntos
     ]
     out = []
+    # ── BLOQUE 1: alturas FIJAS. Es el que estaba, y es el que pisa la GUARDA.
+    # La cuarta geometria se anyadio con ella: 739,705 = 739,23 + 0,475 es el
+    # dato BIEN PUESTO para el perfil llano de Ayora, y tiene que dar 0 exacto,
+    # mientras que las tres primeras -antenas a metros del CERO contra un
+    # terreno a 739 m- dejan la antena 737 m bajo su propia tierra lisa y tienen
+    # que dar `db: None` con motivo. Las dos ramas, comparadas.
     for p in perfiles:
-        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 200), (3.15, 0.775, 120)):
+        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 180), (3.15, 0.775, 120),
+                          (739.705, 739.705, 100)):
             out.append([zA, zB, D, p])
+
+    # ── BLOQUE 2: alturas DERIVADAS DEL PROPIO PERFIL, y este bloque hay que
+    # explicarlo porque nacio de un hallazgo.
+    #
+    # Al poner la guarda se vio que ONCE de los 44 casos del bloque 1 tenian la
+    # antena bajo tierra, y no solo los tres del perfil de Ayora: tambien la
+    # rampa (a 100 m de una pendiente 0,05 el suelo esta a 5 m y la antena a
+    # 1,5), el cerro y el perfil llano a 5 m. O sea que el bloque 1 llevaba
+    # desde el principio casos FISICAMENTE IMPOSIBLES a los que el motor
+    # respondia con un numero, y la paridad los daba por buenos porque los dos
+    # lados se equivocaban igual.
+    #
+    # Con la guarda esos once pasan a `None`, que es lo correcto, PERO ENTONCES
+    # LA PARIDAD COMPARA MENOS ARITMETICA: once perfiles inclinados dejan de
+    # ejercitar `bullington_db`. Este bloque lo repone y lo mejora: la antena se
+    # pone sobre EL SUELO DE SU PROPIO EXTREMO, asi que el dato es consistente
+    # por construccion y la guarda no puede saltar nunca aqui.
+    def suelo(p, s):
+        """Cota del perfil en s, lineal entre puntos. La calcula ESTE fichero,
+        no el motor: pedirsela al motor seria generar los casos con lo que se
+        quiere comprobar."""
+        if not p:
+            return None
+        if s <= p[0][0]:
+            return p[0][1]
+        for i in range(1, len(p)):
+            if s <= p[i][0]:
+                a, b = p[i - 1], p[i]
+                if b[0] == a[0]:
+                    return b[1]
+                return a[1] + (b[1] - a[1]) * (s - a[0]) / (b[0] - a[0])
+        return p[-1][1]
+
+    for p in perfiles:
+        for D in (100, 180, 120):
+            if not p or p[-1][0] - p[0][0] < D:
+                continue                       # no cubre: ya lo mira el bloque 1
+            z0, z1 = suelo(p, p[0][0]), suelo(p, p[0][0] + D)
+            for ant in (0.475, 1.5, 3.15):
+                out.append([z0 + ant, z1 + ant, D, p])
     return out
 
 
@@ -167,40 +250,86 @@ def casos_escalares():
     return out
 
 
-def casos_difraccion():
-    """Enlaces completos. Éste es el que de verdad cierra la fase: mete la
-    geometría de banda dentro de la recursión de Deygout, que es donde una
-    diferencia de un borde se convierte en dB."""
+
+
+def casos_antena():
+    """LA ANTENA DE LA TCU Y EL PATRÓN, que son geometría nueva y tienen que
+    dar el mismo número en los dos motores como todo lo demás.
+
+    El patrón se barre hasta el NULO del eje: ahí la función es vertical y es
+    donde la paridad se rompería si una de las dos ramas se escribiera distinta.
+    Y el conductor perfecto entra porque es un CORTOCIRCUITO, no una fórmula:
+    una rama que solo exista en un lado es exactamente lo que esto vigila."""
     out = []
-    filas = {
-        "plana":   [2.0, 2.38, 0, 0.0],
-        "poco":    [2.0, 2.38, 17.5, 0.0],
-        "media":   [2.0, 2.38, 30, 0.0],
-        "canto":   [2.6, 2.38, 90, 0.0],
-        "alta":    [3.15, 4.0, 55, 1.9],
-    }
-    esquemas = [
-        [("media", 50)],
-        [("canto", 60), ("media", 140)],
-        [("media", 60), ("canto", 140)],
-        [("plana", 40), ("poco", 80), ("media", 120), ("canto", 160)],
-        [("alta", 30), ("alta", 90), ("alta", 150)],
-        [("media", 0), ("media", 200)],          # en los extremos: se descartan
-        [("canto", 12), ("canto", 24), ("canto", 36), ("canto", 48), ("canto", 60)],
-    ]
-    for esq in esquemas:
-        for zA, zB in ((1.5, 1.5), (0.775, 0.775), (0.775, 3.15), (3.15, 0.775),
-                       (2.0, 2.0), (4.5, 4.5), (1.0, 1.0)):
-            for f in F:
-                for D in (200, 120.5):
-                    out.append([D, zA, zB, [[filas[n], s] for n, s in esq], f])
+    for al in [0, 5, 15, 30, 35.09, 45, 55, 60, 75, 90, -30, -55, 120, 180]:
+        out.append(["ancla", 0.225, al])
+        out.append(["altura", 1.5, 0.225, 0.50, al])
+        for c in [2.380, 2.411]:
+            out.append(["holgura", 0.225, 0.50, c, al])
+    for e in [0.0, 1e-9, 0.01, 0.1, 0.25, 0.5, 1.0, 1.4, 1.5707963267948966,
+              1.5707963267948966 - 1e-9, -0.25, -1.0, -1.4, 3.0]:
+        out.append(["patron", e, "dipolo"])
+        out.append(["patron", e, "iso"])
+    for d1 in [0.0, 0.05, 0.1125, 0.25, 3.0, 100.0]:
+        for f in [2.45e9, 868e6, 2.4e9]:
+            for u in [2, 5, 0.5]:
+                out.append(["cerca", d1, 100.0, f, u])
+    # conductor perfecto: la rama de cortocircuito, por los dos lados
+    for th in [0.01, 0.25, 1.0]:
+        out.append(["reflinf", th, 5e-3, 2.45e9, "v"])
+        out.append(["reflinf", th, 5e-3, 868e6, "h"])
+    # LA ALTURA DEL EJE: declarada, medida, sin montaje, y el cero que NO cuela
+    # EL NOMBRE ES `eje_m` Y SOLO ESE. Los casos con `module_height` PUESTO ya
+    # no van aqui: los dos motores LANZAN, y eso se carea abajo con su propio
+    # bloque. Un `module_height: null` si entra, porque es lo que el generador
+    # emite hoy en las diez plantas y tiene que seguir siendo inocuo.
+    for m in [{"eje_m": None}, {"eje_m": 2.0}, {"eje_m": 1.87},
+              {"eje_m": 0}, {"eje_m": -1}, {}, None,
+              {"module_height": None}, {"module_height": None, "eje_m": 1.35}]:
+        out.append(["eje", m, 1.20])
+    for cu in [2.380, 2.382, 2.384, 2.411]:
+        for al in [0, 30, 55, 84.5248, 90]:
+            for su in [0.0, 0.40, -0.3]:
+                out.append(["tierra", 1.20, cu, al, su])
+    # CORTE EXACTO CON EL PANEL INCLINADO. Se barren las CINCO ramas, porque una
+    # que solo exista en un lado es justo lo que esto vigila: paralelo, fuera de
+    # la huella, atraviesa, roza por debajo y roza por encima.
+    for al in [0, 10, 30, 35.091, 45, 55, -30]:
+        for wA, wB in [(0.1125, -10.0), (-10.0, 0.1125), (0.0, 0.0),   # cruza, al reves, paralelo
+                       (5.0, 9.0), (-9.0, -5.0),                        # fuera de la huella
+                       (-2.0, 2.0), (-0.5, 0.5)]:                       # cruza entero / tramo corto
+            for zA, zB in [(-0.6949, -0.6949), (-0.6949, 0.40), (2.0, 2.0), (-3.0, -3.0)]:
+                out.append(["panel", 0.0, 2.38, al, wA, wB, zA, zB])
     return out
 
 
+def casos_paneles():
+    """DEYGOUT SOBRE PANELES. Se barre el angulo de cruce -de perpendicular a
+    casi paralelo- porque `senPhi` entra en el `w` de los dos extremos Y en la
+    vuelta del canto a distancia recorrida: si un motor lo aplicara solo en un
+    sitio, la diferencia saldria aqui y no en `corta_panel`."""
+    out = []
+    for D, zA, zB in [(60, 0.805, 0.805), (120, 0.805, 3.15), (24, 0.775, 0.775),
+                      (338, 0.871, 0.871)]:
+        for al in [0, 10, 30, 45, 55]:
+            for sp in [1.0, 0.866, 0.5, 0.1736, 0.05]:
+                for ss in [[0.2], [0.2, 0.5, 0.8], [0.1, 0.3, 0.5, 0.7, 0.9]]:
+                    cr = [{"s": f * D, "zEje": 1.5, "cuerda": 2.382,
+                           "alpha": al, "senPhi": sp} for f in ss]
+                    out.append([D, zA, zB, cr, 2.45e9])
+    return out
+
+
+# LAS FAMILIAS «banda», «corta» y «difraccion» YA NO ESTAN, y no es una perdida
+# de cobertura: esas funciones ya no existen en NINGUNO de los dos motores. La
+# banda vertical se saco a `tests/referencia_banda_vertical.js` porque el motor
+# no puede tener dos funciones que den el despeje de una fila, y lo que el motor
+# calcula ahora -el corte con el plano inclinado y su Deygout- esta cubierto por
+# «paneles» y por la parte de panel de «antena».
 CASOS = {
-    "banda": casos_banda(), "corta": casos_corta(), "regimen": casos_regimen(),
+    "paneles": casos_paneles(), "regimen": casos_regimen(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
-    "difraccion": casos_difraccion(),
+    "antena": casos_antena(),
 }
 
 # ── LOS DOS MOTORES ────────────────────────────────────────────────────────
@@ -213,16 +342,11 @@ vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
 const R = ctx.module.exports;
 const casos = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const bandaDe = a => R.banda(a[0], a[1], a[2], a[3]);
 const out = {};
-out.banda = casos.banda.map(a => { const b = bandaDe(a);
-  return [b.eje, b.semi, b.zBot, b.zTop, b.suelo, b.hueco]; });
-out.corta = casos.corta.map(([a, z]) => { const c = R.corta(bandaDe(a), z);
-  return [c.estado, c.despeje, c.borde, c.bajoSuelo === undefined ? null : c.bajoSuelo]; });
 out.regimen = casos.regimen.map(([e, f, tol]) => {
   const r = R.regimen(e[0], e[1], f[0], f[1], tol); return [r.tipo, r.anguloDeg]; });
-out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDominante(zA, zB, D, p);
-  return r === null ? null : [r.s, r.zSuelo, r.invade]; });
+out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDeltaDb(D, zA, zB, p, 2.45e9);
+  return r === null ? null : [r.db, r.bruto, r.hst, r.hsr, r.hstd, r.hsrd, r.htE, r.hrE, r.motivo]; });
 out.escalares = casos.escalares.map(c => {
   switch (c[0]) {
     case 'fspl':    return R.fsplDb(c[1], c[2]);
@@ -237,8 +361,30 @@ out.escalares = casos.escalares.map(c => {
   }
   throw new Error('caso escalar desconocido: ' + c[0]);
 });
-out.difraccion = casos.difraccion.map(([D, zA, zB, cr, f]) =>
-  R.difraccionBandasDb(D, zA, zB, cr.map(([a, s]) => ({ s: s, banda: bandaDe(a) })), f));
+out.paneles = casos.paneles.map(([D, zA, zB, cr, f]) => {
+  const r = R.difraccionPanelesDetalle(D, zA, zB, cr, f);
+  const d = r.dominante;
+  return [r.totalDb, r.motivo, d === null ? null : [d.s, d.sEje, d.nu, d.perdidaDb, d.estado, d.despeje, d.borde, d.wBorde]];
+});
+out.antena = casos.antena.map(c => {
+  switch (c[0]) {
+    case 'ancla':   { const a = R.anclaAntena(c[1], c[2]); return [a.dz, a.lateral]; }
+    case 'altura':  return R.alturaAntenaTCU(c[1], c[2], c[3], c[4]);
+    case 'holgura': return R.holguraBajoModulo(c[1], c[2], c[3], c[4]);
+    case 'patron':  return R.gananciaPatronDb(c[1], c[2]);
+    case 'cerca':   { const k = R.campoCercano(c[1], c[2], c[3], c[4]);
+                      return [k.cerca, k.distanciaM, k.lambdas, k.umbralLambdas]; }
+    case 'reflinf': { const g = R.coefReflexion(c[1], Infinity, c[2], c[3], c[4]);
+                      return [g.re, g.im]; }
+    case 'panel':   { const p = R.cortaPanel(c[1], c[2], c[3], c[4], c[5], c[6], c[7]);
+                      return [p.estado, p.despeje, p.borde, p.wBorde, p.motivo]; }
+    case 'eje':     { const e = R.alturaEje(c[1], c[2]);
+                      return [e.valor, e.medida, e.motivo]; }
+    case 'tierra':  { const g = R.bajoTierra(c[1], c[2], c[3], c[4]);
+                      return [g.zBot, g.bajoTierra, g.hundimientoM, g.alphaCorteDeg, g.motivo]; }
+  }
+  throw new Error('caso de antena desconocido: ' + c[0]);
+});
 // 17 dígitos: el redondeo del JSON no puede ser quien decida si hay paridad
 process.stdout.write(JSON.stringify(out, (k, v) =>
   typeof v === 'number' && !Number.isInteger(v) ? Number(v.toPrecision(17)) : v));
@@ -246,22 +392,17 @@ process.stdout.write(JSON.stringify(out, (k, v) =>
 
 
 def corre_python(mod, casos):
-    b = lambda a: mod.banda(a[0], a[1], a[2], a[3])
     out = {}
-    out["banda"] = [[x["eje"], x["semi"], x["zBot"], x["zTop"], x["suelo"], x["hueco"]]
-                    for x in (b(a) for a in casos["banda"])]
-    out["corta"] = []
-    for a, z in casos["corta"]:
-        c = mod.corta(b(a), z)
-        out["corta"].append([c["estado"], c["despeje"], c["borde"], c.get("bajoSuelo")])
     out["regimen"] = []
     for e, f, tol in casos["regimen"]:
         r = mod.regimen(e[0], e[1], f[0], f[1], tol)
         out["regimen"].append([r["tipo"], r["anguloDeg"]])
     out["relieve"] = []
     for zA, zB, D, p in casos["relieve"]:
-        r = mod.relieve_dominante(zA, zB, D, p)
-        out["relieve"].append(None if r is None else [r["s"], r["zSuelo"], r["invade"]])
+        r = mod.relieve_delta_db(D, zA, zB, p, 2.45e9)
+        out["relieve"].append(None if r is None else
+                              [r["db"], r["bruto"], r["hst"], r["hsr"],
+                               r["hstd"], r["hsrd"], r["htE"], r["hrE"], r["motivo"]])
     out["escalares"] = []
     for c in casos["escalares"]:
         k = c[0]
@@ -277,9 +418,40 @@ def corre_python(mod, casos):
             g = mod.coef_reflexion(c[1], c[2], c[3], c[4], c[5])
             out["escalares"].append([g[0], g[1]])
         else: raise SystemExit("caso escalar desconocido: %s" % k)
-    out["difraccion"] = [
-        mod.difraccion_bandas_db(D, zA, zB, [{"s": s, "banda": b(a)} for a, s in cr], f)
-        for D, zA, zB, cr, f in casos["difraccion"]]
+    out["paneles"] = []
+    for D, zA, zB, cr, f in casos["paneles"]:
+        r = mod.difraccion_paneles_detalle(D, zA, zB, cr, f)
+        d = r["dominante"]
+        out["paneles"].append([r["totalDb"], r["motivo"], None if d is None else
+            [d["s"], d["sEje"], d["nu"], d["perdidaDb"], d["estado"], d["despeje"], d["borde"], d["wBorde"]]])
+    out["antena"] = []
+    for c in casos["antena"]:
+        if c[0] == "ancla":
+            a = mod.ancla_antena(c[1], c[2]); out["antena"].append([a["dz"], a["lateral"]])
+        elif c[0] == "altura":
+            out["antena"].append(mod.altura_antena_tcu(c[1], c[2], c[3], c[4]))
+        elif c[0] == "holgura":
+            out["antena"].append(mod.holgura_bajo_modulo(c[1], c[2], c[3], c[4]))
+        elif c[0] == "patron":
+            out["antena"].append(mod.ganancia_patron_db(c[1], c[2]))
+        elif c[0] == "cerca":
+            k = mod.campo_cercano(c[1], c[2], c[3], c[4])
+            out["antena"].append([k["cerca"], k["distanciaM"], k["lambdas"], k["umbralLambdas"]])
+        elif c[0] == "reflinf":
+            g = mod.coef_reflexion(c[1], math.inf, c[2], c[3], c[4])
+            out["antena"].append([g[0], g[1]])
+        elif c[0] == "panel":
+            q = mod.corta_panel(c[1], c[2], c[3], c[4], c[5], c[6], c[7])
+            out["antena"].append([q["estado"], q["despeje"], q["borde"], q["wBorde"], q["motivo"]])
+        elif c[0] == "eje":
+            e = mod.altura_eje(c[1], c[2])
+            out["antena"].append([e["valor"], e["medida"], e["motivo"]])
+        elif c[0] == "tierra":
+            g = mod.bajo_tierra(c[1], c[2], c[3], c[4])
+            out["antena"].append([g["zBot"], g["bajoTierra"], g["hundimientoM"],
+                                  g["alphaCorteDeg"], g["motivo"]])
+        else:
+            raise ValueError("caso de antena desconocido: %s" % c[0])
     return out
 
 
@@ -355,7 +527,13 @@ def igual(a, b, ruta):
 
 print("· los dos motores, caso a caso")
 total = 0
-for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"):
+# LOS BLOQUES SALEN DE `CASOS`, NO DE UNA LISTA A MANO. Estaba escrita dos
+# veces, y al añadir la familia «antena» los dos bucles siguieron recorriendo
+# las seis de antes: los casos nuevos se generaban, los dos motores los
+# calculaban, y NADIE LOS COMPARABA. El banco decia «1492 casos» y seguia en
+# verde. Una familia nueva entra sola ahora, y el guardian de abajo lo exige.
+BLOQUES = tuple(CASOS)
+for bloque in BLOQUES:
     a, b = JS.get(bloque), PYR.get(bloque)
     if a is None or b is None or len(a) != len(b):
         check("%s: mismo numero de casos" % bloque, False, "js=%s py=%s"
@@ -368,23 +546,108 @@ for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"
           % (len(malos), malos[0], a[malos[0]], b[malos[0]]))
 
 check("el barrido no esta vacio", total > 500, total)
+# GUARDIAN CONTRA LA DERIVA QUE ESTO ACABA DE TENER: toda familia declarada en
+# CASOS tiene que haber llegado a los DOS motores. Si un driver se queda sin su
+# rama, el bloque no aparece en la salida y esto lo dice, en vez de comparar
+# cinco familias de seis y llamarlo paridad.
+faltan = [b for b in BLOQUES if b not in JS or b not in PYR]
+check("las %d familias de CASOS llegan a los dos motores" % len(BLOQUES),
+      not faltan, "sin comparar: " + ", ".join(faltan) if faltan else None)
 print("     %d casos comparados. Peor diferencia por bloque:" % total)
-for bloque in ("banda", "corta", "regimen", "relieve", "escalares", "difraccion"):
-    unidad = {"regimen": "grados", "difraccion": "dB", "escalares": "dB/m (mezcla)"}
+for bloque in BLOQUES:
+    unidad = {"regimen": "grados", "paneles": "dB", "escalares": "dB/m (mezcla)",
+              "antena": "dB/m (mezcla)"}
     print("       %-11s %.3e %s" % (bloque, peor.get(bloque, 0.0),
                                     unidad.get(bloque, "m")))
 
-# Y que el barrido toque de verdad los tres estados de `corta` y los dos
+# Y que el barrido toque de verdad los estados de `cortaPanel` y los dos
 # regimenes: un barrido que solo pasara por un camino compararia poco.
-estados = {c[0] for c in JS["corta"]}
+# Los casos de panel viven DENTRO de la familia «antena», mezclados con los
+# demas, asi que hay que ir a buscarlos por su indice en CASOS.
+iPanel = [i for i, c in enumerate(CASOS["antena"]) if c[0] == "panel"]
+estados = {JS["antena"][i][0] for i in iPanel}
 tipos = {r[0] for r in JS["regimen"]}
-check("el barrido pasa por los tres estados de la banda",
-      estados == {"libre", "hueco", "tapado"}, sorted(estados))
+check("el barrido pasa por los cinco estados del panel inclinado",
+      estados == {"libre", "hueco", "tapado", "fuera", "paralelo"}, sorted(estados))
 check("y por los dos regimenes, mas el degenerado",
       tipos == {"pasillo", "cruza", "degenerado"}, sorted(tipos))
-noCero = [x for x in JS["difraccion"] if x > 0]
-check("y hay difraccion que cobra de verdad, no todo ceros",
-      len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["difraccion"])))
+noCero = [x[0] for x in JS["paneles"] if x[0] > 0]
+check("y hay difraccion de panel que cobra de verdad, no todo ceros",
+      len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["paneles"])))
+
+# ── NINGUN CASO DE RELIEVE PUEDE SER UNA GEOMETRIA IMPOSIBLE SIN DECLARARLO ──
+#
+# ESTO NACE DE UNA AVERIA REAL DE ESTE MISMO FICHERO. Antes de que el motor
+# tuviera la guarda, ONCE de los 44 casos de relieve llevaban la antena POR
+# DEBAJO del suelo de su propio extremo -el perfil llano de Ayora a 739 m con
+# antenas a 1,5, la rampa, el cerro, el llano a 5 m- y el motor les contestaba
+# con un numero. La paridad estaba VERDE porque los dos motores se equivocaban
+# IGUAL. Una paridad verde sobre geometrias imposibles no prueba nada: prueba
+# que las dos copias comparten el fallo.
+#
+# La comprobacion clasifica cada caso POR SU GEOMETRIA, sin preguntarle al
+# motor —el suelo se interpola aqui, con `suelo_en()`— y exige que las tres
+# clases se correspondan EXACTAMENTE con las tres respuestas posibles:
+#
+#   no cubre el vano        ->  los dos motores devuelven None
+#   antena bajo el suelo    ->  los dos devuelven db=None con motivo
+#   geometria posible       ->  los dos devuelven un numero
+#
+# Cualquier cruce es rojo. En particular «antena enterrada y el motor contesta
+# un numero», que es exactamente la averia de arriba volviendo.
+def suelo_en(p, s):
+    """El suelo del perfil en s, lineal entre puntos. Lo calcula ESTE fichero:
+    preguntarselo al motor seria clasificar los casos con lo que se comprueba."""
+    if not p:
+        return None
+    if s <= p[0][0]:
+        return p[0][1]
+    for k in range(1, len(p)):
+        if s <= p[k][0]:
+            a, b = p[k - 1], p[k]
+            if b[0] == a[0]:
+                return b[1]
+            return a[1] + (b[1] - a[1]) * (s - a[0]) / (b[0] - a[0])
+    return p[-1][1]
+
+
+def clase_geometrica(zA, zB, D, p):
+    if not p or (p[-1][0] - p[0][0]) < D:
+        return "no_cubre"
+    if zA <= suelo_en(p, p[0][0]) or zB <= suelo_en(p, p[0][0] + D):
+        return "antena_enterrada"
+    return "posible"
+
+
+ESPERADO = {"no_cubre": "None", "antena_enterrada": "guarda", "posible": "numero"}
+
+
+def respuesta(fila):
+    if fila is None:
+        return "None"
+    # [db, bruto, hst, hsr, hstd, hsrd, htE, hrE, motivo]
+    return "guarda" if fila[0] is None else "numero"
+
+
+cruces, conteo = [], {}
+for i, (zA, zB, D, p) in enumerate(CASOS["relieve"]):
+    cls = clase_geometrica(zA, zB, D, p)
+    conteo[cls] = conteo.get(cls, 0) + 1
+    for motor, salida in (("js", JS["relieve"]), ("py", PYR["relieve"])):
+        if i >= len(salida):
+            continue
+        r = respuesta(salida[i])
+        if r != ESPERADO[cls]:
+            cruces.append("#%d %s: geometria=%s pero %s responde %s" % (i, motor, cls, motor, r))
+
+check("ningun caso de relieve es una geometria imposible sin declararlo",
+      not cruces, "%d cruces; el primero: %s" % (len(cruces), cruces[0]) if cruces else None)
+# Y QUE LAS TRES CLASES ESTEN POBLADAS. Si un dia el generador dejara de
+# producir enterradas, la comprobacion de arriba pasaria sola y sin mirar nada:
+# un «no hay cruces» sobre cero casos es el verde vacio de siempre.
+check("las tres clases de geometria estan pobladas (%s)"
+      % ", ".join("%s=%d" % (k, conteo.get(k, 0)) for k in ESPERADO),
+      all(conteo.get(k, 0) > 0 for k in ESPERADO), conteo)
 
 # ── EL SUELO DE LA PLATAFORMA ──────────────────────────────────────────────
 # Por qué la tolerancia no es cero, dicho con números y no de palabra.
@@ -460,6 +723,29 @@ try:
 except Exception as e:
     revento = "f_hz" in str(e)
 check("en Python tambien LANZA si falta la frecuencia", revento)
+
+# EL NOMBRE VIEJO DE LA ALTURA DEL EJE: los DOS motores tienen que lanzar.
+# Si uno lo ignorase y el otro no, una planta con el campo viejo puesto daria
+# mapas distintos en el visor y en la calibracion, que es la averia que esta
+# paridad existe para impedir.
+def _lanza_py():
+    try:
+        PY.altura_eje({"module_height": 1.87}, 1.20); return False
+    except Exception as e:
+        return "module_height" in str(e) and "eje_m" in str(e)
+
+_fEje = os.path.join(tmp, "eje_viejo.js")
+open(_fEje, "w").write(
+    "const fs=require('fs'),vm=require('vm');const c={module:{exports:{}},globalThis:{}};"
+    "c.globalThis=c;vm.createContext(c);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),c);"
+    "try{c.module.exports.alturaEje({module_height:1.87},1.20);process.stdout.write('NO_LANZO');}"
+    "catch(e){process.stdout.write(/module_height/.test(e.message)&&/eje_m/.test(e.message)"
+    "?'LANZA_BIEN':'LANZA_MAL:'+e.message);}")
+_rEje = subprocess.run([os.environ.get("NODE", "node"), _fEje, ruta_js],
+                       capture_output=True, text=True)
+check("los dos motores LANZAN con el nombre viejo PUESTO, no lo ignoran",
+      _lanza_py() and _rEje.stdout.strip() == "LANZA_BIEN",
+      "py=%s js=%s" % (_lanza_py(), (_rEje.stdout or _rEje.stderr)[:80]))
 
 print()
 print("FALLOS: %d (de %d)" % (ko, ok + ko) if ko else "TODO OK — %d comprobaciones" % ok)

@@ -28,62 +28,121 @@ const cerca = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-9 : tol);
 // puesta, esa comprobación no comprobaba nada.
 const MUTACIONES = {
   // el error del modelo antiguo, reintroducido a propósito: filo desde el suelo
-  filoDesdeSuelo: [/zBot: eje - semi,/, 'zBot: sueloM == null ? 0 : sueloM,'],
+  filoDesdeSuelo: ['tests/referencia_banda_vertical.js', /zBot: eje - semi,/, 'zBot: sueloM == null ? 0 : sueloM,'],
   // media cuerda en vez de cuerda entera: la banda sale con la mitad de alto
-  semiCuerda:     [/var semi = \(cuerdaM \/ 2\)/, 'var semi = (cuerdaM / 4)'],
+  semiCuerda:     ['tests/referencia_banda_vertical.js', /var semi = \(cuerdaM \/ 2\)/, 'var semi = (cuerdaM / 4)'],
   // coseno en vez de seno: el seguidor plano taparía lo máximo y el vertical nada
-  senoPorCoseno:  [/Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/, 'Math.abs(Math.cos(alphaDeg * GRADO))'],
+  /* EL ANCLA LLEVA `var semi =` A PROPOSITO. Cuando `banda()` vivia en el
+     motor, sin ese contexto casaba con la PRIMERA aparicion de
+     `Math.abs(Math.sin(alphaDeg * GRADO))`, y al insertar `bajoTierra()`
+     ENCIMA -con una expresion casi identica- la mutacion paso a mutar la
+     funcion nueva, que este banco no prueba: se quedo DORMIDA en verde.
+     Ahora la banda esta sola en la referencia y el riesgo ya no existe ahi,
+     pero el contexto se queda: meter codigo parecido por encima de otro le
+     roba sus anclas, y eso no avisa solo. */
+  senoPorCoseno:  ['tests/referencia_banda_vertical.js', /var semi = \(cuerdaM \/ 2\) \* Math\.abs\(Math\.sin\(alphaDeg \* GRADO\)\)/,
+                   'var semi = (cuerdaM / 2) * Math.abs(Math.cos(alphaDeg * GRADO))'],
   // el hueco deja de existir: cualquier rayo por debajo se da por tapado
-  sinHueco:       [/if \(zRayo < b\.zBot\) \{/, 'if (false) {'],
+  sinHueco:       ['tests/referencia_banda_vertical.js', /if \(zRayo < b\.zBot\) \{/, 'if (false) {'],
   // el régimen siempre dice «cruza»: se pierde el caso del pasillo
-  siemprCruza:    [/ang <= tol \? "pasillo" : "cruza"/, '"cruza"'],
+  siemprCruza:    ['radio_pv_model.js', /ang <= tol \? "pasillo" : "cruza"/, '"cruza"'],
+
+  // ── LA TIERRA LISA, y las cuatro formas de romperla ──
+  // se quita el CENTRADO: el ajuste pierde precision con cotas grandes y el
+  // perfil plano a 739,23 m deja de dar cero EXACTO (1,44e-12 dB de residuo)
+  sinCentrar:     ['radio_pv_model.js', /var dRef = perfil\[0\]\[0\], hRef = perfil\[0\]\[1\];/,
+                                        'var dRef = 0, hRef = 0;'],
+  // se cae el recorte de (92): la tierra lisa puede quedar POR ENCIMA del
+  // terreno en los extremos y la antena queda enterrada en su referencia
+  sinRecorte92:   ['radio_pv_model.js', /return \{ hst: Math\.min\(hst, hIni\) \+ hRef,/,
+                                        'return { hst: hst + hRef,'],
+  // el terreno vuelve a Deygout: el resultado pasa a depender del muestreo
+  terrenoDeygout: ['radio_pv_model.js', /var a = bullingtonDb\(D, zA, zB, real, fHz\);/,
+                                        'var a = difraccionCantosDetalle(D, zA, zB, real, fHz).totalDb;'],
+  // el perfil deja de recortarse al vano: la recta se ajusta sobre TODO lo que
+  // llegue y la altura de antena efectiva sale mal
+  sinRecortarVano:['radio_pv_model.js', /var rec = recortaPerfil\(perfil, D\);/,
+                                        'var rec = perfil;'],
 
   // ── y de la parte de TECNOLOGÍA ──
   // la frecuencia recupera un valor por defecto: el fallo que esto viene a
   // impedir es predecir sub-GHz con los números de 2,4 y que nadie se entere
-  sinExigeF:      [/if \(!\(fHz > 0\)\) throw new Error\([^;]*\);/, 'if (!(fHz > 0)) return 2.45e9;'],
+  sinExigeF:      ['radio_pv_model.js', /if \(!\(fHz > 0\)\) throw new Error\([^;]*\);/, 'if (!(fHz > 0)) return 2.45e9;'],
   // el radio de Fresnel deja de depender de λ: la misma geometría despejaría
   // igual en 868 MHz que en 2,45 GHz, que es justo lo que NO se puede trasladar
-  fresnelSinLambda: [/\(nn \* longitudOnda\(fHz\) \* d1 \* d2\)/, '(nn * d1 * d2)'],
+  fresnelSinLambda: ['radio_pv_model.js', /\(nn \* longitudOnda\(fHz\) \* d1 \* d2\)/, '(nn * d1 * d2)'],
   // se cae el corte de ν = −0,78: la difracción empieza a dar pérdidas
   // NEGATIVAS (ganancia) donde debería dar 0
-  filoSinCorte:   [/if \(v <= -0\.78\) return 0\.0;/, 'if (false) return 0.0;'],
+  filoSinCorte:   ['radio_pv_model.js', /if \(v <= -0\.78\) return 0\.0;/, 'if (false) return 0.0;'],
   // punto de ruptura con 2 en vez de 4
-  rupturaMitad:   [/return \(4 \* ht \* hr\) \/ longitudOnda\(fHz\);/, 'return (2 * ht * hr) / longitudOnda(fHz);'],
+  rupturaMitad:   ['radio_pv_model.js', /return \(4 \* ht \* hr\) \/ longitudOnda\(fHz\);/, 'return (2 * ht * hr) / longitudOnda(fHz);'],
   // Deygout relanzado desde el borde SUPERIOR: el error del modelo antiguo,
   // metido esta vez en la reconstrucción y no en la banda
   // El ancla se movió al partir `difraccionBandasDetalle` en dos líneas (`cDom`
   // se reusa para `estado` y `despeje` en el detalle). La CI lo cazó con rc=2
   // — «no casó con el código»—, que es justo para lo que se exige rc=1 exacto:
   // con «distinto de cero» esta mutación habría contado como cazada sin serlo.
-  bordeDeArriba:  [/var bordeDom = cDom\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
+  bordeDeArriba:  ['tests/referencia_banda_vertical.js', /var bordeDom = cDom\.borde;/, 'var bordeDom = cruces[mejor].banda.zTop;'],
 
   // ── dos rayos ──
   // se cae el rayo reflejado: queda espacio libre y se pierden los lóbulos,
   // que es justo lo que este modelo añade sobre el FSPL
-  sinReflejado:   [/var campo = cAdd\(cx\(1 \/ dLos, 0\), refl\);/, 'var campo = cx(1 / dLos, 0);'],
+  sinReflejado:   ['radio_pv_model.js', /var campo = cAdd\(cx\(1 \/ dLos, 0\), refl\);/, 'var campo = cx(1 / dLos, 0);'],
   // el suelo pasa a ser un conductor perfecto sin pérdidas: eps deja de tener
   // parte imaginaria y el coeficiente de reflexión se vuelve real
-  sueloSinPerdida:[/var eps = cx\(epsR, -60\.0 \* lam \* sigma\);/, 'var eps = cx(epsR, 0);'],
+  sueloSinPerdida:['radio_pv_model.js', /var eps = cx\(epsR, -60\.0 \* lam \* sigma\);/, 'var eps = cx(epsR, 0);'],
   // el ángulo de incidencia se mide con la DIFERENCIA de alturas en vez de la
   // suma: deja de ser el rayo reflejado y pasa a ser el directo
-  anguloDirecto:  [/var theta = Math\.atan2\(ht \+ hr, d\);/, 'var theta = Math.atan2(ht - hr, d);'],
+  anguloDirecto:  ['radio_pv_model.js', /var theta = Math\.atan2\(ht \+ hr, d\);/, 'var theta = Math.atan2(ht - hr, d);'],
 };
+/* CADA MUTACION DICE A QUE FICHERO VA. Al mudarse la banda vertical a la
+   referencia, cinco mutaciones se quedaron apuntando a un codigo que ya no
+   estaba en el motor: salian rc=2 -«no caso»- en vez de rojas, o sea cinco
+   guardias apagados. Por eso se exige rc=1 EXACTO en la CI y no «distinto de
+   cero»: con eso habrian contado como cazadas sin serlo. */
 const MUTA = process.env.MUTA;
-let fuente = fs.readFileSync(path.join(RAIZ, 'radio_pv_model.js'), 'utf8');
-if (MUTA) {
+let casada = false;
+function fuenteDe(rel) {
+  let t = fs.readFileSync(path.join(RAIZ, rel), 'utf8');
+  if (!MUTA) return t;
   const m = MUTACIONES[MUTA];
   if (!m) { console.error('mutacion desconocida. Hay: ' + Object.keys(MUTACIONES).join(', ')); process.exit(2); }
-  const antes = fuente;
-  fuente = fuente.replace(m[0], m[1]);
-  if (fuente === antes) { console.error('la mutacion «' + MUTA + '» no casó con el código'); process.exit(2); }
-  console.log('### MUTACION «' + MUTA + '» PUESTA: este banco TIENE que salir rojo\n');
+  if (m[0] !== rel) return t;
+  const antes = t; t = t.replace(m[1], m[2]);
+  if (t === antes) { console.error('la mutacion «' + MUTA + '» no casó con ' + rel); process.exit(2); }
+  casada = true;
+  console.log('### MUTACION «' + MUTA + '» PUESTA en ' + rel + ': este banco TIENE que salir rojo\n');
+  return t;
 }
+const fuente = fuenteDe('radio_pv_model.js');
 const ctx = { module: { exports: {} }, globalThis: {} };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
 vm.runInContext(fuente, ctx);
 const R = ctx.module.exports;
+/* LA BANDA VERTICAL YA NO ESTA EN EL MOTOR: vive en la referencia, con otro
+   nombre, porque el motor no puede tener dos funciones que den el despeje de
+   una fila. Este banco la prueba COMO REFERENCIA -es lo que se carea contra
+   `cortaPanel`-, no como camino de calculo.
+
+   SE CARGA DESDE EL FUENTE, no con `require`, por dos razones. Una: `require`
+   lee del disco y las mutaciones viven en memoria, asi que las cinco que
+   apuntan a la referencia no llegarian nunca y se quedarian dormidas. Y dos:
+   el `require` interno de la referencia se sustituye por ESTE motor -el del
+   `vm`, mutaciones incluidas-, de modo que banda y plano comparten `nu`,
+   `perdidaFiloDb` y `alturaRayo` en vez de careares contra dos copias. */
+const ctxRef = { module: { exports: {} }, require: () => R, Math: Math, console: console };
+ctxRef.globalThis = ctxRef;
+vm.createContext(ctxRef);
+vm.runInContext(fuenteDe('tests/referencia_banda_vertical.js'), ctxRef);
+const REF = ctxRef.module.exports;
+if (MUTA && !casada) {
+  console.error('la mutacion «' + MUTA + '» apunta a un fichero que este banco no carga: ' + MUTACIONES[MUTA][0]);
+  process.exit(2);
+}
+R.banda = REF.banda; R.corta = REF.corta;
+R.difraccionBandasDb = REF.difraccionBandasRefDb;
+R.difraccionBandasDetalle = REF.difraccionBandasRef;
 check('el motor se carga y expone la geometría',
       R && typeof R.banda === 'function' && typeof R.corta === 'function');
 if (!R || !R.banda) { console.log('\nFALLOS: ' + ko); process.exit(1); }
@@ -155,17 +214,78 @@ check('a 15° ya cruza',
 check('y el sentido da igual: antiparalelo también es pasillo',
       R.regimen(-1, 0, 1, 0, 10).tipo === 'pasillo');
 
-// ── RELIEVE ──────────────────────────────────────────────────────────────────
-console.log('\n· el terreno entre los nodos');
-// rayo de 2 a 2 sobre 100 m: horizontal a 2 m. Un cerro de 3 m en s=50 invade 1 m.
-const perfil = [[20, 0.5], [50, 3.0], [80, 1.0]];
-const dom = R.relieveDominante(2, 2, 100, perfil);
-check('el punto dominante es el que más invade el rayo', dom && dom.s === 50, dom && dom.s);
-check('y dice cuánto invade: 1,0 m', dom && cerca(dom.invade, 1.0), dom && dom.invade);
-check('sin perfil, no hay relieve que valga (null, no 0)',
-      R.relieveDominante(2, 2, 100, null) === null);
-check('un terreno que no llega al rayo da invasión negativa, no se descarta',
-      R.relieveDominante(2, 2, 100, [[50, 1.0]]).invade < 0);
+/* ── RELIEVE: LA TIERRA LISA ──────────────────────────────────────────────
+   `relieveDominante` ya no existe. Daba el punto que mas invade el rayo y con
+   eso se cobraba un filo de cuchillo, lo cual con un perfil de terreno cuenta
+   DOS VECES el mismo suelo que `dosRayosDb` ya modela: 21,66 dB medidos sobre
+   un perfil PLANO a 100 m. Ahora la referencia es la recta de minimos
+   cuadrados -P.1812-6, Anexo 1, Adjunto 1, §5.6.1- y el relieve es lo que el
+   terreno cobra POR ENCIMA de ella.
+
+   Los numeros de abajo estan CALCULADOS A MANO, que es lo que la recta permite:
+     perfil PLANO a cota c  ->  la recta ES el perfil  ->  hst = hsr = c
+     rampa h = a + b·d      ->  la recta ES la rampa   ->  hst = a, hsr = a+b·D
+   y en los dos casos real y referencia son la MISMA cuenta, asi que 0 exacto. */
+console.log('\n· el terreno entre los nodos: la tierra lisa');
+const LL = (h, D, n) => { const p = []; for (let i = 0; i <= (n || 10); i++)
+  { const s = D * i / (n || 10); p.push([s, h(s)]); } return p; };
+check('perfil PLANO a 0: la recta es el perfil',
+      cerca(R.tierraLisa(LL(() => 0, 100)).hst, 0) && cerca(R.tierraLisa(LL(() => 0, 100)).hsr, 0));
+check('perfil PLANO a 7,5: idem, hst = hsr = 7,5',
+      cerca(R.tierraLisa(LL(() => 7.5, 100)).hst, 7.5) &&
+      cerca(R.tierraLisa(LL(() => 7.5, 100)).hsr, 7.5));
+check('rampa 2 + 0,05·d sobre 100 m: hst = 2 y hsr = 7 (a mano)',
+      cerca(R.tierraLisa([[0, 2], [25, 3.25], [60, 5], [100, 7]]).hst, 2) &&
+      cerca(R.tierraLisa([[0, 2], [25, 3.25], [60, 5], [100, 7]]).hsr, 7));
+check('un cerro CENTRADO no inclina la recta',
+      cerca(R.tierraLisa([[0, 0], [25, 0], [50, 10], [75, 0], [100, 0]]).hst,
+            R.tierraLisa([[0, 0], [25, 0], [50, 10], [75, 0], [100, 0]]).hsr));
+/* Y EL AJUSTE ES CONTINUO, no por puntos: pesa cada tramo por su longitud, asi
+   que un muestreo irregular da la MISMA recta. Es lo que permite mezclar DEM y
+   levantamiento sin que el resultado dependa de donde caiga cada muestra. */
+check('el muestreo irregular da la misma recta que el fino',
+      cerca(R.tierraLisa([[0, 2], [100, 7]]).hst,
+            R.tierraLisa([[0, 2], [1, 2.05], [99, 6.95], [100, 7]]).hst) &&
+      cerca(R.tierraLisa([[0, 2], [100, 7]]).hsr,
+            R.tierraLisa([[0, 2], [1, 2.05], [99, 6.95], [100, 7]]).hsr));
+
+/* EL REQUISITO: perfil plano o en rampa -> relieve 0 EXACTO. No «pequeño»:
+   exacto, porque real y referencia son la misma cuenta. */
+const FREL = 2.45e9;
+for (const [q, p, zA, zB] of [
+  ['plano a 0',      LL(() => 0, 100),        0.475,   0.475],
+  ['plano a 739,23', LL(() => 739.23, 100),   739.705, 739.705],
+  ['plano a -12,75', LL(() => -12.75, 100),  -12.275, -12.275],
+  ['rampa +5 %',     LL(s => 0.05 * s, 100),  0.475,   5.475],
+  ['rampa -15 %',    LL(s => -0.15 * s, 100), 0.475,  -14.525],
+]) {
+  check('relieve 0 EXACTO con ' + q, R.relieveDeltaDb(100, zA, zB, p, FREL).db === 0,
+        R.relieveDeltaDb(100, zA, zB, p, FREL).db);
+}
+/* Y UN CERRO SI COBRA, y mas cuanto mas alto. Sin esto el banco pasaria con
+   una funcion que devolviera 0 siempre. */
+const cerro = H => LL(s => H * Math.exp(-Math.pow((s - 50) / (100 / 6), 2)), 100, 20);
+const dbs = [0.1, 0.5, 2, 5, 10].map(H => R.relieveDeltaDb(100, 0.475, 0.475, cerro(H), FREL).db);
+check('un cerro cobra, y monotono con su altura',
+      dbs[0] > 0 && dbs.every((v, i) => i === 0 || v > dbs[i - 1]), dbs.map(v => v.toFixed(2)).join(' '));
+
+/* BULLINGTON Y NO DEYGOUT PARA EL TERRENO, y esto es lo que lo decide: el
+   resultado NO PUEDE depender de lo fino que se muestree el terreno. Con
+   Deygout daba 1,10 dB con 2 puntos y 22,74 con 80 -medido-; el mismo terreno
+   dando veinte veces mas segun como se mire no es una propiedad del terreno. */
+const ond = n => LL(s => 0.10 * Math.sin(Math.PI * s / 24), 24, n);
+const muestreos = [2, 4, 10, 20, 40, 80].map(n => R.relieveDeltaDb(24, 0.475, 0.475, ond(n), FREL).db);
+check('el relieve NO depende de la densidad de muestreo',
+      muestreos.every(v => Math.abs(v - muestreos[0]) < 1e-9),
+      muestreos.map(v => v.toFixed(4)).join(' '));
+
+/* EL PERFIL SE RECORTA AL VANO. Un DEM se muestrea con margen, y si la recta
+   se ajusta sobre el perfil entero en vez de sobre el tramo del enlace, la
+   altura de antena efectiva sale mal: medido, 1,33 m en vez de 0,475. */
+check('un perfil MAS LARGO que el vano se recorta y da lo mismo que el justo',
+      cerca(R.relieveDeltaDb(100, 3.475, 3.475, [[-10, 3], [200, 3]], FREL).htE, 0.475));
+check('y uno MAS CORTO que el vano no se inventa nada: null',
+      R.relieveDeltaDb(100, 0.475, 0.475, [[0, 0], [50, 0]], FREL) === null);
 
 // ── TECNOLOGÍA: paridad con el modelo congelado ──────────────────────────────
 // Las fórmulas compartidas NO se escriben de memoria: se citan de
