@@ -68,7 +68,11 @@ if (!fs.existsSync(html) || !fs.existsSync(fich)) {
   console.log('  ' + html + (fs.existsSync(html) ? ' ✓' : ' ✗'));
   console.log('  ' + fich + (fs.existsSync(fich) ? ' ✓' : ' ✗'));
   console.log('No se ha comprobado nada. Esto no es un verde.');
-  process.exit(0);
+  /* rc = 2, NO 0: «no comprobado» tiene que salir DISTINTO de «comprobado y
+     pasa». Con rc = 0 este util imprimia «Esto no es un verde» y la CI lo
+     pintaba verde igual — el agregador lee el codigo de salida, no el texto.
+     Es el mismo defecto que #738 arreglo en el banco de configuracion. */
+  process.exit(2);
 }
 
 /* EXTRACCIÓN DE `relAt`, acotada por los dos extremos exactos. Si el corte

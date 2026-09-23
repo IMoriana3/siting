@@ -228,6 +228,36 @@ De ahí salen las dos cosas que este repo se lleva:
    tolerancia se prueba a **1 m, 1 mm y 1 µm**: una que no distinga esas tres
    de 1e-13 no es una tolerancia, es un apagón.
 
+### El mismo método volvió a cazar, y esta vez en la propia CI
+
+Mirando **cuánto tardaba cada paso** de la CI de este repo: cuatro cerraban en
+menos de un segundo. Los cuatro imprimían *«No se ha medido nada. Esto no es un
+verde»* y **salían con 0**, así que en la página de checks se veían exactamente
+igual que los que sí medían. Entre ellos:
+
+| paso | lo que de verdad hace, cuando puede |
+|---|---|
+| `careo_terreno_3d.mjs` | **200.000 muestras bit a bit** contra el `relAt` del 3D |
+| `careo_equipos.mjs` | **17 comprobaciones** de contrato de cotas entre los dos repos |
+
+Dos puertas de verdad que **nunca habían corrido aquí** — y la segunda con un
+nombre de paso («las cotas de equipo copiadas, y sus citas») que ni siquiera lo
+decía. La causa era simple: los cuatro necesitan el repo hermano al lado y la
+CI no lo clonaba. **El hermano es público**: `--depth 1` trae 78 MB en 2 s.
+
+Lo que se lleva de aquí, y es la misma familia que el `rc=2` del banco de
+configuración de cobertura (#738): **el texto de un paso no es su resultado.**
+El agregador lee el código de salida. Un paso que dice «esto no es un verde» y
+sale con 0 **es** un verde. Ahora los cuatro salen con **rc = 2** y un censo
+final publica los tres estados por separado —MIDE / NO COMPROBADO / ROJO— en el
+resumen de la corrida y como anotación junto al tick.
+
+Probado por los cuatro caminos, que es lo único que lo convierte en puerta:
+con hermano los cuatro miden; sin hermano salen los cuatro NO COMPROBADO; con
+una cota del hermano movida el careo de equipos sale ROJO; y con `relAt`
+sesgado **1 mm**, el careo 3D pasa de 0 discrepancias a **57.919**, con
+|Δ| = 1 mm exacto.
+
 **Y esto es lo que más importa de todo el documento: el relieve crece con la
 longitud del vano, y mucho.** Con saltos a vecina —12 m— sale 0 en más de la
 mitad de los casos, y eso invita a concluir que el terreno no cobra. **Es

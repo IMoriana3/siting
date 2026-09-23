@@ -58,7 +58,11 @@ if (faltan.length) {
   console.log('SIN MEDIDA: falta ' + faltan.map(p => p + '_relieve.json').join(', ') + ' en ' + HERMANO);
   console.log('Los escribe cobertura-zigbee/tools/relieve_de_levantamiento.mjs');
   console.log('No se ha medido nada. Esto no es un verde.');
-  process.exit(0);
+  /* rc = 2, NO 0: «no comprobado» tiene que salir DISTINTO de «comprobado y
+     pasa». Con rc = 0 este util imprimia «Esto no es un verde» y la CI lo
+     pintaba verde igual — el agregador lee el codigo de salida, no el texto.
+     Es el mismo defecto que #738 arreglo en el banco de configuracion. */
+  process.exit(2);
 }
 
 const pct = (a, p) => { if (!a.length) return null;

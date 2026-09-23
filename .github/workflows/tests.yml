@@ -13,6 +13,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # EL REPO HERMANO, QUE HASTA HOY NO SE CLONABA. Cuatro pasos de abajo
+      # necesitan `Cobertura-Zigbee` al lado, y sin el imprimian «No se ha
+      # medido nada. Esto no es un verde» y salian en VERDE igual. Entre ellos
+      # el careo del terreno contra el 3D —200.000 muestras bit a bit— y el
+      # careo de cotas de equipo entre los dos repos: dos puertas de verdad que
+      # NUNCA habian corrido aqui.
+      #
+      # El hermano es publico, asi que no hace falta ningun secreto. `--depth 1`
+      # trae 78 MB en ~2 s.
+      #
+      # Si el clonado falla NO se para el job: los cuatro utiles salen entonces
+      # con rc = 2 y el censo del final lo publica como NO COMPROBADO, que es
+      # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
+      # aprobado.
+      - name: el repo hermano, al lado (es publico)
+        continue-on-error: true
+        run: |
+          git clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
+            && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
+            || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
       - name: banco de pruebas
         run: |
           set -o pipefail
@@ -37,18 +58,39 @@ jobs:
       # llevaba dentro uno de los utiles que nadie corria. Sin hermano carga el
       # motor, comprueba que la API que usa sigue existiendo, dice que no ha
       # comprobado nada y sale con 0.
-      - name: el careo de terreno contra el 3D arranca (sin hermano, no carea)
-        run: node tools/careo_terreno_3d.mjs
+      - name: el careo del terreno contra el 3D
+        run: |
+          set +e
+          node tools/careo_terreno_3d.mjs
+          rc=$?
+          set -e
+          echo "$rc|el careo del terreno contra el 3D" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::el careo del terreno contra el 3D no ha medido nada (rc=$rc)"; fi
 
       # Igual que el de arriba: necesita los levantamientos de ayora y sanjose,
       # que viven en el hermano. Aqui solo se comprueba que arranca y que la
       # API del motor que usa sigue existiendo.
-      - name: el informe de relieve por planta arranca (sin hermano, no mide)
-        run: node tools/relieve_plantas.mjs
+      - name: el relieve por planta
+        run: |
+          set +e
+          node tools/relieve_plantas.mjs
+          rc=$?
+          set -e
+          echo "$rc|el relieve por planta" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::el relieve por planta no ha medido nada (rc=$rc)"; fi
 
       # Lo mismo: los layouts con meteo viven en el hermano.
-      - name: el informe de antena de la HSU arranca (sin hermano, no mide)
-        run: node tools/antena_hsu.mjs
+      - name: la antena de la HSU
+        run: |
+          set +e
+          node tools/antena_hsu.mjs
+          rc=$?
+          set -e
+          echo "$rc|la antena de la HSU" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::la antena de la HSU no ha medido nada (rc=$rc)"; fi
 
       # LAS COTAS DE EQUIPO QUE ESTE REPO COPIA. La mitad que SI corre sin
       # hermano —y es la que de verdad impide que el problema vuelva— es que
@@ -56,8 +98,15 @@ jobs:
       # asi y SEIS estaban caducadas: nadie las movio, se movieron solas cuando
       # el PR #714 anyadio comentarios a esos ficheros. Una cita podrida es peor
       # que ninguna, porque parece que alguien lo comprobo.
-      - name: las cotas de equipo copiadas, y sus citas
-        run: node tools/careo_equipos.mjs
+      - name: las cotas de equipo y sus citas
+        run: |
+          set +e
+          node tools/careo_equipos.mjs
+          rc=$?
+          set -e
+          echo "$rc|las cotas de equipo y sus citas" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::las cotas de equipo y sus citas no ha medido nada (rc=$rc)"; fi
 
       # ESTE SI MIDE EN CI, porque el terreno viaja con el proyecto y vive en
       # este repo: no depende del hermano. Dice cuantos enlaces cambian de
@@ -294,4 +343,58 @@ jobs:
             echo "::error::mutaciones que NO salieron rc=1 (rc=2 = ancla que se quedo atras en un refactor; NO es «cazada»):"
             echo "$rotas" | tr ';' '\n' | grep -v '^$'
             exit 1
+          fi
+
+      # ══ EL CENSO DE BANCOS: «NO COMPROBADO» ≠ «COMPROBADO Y PASA» ══════════
+      #
+      # POR QUE EXISTE. Cuatro pasos de esta CI imprimian «No se ha medido
+      # nada. Esto no es un verde» y salian con 0, asi que en la pagina de
+      # checks se veian EXACTAMENTE igual que los que si median. Entre ellos el
+      # careo del terreno contra el 3D —200.000 muestras, 0 discrepancias, bit
+      # a bit— y el careo de cotas de equipo entre repos. Dos puertas que nunca
+      # habian corrido, una de ellas con un nombre de paso que ni lo decia.
+      #
+      # Se encontro mirando cuanto tardaba cada paso: los cuatro cerraban en
+      # menos de un segundo. El texto decia la verdad; el codigo de salida la
+      # contradecia; el agregador lee el codigo de salida.
+      #
+      # QUE HACE. Publica los tres estados por separado —MIDE / NO COMPROBADO /
+      # ROJO—, en el resumen de la corrida (que es lo que se mira sin abrir los
+      # logs) y como anotacion ::warning:: al lado del tick verde. Y se para si
+      # algo salio rc = 1.
+      #
+      # NO pone el job en rojo por un rc = 2: un clonado que falla por red no es
+      # un hallazgo. Pero tampoco pasa por verde callando.
+      - name: censo de bancos (que «no comprobado» no parezca verde)
+        if: always()
+        run: |
+          f="$RUNNER_TEMP/censo_bancos"
+          [ -f "$f" ] || { echo "::error::el censo no se escribio: ningun paso lo alimento"; exit 1; }
+          mide=0; nc=0; rojo=0
+          {
+            echo "### Censo de bancos"
+            echo ""
+            echo "| banco | estado |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # El separador es «|» A PROPOSITO: los nombres llevan espacios y un
+          # `read -r nombre rc` los parte por la primera palabra. Salio en la
+          # primera pasada: los cuatro bancos aparecian como «el», «el», «la»,
+          # «las», todos NO COMPROBADO aunque median.
+          while IFS='|' read -r rc nombre; do
+            case "$rc" in
+              0) est="✅ MIDE";          mide=$((mide+1)) ;;
+              1) est="❌ ROJO";          rojo=$((rojo+1)) ;;
+              *) est="⚠️ NO COMPROBADO"; nc=$((nc+1)) ;;
+            esac
+            printf '| %s | %s |\n' "$nombre" "$est" >> "$GITHUB_STEP_SUMMARY"
+            printf '  %-40s %s\n' "$nombre" "$est"
+          done < "$f"
+          echo ""
+          echo "  miden: $mide · NO COMPROBADOS: $nc · rojos: $rojo"
+          printf '\n**miden %d · NO COMPROBADOS %d · rojos %d**\n' "$mide" "$nc" "$rojo" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rojo" != "0" ]; then echo "::error::$rojo banco(s) en rojo"; exit 1; fi
+          if [ "$nc" != "0" ]; then
+            echo "::warning title=NO COMPROBADO::$nc banco(s) no han medido nada. Esto NO es un verde entero."
+            printf '\n> ⚠️ %d banco(s) no han medido nada. Esto NO es un verde entero.\n' "$nc" >> "$GITHUB_STEP_SUMMARY"
           fi
