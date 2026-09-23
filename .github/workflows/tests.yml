@@ -66,6 +66,13 @@ jobs:
       - name: antes/despues del terreno en la app
         run: node tools/antes_despues_terreno.mjs
 
+      # A4, CERRADO CON UNA MEDIDA Y NO CON UNA OPINION. Corre en CI porque su
+      # conclusion depende de dos cosas que pueden cambiar: que el relieve siga
+      # dando CERO EXACTO sobre terreno llano -si dejara de darlo, el doble
+      # conteo volveria- y que el terreno de las dos plantas siga ahi.
+      - name: A4 · el suelo bajo la placa, medido
+        run: node tools/a4_suelo_bajo_placa.mjs
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
