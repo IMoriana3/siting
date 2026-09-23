@@ -9,9 +9,16 @@ Cada cifra de aquí sale de correr algo que está en el repo, y se dice de cuál
 
 | útil | qué mide | necesita el hermano |
 |---|---|---|
+| `cobertura-zigbee/tools/relieve_de_levantamiento.mjs` | **escribe** `<planta>_relieve.json` del levantamiento + DEM | vive allí |
 | `tools/careo_terreno_3d.mjs` | que el motor y el 3D lean el mismo fichero igual | sí (sin él no carea, y lo dice) |
 | `tools/relieve_plantas.mjs` | qué cobra el terreno real de Ayora y San José | sí (sin él no mide, y lo dice) |
+| `tools/antena_hsu.mjs` | lo que mueve la altura de antena de la HSU | sí |
 | `tests/test_terreno_planta.js` | el muestreo y la cadena, con valores a mano | no — corre en CI |
+
+**Este repo consume, no produce.** El productor vive en cobertura-zigbee, junto
+al levantamiento. Una versión anterior de `relieve_plantas.mjs` construía aquí
+su propia malla, y eso era la avería de siempre: dos sitios calculando la misma
+magnitud, listos para separarse sin que nadie lo note.
 
 ---
 
@@ -39,14 +46,16 @@ separan sin que nadie lo note.
 `terreno_planta.js` transcribe el muestreo de `relAt`. Una transcripción es una
 copia, y una copia se separa. Así que `tools/careo_terreno_3d.mjs` **extrae
 `relAt` del propio `terreno.html`** —no lo reimplementa— y lo ejecuta contra el
-nuestro sobre `dicayagua_relieve.json` real:
+nuestro sobre los ficheros reales, 200.000 muestras cada uno, sobre la malla y
+200 m alrededor:
 
-| | |
-|---|---|
-| malla | 501 × 189 a 10 m, **59,4 % de nulos** |
-| muestras | 200.000, sobre la malla y 200 m alrededor |
-| idénticos | **200.000** — de ellas 142.081 por la rama del nulo |
-| peor \|Δ\| | **0** — cero exacto, bit a bit, no «bajo tolerancia» |
+| fichero | malla | idénticos | peor \|Δ\| |
+|---|---|---:|---:|
+| `dicayagua_relieve.json` | 501 × 189 a 10 m, 59,4 % de nulos | **200.000** (142.081 por la rama del nulo) | **0** |
+| `ayora_relieve.json` | 458 × 518 a 6 m | **200.000** (48.535 por la rama del nulo) | **0** |
+| `sanjose_relieve.json` | 548 × 496 a 6 m | **200.000** (46.610 por la rama del nulo) | **0** |
+
+Cero exacto, bit a bit, no «bajo tolerancia».
 
 **Negativo probado**: degradando la bilineal a la esquina de abajo a la
 izquierda, 38.010 discrepancias y 14,79 m de peor diferencia. La puerta se ha
@@ -58,11 +67,11 @@ visto fallar.
 
 De `cobertura-zigbee/censo_relieve_cartera.csv`, que es un censo medido:
 
-| estado | plantas |
-|---|---|
-| **EVALUADA con levantamiento** | **ayora** (cobertura 100,0 %), **sanjose** (95,3 %) |
-| curvas de nivel propias | dicayagua — pero es una oferta de estructura FIJA, sin TCU ni radio |
-| **SIN LEVANTAMIENTO** | bagnarelli, benante, **elburgo**, fayon, panbianco, paramo, polvorin, tunez |
+| estado | plantas | ¿tiene `_relieve.json`? |
+|---|---|---|
+| **EVALUADA con levantamiento** | **ayora** (cobertura 100,0 %), **sanjose** (95,3 %) | **sí, escrito** |
+| curvas de nivel propias | dicayagua — pero es una oferta de estructura FIJA, sin TCU ni radio | sí, de antes |
+| **SIN LEVANTAMIENTO** | bagnarelli, benante, **elburgo**, fayon, panbianco, paramo, polvorin, tunez | no, y por eso `relieveDb = null` |
 
 O sea que **la planta de la que tenemos 49 medidas de radio reales —El Burgo—
 no tiene terreno validado**, y su careo se queda exactamente como está. Eso no
@@ -103,10 +112,35 @@ HEJE por debajo. **Es una suposición declarada, no una medida**, y con ella:
 | | Ayora | San José |
 |---|---|---|
 | seguidores levantados | 751 (0 reconstruidos) | 2.289 (2 reconstruidos, 43 cotas repuestas) |
+| puntos de suelo, densificados | 26.318 | 89.586 |
+| malla escrita | 458 × 518 a 6 m (1,56 MB) | 548 × 496 a 6 m (2,04 MB) |
 | **TCU con cota** | **751 de 751 (100,0 %)** | **2.289 de 2.289 (100,0 %)** |
-| desnivel del campo | 90,0 m (708,5 → 798,5) | 89,0 m (1.510,7 → 1.599,7) |
+| desnivel del campo | 90,0 m (710,3 → 800,3) | 89,0 m (1.516,3 → 1.605,3) |
+| escalón levantamiento − DEM | −1,78 m | −5,56 m |
+| **error contra las cotas medidas** | **p50 0,030 m** · p95 0,114 · máx 0,541 | **p50 0,074 m** · p95 0,227 · máx 1,562 |
 
 El 100,0 % de Ayora coincide con el que declara el censo por su cuenta.
+
+### El residuo va en DOS términos, y se eligió midiendo
+
+Con un solo IDW no caben las dos cosas que hacen falta. Error del fichero
+contra las 3.004 cotas medidas de Ayora:
+
+| IDW | \|error\| p50 | |
+|---|---:|---|
+| radio 120, soft 25 | 0,214 m | el del 3D. Empalma suave, **borra el detalle** |
+| radio 40, soft 25 | 0,115 m | |
+| radio 12, soft 1 | 0,043 m | fiel, pero **corta el empalme a 12 m** |
+| radio 120, soft 1 | 0,146 m | ensanchar con 1/d² tampoco: con 26.318 puntos los lejanos son tantos que en conjunto dominan |
+| **ancho 120/25 + fino 12/1** | **0,030 m** | los dos, y sin cantil |
+
+Afinar la malla no compra casi nada y cuesta mucho: a 3 m el error baja a
+0,022 m y el fichero pasa de 1,4 a **5,3 MB**.
+
+**Y el máximo no es del método.** Las DOS vigas de un mismo seguidor van a
+6,02 m una de otra y difieren en cota hasta **0,511 m** en Ayora (1,910 en San
+José). Con paso de malla 6 m caen en celdas contiguas y la bilineal reparte: el
+techo del error ES el escalón del propio dato entre filas vecinas.
 
 ---
 
@@ -115,8 +149,8 @@ El 100,0 % de Ayora coincide con el que declara el censo por su cuenta.
 > ### ⚠ ESTA TABLA NO SE AGREGA. NUNCA.
 >
 > **Una cifra de relieve «sobre los enlaces», sin separar por longitud de vano,
-> no significa nada.** Las bandas de abajo van de **0,000 dB a 4,246 de
-> mediana** y hasta **14,7 de máximo**: promediarlas da el número que uno
+> no significa nada.** Las bandas de abajo van de **0,000 dB a 8,438 de
+> mediana** y hasta **23,8 de máximo**: promediarlas da el número que uno
 > quiera según cuántos vanos cortos haya en la muestra, y la muestra la elige
 > la malla, no la física.
 >
@@ -146,35 +180,39 @@ daba **p50 = 0,000 dB**. Sólo al separar por longitud apareció lo que hay.
 
 | vano | n | p50 | p95 | máx | a cero | sin perfil |
 |---|---:|---:|---:|---:|---:|---:|
-| 10–20 m | 37 | **0,000** | 0,000 | 0,000 | 37/37 | 0 |
-| 20–50 m | 121 | 0,244 | 1,231 | 1,347 | 29/121 | 0 |
-| 50–100 m | 282 | 0,671 | 2,995 | 4,287 | 75/282 | 18 |
-| 100–200 m | 198 | 1,440 | 6,028 | 10,084 | 34/198 | 102 |
-| 200–400 m | 67 | **3,113** | 6,621 | 10,276 | 2/67 | 233 |
+| 10–20 m | 65 | **0,000** | 0,000 | 0,000 | 65/65 | 0 |
+| 20–50 m | 258 | 0,185 | 1,306 | 1,451 | 56/258 | 0 |
+| 50–100 m | 300 | 0,700 | 3,355 | 5,535 | 69/300 | 0 |
+| 100–200 m | 300 | 1,485 | 7,227 | 10,811 | 41/300 | 0 |
+| 200–400 m | 300 | 2,775 | 8,744 | 13,813 | 12/300 | 0 |
+| 400–800 m | 300 | 3,112 | 8,346 | 12,974 | 7/300 | 0 |
+| 800–1600 m | 300 | **7,798** | 14,731 | 20,051 | 3/300 | 0 |
 
 **San José** — 89 m de desnivel:
 
 | vano | n | p50 | p95 | máx | a cero | sin perfil |
 |---|---:|---:|---:|---:|---:|---:|
-| 10–20 m | 8 | **0,000** | 0,000 | 0,000 | 8/8 | 0 |
-| 20–50 m | 69 | 0,045 | 1,587 | 1,587 | 27/69 | 0 |
-| 50–100 m | 187 | 1,038 | 7,025 | 13,197 | 44/187 | 4 |
-| 100–200 m | 288 | 2,125 | 7,324 | 9,960 | 26/288 | 12 |
-| 200–400 m | 246 | 2,907 | 8,705 | 14,582 | 3/246 | 54 |
-| 400–800 m | 144 | 3,259 | 8,675 | 12,259 | 0/144 | 156 |
-| 800–1600 m | 52 | **4,246** | 9,641 | 10,032 | 0/52 | 248 |
+| 10–20 m | 14 | **0,000** | 0,000 | 0,000 | 14/14 | 0 |
+| 20–50 m | 138 | 0,124 | 2,784 | 2,784 | 62/138 | 0 |
+| 50–100 m | 300 | 1,040 | 8,915 | 13,531 | 56/300 | 0 |
+| 100–200 m | 300 | 2,237 | 8,938 | 15,670 | 18/300 | 0 |
+| 200–400 m | 300 | 3,499 | 11,555 | 22,824 | 1/300 | 0 |
+| 400–800 m | 300 | 5,748 | 17,808 | 23,780 | 0/300 | 0 |
+| 800–1600 m | 300 | **8,438** | 16,329 | 22,221 | 0/300 | 0 |
 
 Tres lecturas, y las tres son del dato:
 
 * **A 12 m el relieve es CERO EXACTO, siempre.** No «casi»: cero. Es la prueba
   de que la referencia hace su trabajo — absorbe 90 m de desnivel de campo y no
   cobra nada por una pendiente.
-* **A partir de 100 m son varios dB, con cola de 10–15.** Es un término real y
-  no se puede seguir tratando como ausente.
-* **La columna `sin perfil` crece con el vano**, y es el límite honesto de
-  usar sólo el levantamiento: a 200–400 m la mayoría de los vanos cruzan los
-  huecos entre bloques —viales, centros de transformación—. **Ahí es donde hace
-  falta el DEM del encargo**, y es la parte que no se puede hacer sin red.
+* **A partir de 100 m son varios dB, y a 800–1600 m la mediana pasa de 7,8 dB
+  con cola de 20–24.** Es un término real y no se puede seguir tratando como
+  ausente.
+* **La columna `sin perfil` está a CERO en todas las bandas**, y eso es lo que
+  aportó empalmar con el DEM. Con el levantamiento solo, a 200–400 m se perdían
+  **233 de 300** vanos porque cruzaban los huecos entre bloques —viales,
+  centros de transformación—; a 800–1600 m se perdían 248 de 300. El DEM los
+  llena, y por eso las dos últimas bandas existen aquí y antes no.
 
 ---
 
@@ -239,19 +277,39 @@ con el 1,20 rotulado, sin esperar al plano.
 
 ---
 
-## 7. Lo que falta, y por qué no está hecho
+## 7. El productor, y la decisión que hubo que tomar
 
-**Escribir `ayora_relieve.json` y `sanjose_relieve.json`.** Todo lo de arriba se
-ha medido construyendo la malla al vuelo; el productor tiene que vivir en
-**cobertura-zigbee**, junto al levantamiento y junto al `kml_curvas_a_cotas.mjs`
-que ya escribe ese formato. Allí hay una PR abierta que declara **«solo
-comentarios»**, y meterle un útil nuevo y dos ficheros de datos la convertiría
-en mentira. **Va detrás de que se mergee.**
+**`cobertura-zigbee/tools/relieve_de_levantamiento.mjs`**, que es donde vive el
+levantamiento y donde ya está `kml_curvas_a_cotas.mjs`, que escribe este mismo
+formato. Sin `--write` no toca disco: mide, valida y lo cuenta.
 
-**El empalme con el DEM.** El encargo dice «DEM + levantamiento con empalme», y
-el empalme es lo que llena los huecos entre bloques —la columna `sin perfil` del
-§4—. El DEM son teselas Terrarium de S3, una llamada de red: el 3D las pide en
-vivo y este repo no puede. Cuando el productor exista, la decisión es si el
-fichero se genera con el DEM incrustado (fichero grande, reproducible) o se deja
-el hueco a `null` (fichero pequeño, y los vanos largos sin relieve). **Con los
-números del §4 delante, la respuesta se puede razonar en vez de adivinar.**
+### El DEM se incrusta, y no era obvio
+
+El encargo dice «DEM + levantamiento con empalme». El DEM son teselas Terrarium
+de S3, una llamada de red: el 3D las pide en vivo y el motor de Siting no puede.
+Había dos salidas, y la decisión la dieron los números:
+
+| | fichero | qué pasa con los vanos largos |
+|---|---|---|
+| huecos a `null` | ~0,4 MB | **se pierden**: a 200–400 m, 233 de 300 sin perfil; a 800–1600 m, 248 de 300 |
+| **DEM incrustado** | **1,56 / 2,04 MB** | **0 sin perfil en todas las bandas** |
+
+Se incrusta. Cuesta 1,6 MB por planta y a cambio las dos bandas largas del §4
+existen —y son las que más cobran, p50 7,8 y 8,4 dB—. Además el fichero queda
+**reproducible**: con el DEM dentro, el resultado no depende de que las teselas
+de S3 sigan siendo las mismas el día que alguien lo vuelva a mirar.
+
+Hacen falta 4 teselas z14 para Ayora y 9 para San José.
+
+### Lo que sigue sin estar
+
+* **La altura de poste de un plano.** El fichero lleva el estándar Factiun
+  **1,20 m DECLARADO** rotulado en su `nota`. Mueve el terreno metro por metro,
+  así que el 3D lo nota; el relieve de radio **no** (§6). Cuando llegue el
+  plano, se regenera y el 3D mejora; el relieve no se mueve.
+* **Las ocho plantas sin levantamiento**, El Burgo entre ellas. No es un
+  problema de código: no hay dato. Dan `relieveDb = null` con motivo.
+* **El careo del motor contra medidas reales CON terreno.** Las 49 medidas que
+  hay son de El Burgo, que no tiene levantamiento. Hasta que haya medidas en
+  Ayora o San José, el relieve del §4 es lo que el modelo dice que cobra el
+  terreno, no lo que se ha visto cobrar.
