@@ -449,3 +449,15 @@ Hacen falta 4 teselas z14 para Ayora y 9 para San José.
   hay son de El Burgo, que no tiene levantamiento. Hasta que haya medidas en
   Ayora o San José, el relieve del §4 es lo que el modelo dice que cobra el
   terreno, no lo que se ha visto cobrar.
+
+---
+
+## Cómo se comprueba una comprobación
+
+El estándar de puertas —piso por banco, alcance publicado, los tres estados
+MIDE / NO COMPROBADO / ROJO— vive en un solo sitio:
+**[`proyectos/docs/puertas-y-alcance.md`](https://github.com/IMoriana3/proyectos/blob/main/docs/puertas-y-alcance.md)**.
+
+Un original y enlaces; dos copias divergen. `docs/enlace_guia.sh` comprueba en
+CI que este enlace apunta a algo que existe — un enlace roto a la guía de
+puertas sería el chiste final.
