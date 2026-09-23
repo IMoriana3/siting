@@ -165,6 +165,41 @@
         relieve = relieveDet.db;
         htE = relieveDet.htE;
         hrE = relieveDet.hrE;
+
+        /* ═══ EL UMBRAL DE VANO CORTO DE UN TERRENO SIN RESOLUCION ═══════════
+         *
+         * Con terreno de SOLO DEM, por debajo de cierto vano el relieve que
+         * sale no es impreciso: es INVENTADO. Medido comparando el terreno
+         * empalmado -verdad de campo- contra el mismo sitio con solo DEM,
+         * sobre 400 vanos por banda:
+         *
+         *   vano        relieve VERDADERO p95    el que da el DEM solo p95
+         *   30-50 m           0,00 dB                    9,89 dB
+         *   50-75 m           2,54                      11,10
+         *   75-100 m          1,21                      13,14
+         *
+         * O sea que a 30-50 m el relieve de verdad es CERO EXACTO y el DEM
+         * cobra hasta 9,89 dB. Eso no es ruido alrededor de un valor: es un
+         * termino entero que no existe, pintandose en el mapa.
+         *
+         * Asi que quien carga el terreno declara `vanoMinUtil` -del propio
+         * fichero, `calidad.vano_min_util_m`- y por debajo el relieve va a 0
+         * CON MOTIVO. Cero y no `null`: `null` es «no se ha mirado», y aqui se
+         * ha mirado y la respuesta es que no hay termino.
+         *
+         * Y LAS ALTURAS SE QUEDAN, que es lo que hace esto correcto y no un
+         * apagon. Poner el relieve a cero NO es ignorar el terreno: `htE`/`hrE`
+         * siguen saliendo de la tierra lisa del perfil y alimentan los dos
+         * rayos. Esa parte SI es fiable a vano corto, porque el error del DEM
+         * esta correlado en 80-117 m -medido con el semivariograma- y un vano
+         * por debajo de eso cae DENTRO de la longitud de correlacion: los dos
+         * extremos se desplazan casi lo mismo y el desplazamiento comun no
+         * mueve el balance. Lo que no sobrevive es la DIFERENCIA punto a punto
+         * a lo largo del perfil, que es justo de lo que vive la difraccion. */
+        if (enlace.vanoMinUtil > 0 && D < enlace.vanoMinUtil) {
+          relieve = 0;
+          motivos.push("relieve_dem_sin_resolucion_a_este_vano");
+        }
       }
     }
 

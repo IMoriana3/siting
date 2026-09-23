@@ -135,7 +135,8 @@ for (const B of BANDAS) {
     const pf = TP.perfilEntre(T, e.ax + dx, e.ay + dn, e.bx + dx, e.by + dn, {});
     if (!pf.perfil) { sin++; continue; }
     const conT = RZ.presupuesto({ D: e.D, zA: ANT + pf.zSuelo[0], zB: ANT_NCU + pf.zSuelo[1],
-                                  cruces: [], perfil: pf.perfil }, V, PROP, null);
+                                  cruces: [], perfil: pf.perfil,
+                                  vanoMinUtil: (cal && cal.vano_min_util_m) || 0 }, V, PROP, null);
     if (conT.margenDb == null || sinT.margenDb == null) { sin++; continue; }
     dif.push(conT.margenDb - sinT.margenDb);
     if (banda(conT.margenDb) !== banda(sinT.margenDb)) cambian++;

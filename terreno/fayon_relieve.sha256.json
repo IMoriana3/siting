@@ -1,7 +1,7 @@
 {
   "fichero": "fayon_relieve.json",
-  "sha256": "d7466b1a887e1d614b4c87216da0f4cab2af053ef853b210ee12afafe16299c3",
-  "bytes": 31482,
+  "sha256": "195db0cc6131e055fe1faedaf96c45941671aed9b1b9cd79b6b7bdf6d9102161",
+  "bytes": 31504,
   "productor": "relieve_de_dem.mjs v1",
   "tipo": "dem",
   "generado": "2026-09-23",
@@ -72,6 +72,7 @@
         ]
       },
       "aviso": "A menos de 100 m el relieve verdadero es CERO EXACTO y el DEM solo llega a inventarse hasta 8,1 dB. Ahi no es que sea impreciso: cobra relieve que no hay."
-    }
+    },
+    "vano_min_util_m": 100
   }
 }

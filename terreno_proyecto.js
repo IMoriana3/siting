@@ -259,6 +259,23 @@
    * Devuelve null cuando el fichero no lo trae —y eso NO es «± cero»: es «no
    * se sabe», y quien lo pinte tiene que decir eso y no un cero tranquilizador.
    */
+  /* EL VANO POR DEBAJO DEL CUAL ESTE TERRENO NO TIENE RESOLUCION.
+   *
+   * Lo declara el productor en `calidad.vano_min_util_m`, y el motor lo usa
+   * para poner el relieve a 0 CON MOTIVO en vez de cobrar un termino que no
+   * existe. Medido: a 30-50 m el relieve verdadero es CERO EXACTO y el terreno
+   * de solo DEM llega a dar 9,89 dB.
+   *
+   * Devuelve 0 cuando el fichero no lo declara —el terreno empalmado no lo
+   * necesita— y eso apaga la puerta, que es lo correcto: un terreno validado
+   * SI tiene resolucion a vano corto. */
+  function vanoMinUtil(cargado) {
+    if (!cargado || !cargado.ok) return 0;
+    var c = cargado.man && cargado.man.calidad;
+    var v = c && c.vano_min_util_m;
+    return (typeof v === "number" && v > 0) ? v : 0;
+  }
+
   function incertidumbreDb(cargado, D) {
     if (!cargado || !cargado.ok || !(D > 0)) return null;
     var c = cargado.man && cargado.man.calidad;
@@ -318,6 +335,7 @@
     perfilDeEnlace: perfilDeEnlace,
     rotulo: rotulo,
     incertidumbreDb: incertidumbreDb,
+    vanoMinUtil: vanoMinUtil,
     desfase: desfase,
     residuoAlinear: residuoAlinear,
     _cache: cache,

@@ -165,7 +165,10 @@ for (const [planta, preNom] of PLANTAS) {
       const pf = TP.perfilEntre(T, e.ax + dx, e.ay + dn, e.bx + dx, e.by + dn, {});
       if (!pf.perfil) { sin++; totSin[pf.motivo] = (totSin[pf.motivo] || 0) + 1; continue; }
       const conT = RZ.presupuesto({ D: e.D, zA: ANT + pf.zSuelo[0], zB: ANT_NCU + pf.zSuelo[1],
-                                    cruces: [], perfil: pf.perfil }, V, PROP, null);
+                                    cruces: [], perfil: pf.perfil,
+                                    /* EL UMBRAL DE VANO CORTO, como lo aplica la app: sin esto el
+                                       informe publicaria relieve que la pantalla ya no pinta. */
+                                    vanoMinUtil: (cal && cal.vano_min_util_m) || 0 }, V, PROP, null);
       if (conT.margenDb == null || sinT.margenDb == null) {
         sin++; totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] =
           (totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] || 0) + 1;

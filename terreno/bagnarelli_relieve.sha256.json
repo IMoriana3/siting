@@ -1,7 +1,7 @@
 {
   "fichero": "bagnarelli_relieve.json",
-  "sha256": "6f64d41c47f5897ae0fa3bf459838825ad854adaa6c37808c4d27f54fd29ea4a",
-  "bytes": 30338,
+  "sha256": "fe03494ff192942dd833333c8ffe56fc585189bd73787e852adb5f1cfa6e08a3",
+  "bytes": 30360,
   "productor": "relieve_de_dem.mjs v1",
   "tipo": "dem",
   "generado": "2026-09-23",
@@ -72,6 +72,7 @@
         ]
       },
       "aviso": "A menos de 100 m el relieve verdadero es CERO EXACTO y el DEM solo llega a inventarse hasta 8,1 dB. Ahi no es que sea impreciso: cobra relieve que no hay."
-    }
+    },
+    "vano_min_util_m": 100
   }
 }

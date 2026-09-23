@@ -27,6 +27,15 @@ const cerca = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-9 : tol);
 // Cada una rompe UNA cosa de la geometría. Si el banco sigue verde con una
 // puesta, esa comprobación no comprobaba nada.
 const MUTACIONES = {
+  /* LA TOLERANCIA DEL PERFIL DESAPARECE y vuelve el `< D` a secas. Rechazaba
+     568 de 6.036 enlaces REALES de la cartera —el 9,4 %, con 65 de Ayora y 275
+     de San Jose— por un deficit de hasta 2,13e-13 m. Se quedaban sin termino de
+     relieve con motivo «el perfil no cubre el vano», que es falso. */
+  sinTolerancia:  ['radio_pv_model.js', /if \(largo < D && \(D - largo\) > 1e-9 \* D\) return null;/,
+                                        'if (largo < D) return null;'],
+  /* ...o se afloja hasta ser una puerta de mentira: con 1 % relativo, a un
+     perfil de un vano de 447 m le pueden faltar 4,5 METROS y colar. */
+  toleranciaFloja:['radio_pv_model.js', /\(D - largo\) > 1e-9 \* D/, '(D - largo) > 1e-2 * D'],
   /* EL CANTO EQUIVALENTE DEJA DE SER EL CORTE DE LAS DOS RECTAS y pasa a ser
      simplemente el canto MÁS ALTO. Es el error que parece igual y no lo es:
      con dos cerros iguales, Bullington pone el canto ENTRE ellos y más arriba
@@ -298,6 +307,27 @@ check('un perfil MAS LARGO que el vano se recorta y da lo mismo que el justo',
       cerca(R.relieveDeltaDb(100, 3.475, 3.475, [[-10, 3], [200, 3]], FREL).htE, 0.475));
 check('y uno MAS CORTO que el vano no se inventa nada: null',
       R.relieveDeltaDb(100, 0.475, 0.475, [[0, 0], [50, 0]], FREL) === null);
+
+// ── EL PERFIL QUE «NO CUBRE EL VANO» POR UN PICOMETRO ────────────────────────
+// `recortaPerfil` comparaba `< D` a secas. `perfilEntre` construye el perfil
+// sumando `nSeg` pasos de `D/nSeg`, y esa suma no da D exacto: el perfil sale
+// corto en el ultimo bit. Resultado, en la cartera de verdad: 568 de 6.036
+// enlaces (9,4 %) decian «el perfil no cubre el vano» y se quedaban SIN
+// relieve, con el terreno delante. Peor deficit de toda la cartera: 2,13e-13 m.
+console.log('\n· el perfil corto por coma flotante, y que la tolerancia no afloja');
+{
+  check('corto por 1e-13 m: se acepta', R.recortaPerfil([[0, 0], [50, 1], [100 - 1e-13, 2]], 100) !== null);
+  check('corto por 1 m: se rechaza', R.recortaPerfil([[0, 0], [50, 1], [99, 2]], 100) === null);
+  check('corto por 1 mm: se rechaza', R.recortaPerfil([[0, 0], [50, 1], [99.999, 2]], 100) === null);
+  check('corto por 1 um: se rechaza', R.recortaPerfil([[0, 0], [50, 1], [99.999999, 2]], 100) === null);
+  check('la tolerancia es RELATIVA: 5e-8 sobre 100 m pasa',
+        R.recortaPerfil([[0, 0], [50, 1], [100 - 5e-8, 2]], 100) !== null);
+  check('y 2e-7 sobre 100 m ya no', R.recortaPerfil([[0, 0], [50, 1], [100 - 2e-7, 2]], 100) === null);
+  // Y el punto final NO se extrapola: `altura()` devuelve la cota del ultimo.
+  const r = R.recortaPerfil([[0, 10], [50, 20], [100 - 1e-13, 30]], 100);
+  check('el punto final lleva la cota del ultimo punto, sin extrapolar',
+        cerca(r[r.length - 1][1], 30, 1e-9), r[r.length - 1]);
+}
 
 // ── EL PUNTO DE BULLINGTON, QUE AHORA SE PUBLICA ─────────────────────────────
 // `bullingtonDetalle` existe porque `tools/a5_repecho_local.mjs` necesita SABER

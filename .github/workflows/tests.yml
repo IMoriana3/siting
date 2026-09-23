@@ -157,7 +157,8 @@ jobs:
                                              sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba \
                                              sinReflejado sueloSinPerdida anguloDirecto \
                                              sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano \
-                                             cantoAlMasAlto puntoMudo
+                                             cantoAlMasAlto puntoMudo \
+                                             sinTolerancia toleranciaFloja
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
@@ -165,7 +166,8 @@ jobs:
           rojo node tests/test_radio_malla.js sensInventada siempreCalib rozarEsTapar vegCallada \
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
                                               relieveCallado relieveCortoCero dosRayosSinLisa \
-                                              mezclaSigue mezclaSiempre
+                                              mezclaSigue mezclaSiempre \
+                                              sinUmbralCorto umbralApaga
 
           # EL TERRENO DE LA PLANTA. `terreno_planta.js` lee el MISMO
           # `<planta>_relieve.json` que consume el 3D de cobertura-zigbee, y de
