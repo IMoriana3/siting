@@ -169,6 +169,19 @@ jobs:
       # el hecho que lo cierra —que ningun enlace de la cartera llega a 800 m—
       # deja de ser cierto en cuanto alguien mueva una NCU, y entonces la lectura
       # de la tabla de relieve por banda cambia.
+      # ¿PUEDE ALGÚN PASO DE CI SALIR CON 0 SIN HABER MEDIDO? El cribado de los
+      # cinco patrones —guarda que rinde 0, bucle de cero vueltas, tragado
+      # explícito, suite que no recoge, invoca lo que no hay— sobre este repo y
+      # sobre los hermanos que estén clonados.
+      #
+      # Y SE MIDE A SÍ MISMO: publica cuántos pasos y cuántos comandos ha
+      # resuelto de los que hay, y se pone ROJO por debajo del 90 %. La primera
+      # versión veía 3 ficheros de los 17 pasos de SolarGPTfull y salía casi
+      # limpia — o sea, el mismo defecto que persigue, en sí misma. Sin PyYAML
+      # sale con rc = 2, no con 0.
+      - name: ¿algún paso puede salir verde sin haber medido?
+        run: node tools/auditoria_verdes.mjs
+
       - name: vanos muestreados contra enlaces reales
         run: node tools/vanos_muestreados_vs_reales.mjs > /dev/null
 
