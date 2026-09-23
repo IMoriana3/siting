@@ -356,7 +356,25 @@ def recorta_perfil(perfil, D):
         return None
     d0 = perfil[0][0]
     n = len(perfil)
-    if perfil[n - 1][0] - d0 < D:
+    # ═══ EL PERFIL LLEGA AL FINAL, CON TOLERANCIA RELATIVA ═══════════════════
+    #
+    # ESTO ERA `< D` A SECAS, IGUAL QUE EN JS, Y SEGUIA ASI CUANDO EL JS YA
+    # ESTABA ARREGLADO. La paridad no lo vio: esta verde porque ningun caso
+    # ejercitaba un perfil corto por un ultimo bit, y a nadie se le ocurre
+    # escribir ese caso a mano. Es el mismo patron que ya mordio con las
+    # geometrias imposibles: paridad verde porque los dos motores fallaban
+    # igual, y aqui porque ninguno de los dos se probaba en ese punto.
+    #
+    # `perfilEntre` construye el perfil sumando nSeg pasos de D/nSeg y esa suma
+    # no da D exacto. En la cartera real: 568 de 6.036 enlaces (9,4 %) se
+    # quedaban SIN termino de relieve, con motivo «el perfil no cubre el vano»,
+    # por un deficit de hasta 2,13e-13 m. Dos decimas de PICOMETRO.
+    #
+    # La tolerancia no afloja nada: 1e-9 relativo son 0,45 nm en el vano mas
+    # largo de la cartera. Un perfil que de verdad no cubre el vano se queda
+    # corto en METROS, no en nanometros. Probado a 1 m, 1 mm y 1 um.
+    largo = perfil[n - 1][0] - d0
+    if largo < D and (D - largo) > 1e-9 * D:
         return None
 
     def altura(s):
@@ -369,10 +387,18 @@ def recorta_perfil(perfil, D):
                 return perfil[i - 1][1] + (perfil[i][1] - perfil[i - 1][1]) * (s - a) / (b - a)
         return perfil[n - 1][1]
 
+    # DOS PUNTOS A 1e-13 SON UN PUNTO. Con la tolerancia puesta, un perfil que
+    # acaba en D-1e-13 pasa —y debe pasar— pero su ultimo punto entraria como
+    # INTERIOR y encima se anyadiria el de D: dos cantos a 1e-13 y `nu()`
+    # dividiendo por esa distancia. Medido en JS: el danyo son 1,07e-14 dB
+    # porque en el extremo el rayo va a la altura de la antena, que esta sobre
+    # el suelo. Es una cancelacion afortunada, no una garantia, asi que se quita
+    # el caso — con el MISMO umbral relativo, para no tener dos criterios de
+    # «esto es el mismo punto» en la misma funcion.
     out = [[0, altura(0)]]
     for j in range(n):
         s = perfil[j][0] - d0
-        if 0 < s < D:
+        if 0 < s < D and (D - s) > 1e-9 * D:
             out.append([s, perfil[j][1]])
     out.append([D, altura(D)])
     return out

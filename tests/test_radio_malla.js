@@ -40,6 +40,17 @@ const MUTACIONES = {
   // el perfil que no cubre el vano se confunde con un vano llano
   relieveCortoCero: ['zigbee', /motivos\.push\("relieve_perfil_no_cubre_el_vano"\);/,
                                'relieve = 0;'],
+  /* EL UMBRAL DE VANO CORTO DESAPARECE. Con terreno de solo DEM el relieve por
+     debajo de 100 m es INVENTO —medido: a 30-50 m el verdadero es cero exacto y
+     el DEM da hasta 9,89 dB— y sin esta puerta se pinta. */
+  sinUmbralCorto: ['zigbee', /if \(enlace\.vanoMinUtil > 0 && D < enlace\.vanoMinUtil\) \{/,
+                             'if (false) {'],
+  /* ...o la puerta APAGA TAMBIEN LAS ALTURAS, que es el error tentador: poner
+     el relieve a cero NO es ignorar el terreno. `htE`/`hrE` salen de la tierra
+     lisa del perfil y alimentan los dos rayos, y esa parte SI es fiable a vano
+     corto porque el error del DEM esta correlado en 80-117 m. */
+  umbralApaga:    ['zigbee', /relieve = 0;\s*\n\s*motivos\.push\("relieve_dem_sin_resolucion_a_este_vano"\);/,
+                             'relieve = 0; htE = zA; hrE = zB; motivos.push("relieve_dem_sin_resolucion_a_este_vano");'],
   // las alturas mezcladas se anotan y se sigue, en vez de pararse: el balance
   // saldria de una antena 739 m bajo tierra y con pinta de bueno
   mezclaSigue:   ['zigbee', /salidaSinMargen = true;/, 'salidaSinMargen = false;'],
@@ -403,6 +414,60 @@ check('...y tampoco Prx, para que nadie lo reste a mano',
 check('el MISMO vano con las alturas bien puestas si da margen',
       rAlto.margenDb !== null && rAlto.relieveDb === 0,
       rAlto.margenDb + ' / ' + rAlto.relieveDb);
+
+/* ── EL UMBRAL DE VANO CORTO DE UN TERRENO SIN RESOLUCION ──────────────────
+   Con solo DEM, por debajo de 100 m el relieve que sale es invento: medido,
+   a 30-50 m el verdadero es CERO EXACTO y el DEM llega a 9,89 dB. */
+console.log('\n· el umbral de vano corto');
+{
+  /* Un cerro de verdad a mitad de vano, para que SIN umbral el relieve NO sea
+     cero: un caso que ya diera cero no probaria que la puerta hace nada. */
+  const perf = []; for (let i = 0; i <= 20; i++) {
+    const s = 80 * i / 20; perf.push([s, 3 * Math.exp(-Math.pow((s - 40) / 12, 2))]);
+  }
+  const base = { D: 80, zA: 0.505, zB: 3.15, cruces: [], perfil: perf };
+  const sinU = ZB.presupuesto(Object.assign({}, base, { vanoMinUtil: 0 }), PRO, PROP, null);
+  const conU = ZB.presupuesto(Object.assign({}, base, { vanoMinUtil: 100 }), PRO, PROP, null);
+  const lejos = ZB.presupuesto(Object.assign({}, base, { D: 150, vanoMinUtil: 100 }), PRO, PROP, null);
+
+  check('sin umbral, este cerro SI da relieve (si no, el caso no probaria nada)',
+        sinU.relieveDb > 0.5, sinU.relieveDb);
+  check('con umbral y vano por debajo, el relieve va a CERO', conU.relieveDb === 0, conU.relieveDb);
+  check('y con su motivo, no en silencio',
+        (conU.motivos || []).includes('relieve_dem_sin_resolucion_a_este_vano'), conU.motivos);
+  check('cero y NO null: null es «no se ha mirado», y aqui se ha mirado',
+        conU.relieveDb !== null && conU.relieveDb === 0);
+  check('por encima del umbral la puerta NO se mete',
+        !(lejos.motivos || []).includes('relieve_dem_sin_resolucion_a_este_vano'), lejos.motivos);
+  check('sin vanoMinUtil declarado la puerta esta apagada',
+        !(sinU.motivos || []).includes('relieve_dem_sin_resolucion_a_este_vano'), sinU.motivos);
+  /* LO QUE HACE QUE ESTO SEA CORRECTO Y NO UN APAGON: las alturas se quedan.
+     Si la puerta tambien las apagara, los dos rayos verian la antena sobre la
+     cota 0 en vez de sobre su suelo, y el margen saldria de otra geometria. */
+  check('el margen NO es el de apagar el terreno entero: las alturas se quedan',
+        Math.abs(conU.margenDb - ZB.presupuesto(Object.assign({}, base, { perfil: null }), PRO, PROP, null).margenDb) > 1e-9,
+        [conU.margenDb]);
+}
+
+/* ── EL PERFIL QUE «NO CUBRE EL VANO» POR UN PICOMETRO ─────────────────────
+   568 de 6.036 enlaces REALES de la cartera —el 9,4 %, con 65 de Ayora y 275
+   de San Jose dentro— se quedaban SIN relieve por un deficit de hasta 2,13e-13
+   m entre el D del preset y el largo acumulado del perfil. */
+console.log('\n· el perfil corto por coma flotante');
+{
+  const corto = [[0, 0], [40, 2], [80 - 1e-13, 0]];
+  const r = ZB.presupuesto({ D: 80, zA: 0.505, zB: 3.15, cruces: [], perfil: corto }, PRO, PROP, null);
+  check('un perfil corto por 1e-13 m YA evalua el relieve',
+        !(r.motivos || []).includes('relieve_perfil_no_cubre_el_vano'), r.motivos);
+  const deVerdad = [[0, 0], [40, 2], [79, 0]];
+  const r2 = ZB.presupuesto({ D: 80, zA: 0.505, zB: 3.15, cruces: [], perfil: deVerdad }, PRO, PROP, null);
+  check('y uno corto por 1 m SIGUE diciendo que no cubre',
+        (r2.motivos || []).includes('relieve_perfil_no_cubre_el_vano'), r2.motivos);
+  const casi = [[0, 0], [40, 2], [80 - 1e-6, 0]];
+  const r3 = ZB.presupuesto({ D: 80, zA: 0.505, zB: 3.15, cruces: [], perfil: casi }, PRO, PROP, null);
+  check('un micrometro tambien sigue cayendo: la tolerancia no afloja nada',
+        (r3.motivos || []).includes('relieve_perfil_no_cubre_el_vano'), r3.motivos);
+}
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'
                        : 'TODO OK — ' + ok + ' comprobaciones'));

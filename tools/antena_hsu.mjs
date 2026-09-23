@@ -74,7 +74,11 @@ const NCU = parseFloat(arg('ncu', '3.15'));
 if (!fs.existsSync(HERMANO)) {
   console.log('SIN MEDIDA: falta el repo hermano en ' + HERMANO + ' (de ahí salen los layouts).');
   console.log('No se ha medido nada. Esto no es un verde.');
-  process.exit(0);
+  /* rc = 2, NO 0: «no comprobado» tiene que salir DISTINTO de «comprobado y
+     pasa». Con rc = 0 este util imprimia «Esto no es un verde» y la CI lo
+     pintaba verde igual — el agregador lee el codigo de salida, no el texto.
+     Es el mismo defecto que #738 arreglo en el banco de configuracion. */
+  process.exit(2);
 }
 
 const enlaces = [];
@@ -91,7 +95,8 @@ for (const f of fs.readdirSync(HERMANO).filter(x => x.endsWith('_layout.json')))
     if (isFinite(best) && best > 1) enlaces.push([f.replace('_layout.json', ''), best]);
   }
 }
-if (!enlaces.length) { console.log('SIN MEDIDA: ningún layout del hermano trae meteo y NCU a la vez.'); process.exit(0); }
+// rc = 2 por lo mismo: sin enlaces no se ha medido nada.
+if (!enlaces.length) { console.log('SIN MEDIDA: ningún layout del hermano trae meteo y NCU a la vez.'); console.log('No se ha medido nada. Esto no es un verde.'); process.exit(2); }
 
 const pct = (a, p) => { const s = [...a].sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 console.log('variante: ' + (V.nombre || 'zigbee_pro_24') + '  ·  NCU a ' + NCU.toFixed(2) + ' m'

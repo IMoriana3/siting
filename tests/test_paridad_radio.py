@@ -91,6 +91,31 @@ MUTACIONES = {
     # clases, que no pregunta a ningun motor.
     # la guarda se cae SOLO en Python: los once casos enterrados vuelven a dar
     # numero alli y None aqui
+    # ── LA TOLERANCIA DEL PERFIL, UNA POR MOTOR ─────────────────────────────
+    # Se rompe UN SOLO LADO a proposito: una mutacion que tocase los dos a la
+    # vez dejaria la paridad verde, que es EXACTAMENTE la averia que hubo —el
+    # JS arreglado y el Python no, y la paridad sin enterarse porque ningun
+    # caso pisaba ese punto—.
+    "py_sin_tolerancia": ("py", r'if largo < D and \(D - largo\) > 1e-9 \* D:',
+                                 'if largo < D:'),
+    "js_sin_tolerancia": ("js", r'if \(largo < D && \(D - largo\) > 1e-9 \* D\) return null;',
+                                 'if (largo < D) return null;'),
+    # ── EL PUNTO DUPLICADO, Y POR QUE SU MUTANTE NO SE MATA COMPARANDO SALIDAS
+    #
+    # Las dos primeras versiones de esto —una por motor— salieron DORMIDAS, y
+    # el motivo es estructural, no un despiste del mutante:
+    #
+    # el punto duplicado solo muerde si en el extremo del vano el suelo queda
+    # POR ENCIMA del rayo, y el rayo en el extremo va exactamente a la altura
+    # de la antena. O sea que para que muerda, la antena tiene que estar bajo
+    # tierra — y ese caso lo para antes la guarda `antena_bajo_la_tierra_lisa`.
+    # Medido: el danyo real son 1,07e-14 dB, muy por debajo de la tolerancia de
+    # paridad. Ningun careo js-contra-py puede verlo.
+    #
+    # Asi que se mata donde SI se puede: con una comprobacion ESTRUCTURAL sobre
+    # la funcion —que no devuelva dos puntos pegados— en vez de sobre su
+    # salida numerica. La de JS vive en `test_radio_geom.js`.
+    "py_punto_duplicado": ("py", r'if 0 < s < D and \(D - s\) > 1e-9 \* D:', 'if 0 < s < D:'),
     "py_sin_guarda":  ("py", r'if not \(ht_e > 0\) or not \(hr_e > 0\):', 'if False:'),
     # y SOLO en JS
     "js_sin_guarda":  ("js", r'if \(!\(htE > 0\) \|\| !\(hrE > 0\)\) \{', 'if (false) {'),
@@ -156,6 +181,20 @@ def casos_relieve():
         rej(lambda s: -2.0 * math.exp(-((s - 100) / 30.0) ** 2), 200),   # vaguada
         [[0, 0.0], [1, 0.05], [3, 0.4], [97, 1.1], [150, 0.2], [200, 0.0]],  # irregular
         [[0, 5.0], [200, 5.0]],                        # solo dos puntos
+        # ── EL PERFIL CORTO POR UN ULTIMO BIT ────────────────────────────────
+        # El caso que NINGUN banco tenia y que dejo 568 de 6.036 enlaces reales
+        # (9,4 %) sin termino de relieve, con motivo «no cubre el vano», por un
+        # deficit de 2,13e-13 m. `perfilEntre` suma nSeg pasos de D/nSeg y esa
+        # suma no da D exacto.
+        #
+        # LA PARIDAD ESTABA VERDE CON EL DEFECTO PUESTO EN LOS DOS MOTORES, y
+        # siguio verde cuando se arreglo SOLO el JS: ningun caso pisaba ese
+        # punto. A nadie se le ocurre escribir a mano un perfil corto por un
+        # picometro — y por eso hay que escribirlo.
+        [[0, 0.0], [50, 1.0], [100 - 1e-13, 2.0]],     # corto por 1e-13: SI cubre
+        [[0, 0.0], [50, 1.0], [100 - 1e-6, 2.0]],      # corto por 1 um: NO cubre
+        [[0, 0.0], [50, 1.0], [100 - 1e-3, 2.0]],      # corto por 1 mm: NO cubre
+        [[0, 0.0], [40, 3.0], [100 - 1e-13, 1.0]],     # el que generaba DUPLICADO
     ]
     out = []
     # ── BLOQUE 1: alturas FIJAS. Es el que estaba, y es el que pisa la GUARDA.
@@ -612,7 +651,17 @@ def suelo_en(p, s):
 
 
 def clase_geometrica(zA, zB, D, p):
-    if not p or (p[-1][0] - p[0][0]) < D:
+    # LA MISMA TOLERANCIA QUE EL MOTOR, Y ES UNA TERCERA COPIA DE LA REGLA.
+    # Al meter el perfil corto por 1e-13 este clasificador lo llamo «no_cubre»
+    # mientras el motor —ya con tolerancia— lo cubria y respondia con la
+    # guarda. El banco lo dijo, que es para lo que esta.
+    #
+    # Se deja DICHO que son tres copias (js, py y esta): el clasificador NO
+    # puede llamar al motor, porque entonces comprobaria que el motor coincide
+    # consigo mismo. Su independencia es justo lo que lo hace util, y el precio
+    # es que la regla vive en tres sitios y hay que moverla en los tres.
+    largo = (p[-1][0] - p[0][0]) if p else 0.0
+    if not p or (largo < D and (D - largo) > 1e-9 * D):
         return "no_cubre"
     if zA <= suelo_en(p, p[0][0]) or zB <= suelo_en(p, p[0][0] + D):
         return "antena_enterrada"
@@ -722,6 +771,18 @@ try:
     PY.fspl_db(100, None)
 except Exception as e:
     revento = "f_hz" in str(e)
+# ── EL RECORTE NO DEVUELVE DOS PUNTOS PEGADOS ──────────────────────────────
+# Estructural, no numerica: el danyo del duplicado son 1,07e-14 dB y ninguna
+# comparacion js-contra-py lo ve. Aqui se mira la FORMA de lo que devuelve.
+_rec = PY.recorta_perfil([[0, 0.0], [40, 3.0], [100 - 1e-13, 1.0]], 100)
+check("el recorte de Python no devuelve dos puntos pegados",
+      _rec is not None and (_rec[-1][0] - _rec[-2][0]) > 1e-7,
+      None if _rec is None else "%.3e" % (_rec[-1][0] - _rec[-2][0]))
+check("y sigue aceptando el perfil corto por 1e-13",
+      PY.recorta_perfil([[0, 0.0], [50, 1.0], [100 - 1e-13, 2.0]], 100) is not None)
+check("pero NO el corto por 1 um",
+      PY.recorta_perfil([[0, 0.0], [50, 1.0], [100 - 1e-6, 2.0]], 100) is None)
+
 check("en Python tambien LANZA si falta la frecuencia", revento)
 
 # EL NOMBRE VIEJO DE LA ALTURA DEL EJE: los DOS motores tienen que lanzar.

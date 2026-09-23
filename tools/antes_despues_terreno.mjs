@@ -82,11 +82,32 @@ const ANT = RPV.alturaAntenaTCU(EJE, G.antena_tcu.radio_ancla_m.valor,
                                 G.antena_tcu.coax_caida_m.valor, 30);
 const ANT_NCU = G.antena_ncu_m.valor;
 
+/* El ± de la banda: el fichero trae sus propias bandas y las del informe no
+   tienen por que coincidir, asi que se coge el PEOR de las que solapan. Coger
+   una al azar, o la primera, daria un numero que depende del orden. */
+function zPara(zdb, lo, hi) {
+  if (!zdb) return null;
+  let peor = null;
+  for (const k of Object.keys(zdb)) {
+    const [a, b] = k.split('-').map(Number);
+    if (!(b > a)) continue;
+    if (a < hi && b > lo) { const v = Math.max(...zdb[k]); if (peor == null || v > peor) peor = v; }
+  }
+  return peor;
+}
 const pct = (a, p) => { if (!a.length) return null;
   const s = [...a].sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 const f2 = v => (v == null ? '  -  ' : (v >= 0 ? '+' : '') + v.toFixed(2));
 
-const PLANTAS = [['ayora', 'AYORA'], ['sanjose', 'SANJOSE']];
+/* LAS DIEZ, no las dos. Ocho llevan terreno de solo DEM desde hoy, y el
+   antes/despues de esas es justo el que hay que mirar con la lupa: su relieve
+   trae un ± del tamano del efecto. La fila de CALIDAD va al lado de cada
+   planta, no en una nota al pie, para que no se lean los dB sin ella. */
+const PLANTAS = [['ayora', 'AYORA'], ['sanjose', 'SANJOSE'],
+                 ['bagnarelli', 'BAGNARELLI'], ['benante', 'BENANTE'],
+                 ['elburgo', 'BURGO'], ['fayon', 'FAYON'],
+                 ['panbianco', 'PANBIANCO'], ['paramo', 'PARAMO'],
+                 ['polvorin', 'POLVORIN'], ['tunez', 'TUNEZ']];
 const faltan = PLANTAS.filter(([p]) => !fs.existsSync(path.join(RAIZ, 'terreno', p + '_relieve.json')));
 if (faltan.length) {
   console.log('SIN MEDIDA: falta ' + faltan.map(f => f[0]).join(', ') + ' en terreno/');
@@ -113,11 +134,32 @@ for (const [planta, preNom] of PLANTAS) {
                    D: Math.hypot(c.x - t[0], c.y - t[1]) });
   }
 
+  /* LA FILA DE CALIDAD, PEGADA A LA PLANTA. Un empalmado valida a 0,030 m y un
+     DEM solo a 0,78-1,20: de x17 a x28. Sin esto al lado, las dos tablas se
+     leen igual y dicen cosas distintas. */
+  const cal = man.calidad || null;
+  const marca = cal ? (cal.validado === true
+        ? 'VALIDADO p50 ' + (cal.p50_m != null ? cal.p50_m.toFixed(3) + ' m' : '?')
+          + ' sobre ' + (cal.n_cotas || '?') + ' cotas'
+        : '⚠ SIN VALIDAR' + (cal.px_tesela_m ? ' · solo DEM ~' + cal.px_tesela_m + ' m/pixel' : ''))
+      : '⚠ calidad no declarada';
   console.log('═══ ' + planta.toUpperCase() + ' ═══  ' + enlaces.length + ' enlaces TCU→su NCU'
             + '  ·  terreno ' + man.tipo + ' ' + man.productor);
+  console.log('  CALIDAD: ' + marca);
+  const zdb = cal && cal.z_db && cal.z_db.p90_db ? cal.z_db.p90_db : null;
+  if (zdb) {
+    const peor = Object.values(zdb).reduce((m, v) => Math.max(m, ...v), 0);
+    console.log('  ± del relieve: hasta ' + peor.toFixed(1) + ' dB segun banda de vano'
+              + '  (medido en ' + (cal.z_db.medido_en || []).join('+') + ', NO en esta planta)');
+  }
 
+  /* EL CENSO DE MOTIVOS, que se publica SIEMPRE y no en un log. Un 9,4 % en
+     «no cubre el vano» impreso aqui habria hecho saltar a alguien hace un mes:
+     el motivo estaba en cada enlace desde el primer dia, lo que faltaba era
+     quien los contara. */
+  const todosPres = [];
   const BANDAS = [[0, 50], [50, 100], [100, 200], [200, 400], [400, 800], [800, 1e9]];
-  console.log('\n  vano          n   cambian   Δmargen p50    p05      p95    sin relieve');
+  console.log('\n  vano          n   cambian   Δmargen p50    p05      p95    sin relieve      ±Z');
   let totCambian = 0, totSin = {}, tot = 0;
   for (const [lo, hi] of BANDAS) {
     const dif = []; let cambian = 0, sin = 0, n = 0;
@@ -128,7 +170,11 @@ for (const [planta, preNom] of PLANTAS) {
       const pf = TP.perfilEntre(T, e.ax + dx, e.ay + dn, e.bx + dx, e.by + dn, {});
       if (!pf.perfil) { sin++; totSin[pf.motivo] = (totSin[pf.motivo] || 0) + 1; continue; }
       const conT = RZ.presupuesto({ D: e.D, zA: ANT + pf.zSuelo[0], zB: ANT_NCU + pf.zSuelo[1],
-                                    cruces: [], perfil: pf.perfil }, V, PROP, null);
+                                    cruces: [], perfil: pf.perfil,
+                                    /* EL UMBRAL DE VANO CORTO, como lo aplica la app: sin esto el
+                                       informe publicaria relieve que la pantalla ya no pinta. */
+                                    vanoMinUtil: (cal && cal.vano_min_util_m) || 0 }, V, PROP, null);
+      todosPres.push(conT);
       if (conT.margenDb == null || sinT.margenDb == null) {
         sin++; totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] =
           (totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] || 0) + 1;
@@ -142,10 +188,14 @@ for (const [planta, preNom] of PLANTAS) {
     console.log('  ' + ((hi > 1e8 ? lo + '+ m' : lo + '-' + hi + ' m')).padEnd(12)
       + String(n).padStart(4) + String(cambian).padStart(9)
       + f2(pct(dif, 0.5)).padStart(13) + f2(pct(dif, 0.05)).padStart(9)
-      + f2(pct(dif, 0.95)).padStart(9) + String(sin).padStart(13));
+      + f2(pct(dif, 0.95)).padStart(9) + String(sin).padStart(13)
+      + (zPara(zdb, lo, hi) == null ? '       —' : ('  ±' + zPara(zdb, lo, hi).toFixed(1)).padStart(8)));
   }
   console.log('\n  TOTAL: ' + totCambian + ' de ' + tot + ' enlaces cambian de banda en el mapa ('
             + (100 * totCambian / tot).toFixed(1) + ' %)');
+  const censo = RZ.censoMotivos(todosPres);
+  console.log('  CENSO DE MOTIVOS DE RELIEVE: ' + RZ.censoTexto(censo, 'relieve'));
+  console.log('  sin margen: ' + censo.sinMargen + ' de ' + censo.n);
   if (Object.keys(totSin).length) console.log('  sin relieve: ' + JSON.stringify(totSin));
   console.log('');
 }

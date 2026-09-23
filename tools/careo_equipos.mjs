@@ -93,7 +93,12 @@ if (faltan.length) {
   console.log('\nSIN CAREO: falta ' + faltan.join(', ') + ' en ' + HERMANO);
   console.log('La comprobación de citas SÍ se ha hecho; el careo de valores NO.');
   console.log(ko ? '\nFALLAN ' + ko : '\nlo comprobable sin hermano, OK');
-  process.exit(ko ? 1 : 0);
+  console.log('No se ha comprobado nada. Esto no es un verde.');
+  /* rc = 2, NO 0: «no comprobado» tiene que salir DISTINTO de «comprobado y
+     pasa». Con rc = 0 este util salia sin decir nada y la CI lo
+     pintaba verde igual — el agregador lee el codigo de salida, no el texto.
+     Es el mismo defecto que #738 arreglo en el banco de configuracion. */
+  process.exit(ko ? 1 : 2);
 }
 
 const fuentes = {};

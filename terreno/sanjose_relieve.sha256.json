@@ -1,7 +1,7 @@
 {
   "fichero": "sanjose_relieve.json",
-  "sha256": "c864a9fd94ba712cda301b700db31b1ca6ce804a698d5b8dbd8b07816ea5d56f",
-  "bytes": 2140951,
+  "sha256": "4baf919c9c7d18964993279fa017c52e0ccf81c6429d8e5f8d4621e85db05aae",
+  "bytes": 2141115,
   "productor": "relieve_de_levantamiento.mjs v1",
   "tipo": "empalme",
   "generado": "2026-09-23",
@@ -14,5 +14,14 @@
   "nn": 496,
   "eje_m": 1.2,
   "eje_medido": false,
+  "calidad": {
+    "validado": true,
+    "metodo": "contra las cotas as-built medidas, punto a punto",
+    "n_cotas": 9156,
+    "p50_m": 0.074,
+    "p95_m": 0.227,
+    "max_m": 1.562,
+    "fuera_de_malla": 0
+  },
   "_que_es": "Manifiesto del terreno de esta planta. Viaja con el preset del proyecto; quien consuma el fichero comprueba este sha256 antes de usarlo. El sha se calcula sobre el TEXTO del JSON, byte a byte."
 }

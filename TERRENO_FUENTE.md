@@ -166,6 +166,97 @@ techo del error ES el escalón del propio dato entre filas vecinas.
 > cruzadas**, pero la avería es la misma: un agregado sobre una variable con
 > estructura fuerte. Si alguien necesita un solo número, que sea **por banda de
 > vano y con su n**, nunca uno solo.
+>
+> ### ⚠ Y NINGÚN ENLACE REAL DE LA CARTERA LLEGA A 800 m
+>
+> La banda de 800–1.600 m, donde el relieve pega más fuerte, **no existe en la
+> instalación**. Medido sobre los presets de las diez plantas
+> (`tools/vanos_muestreados_vs_reales.mjs`): el enlace más largo de toda la
+> cartera son **447 m** (San José), y sólo **7 de 6.036** pasan de 400 m.
+>
+> Esta tabla sale de **vanos muestreados** —parejas de TCU al azar— y describe
+> el TERRENO: «si hubiera un enlace de 1.200 m aquí, cuánto relieve tendría».
+> El antes/después describe la INSTALACIÓN. Los dos números son correctos y hay
+> que publicar los dos: dar sólo el primero exagera, y dar sólo el segundo deja
+> creer que el terreno no importa — hasta el día que alguien alargue un vano.
+>
+> *(Y hay un segundo motivo por el que las dos cifras no se carean directamente:
+> `relieve_plantas.mjs` pone antena de TCU en los DOS extremos porque es una
+> sonda del terreno entre seguidores, mientras el enlace real va contra una NCU
+> con la antena a 3,15 m. Medido: 7,847 dB con TCU a los dos lados frente a
+> 5,907 con TCU→NCU. La antena de la NCU se come 1,94 dB ella sola.)*
+
+---
+
+## ⚠ Lo que de verdad cazó el defecto del picómetro, y no fue el banco
+
+Merece su sitio aquí, pegado al apartado de arriba, porque es la misma familia
+de error: **un número que existe y nadie lee.**
+
+`recortaPerfil` comparaba `largo < D` a secas y rechazaba **568 de 6.036
+enlaces reales (9,4 %)** por un déficit de **2,13e-13 m** — dos décimas de
+picómetro. Esos enlaces salían con motivo `relieve_perfil_no_cubre_el_vano`, o
+sea **sin término de relieve, con el terreno delante**, y llevaban así desde
+que el terreno entró en la app.
+
+**Los 17 bancos estaban verdes. Las 43 mutaciones, rojas. La paridad, verde.**
+Nada de eso lo vio, y no por estar mal hechos: ningún banco tenía un caso donde
+el perfil llegara al vano *salvo por un último bit*, porque a nadie se le
+ocurre escribir ese caso a mano.
+
+**Lo que lo cazó fue otra cosa**: poner una puerta nueva —el umbral de vano
+corto— y **ver que NO disparaba donde tenía que disparar**. Benante tenía 146
+enlaces por debajo de 100 m y la puerta sólo saltaba en 139. Ir a ver por qué
+faltaban 7 fue lo que destapó el picómetro.
+
+O sea: **el contraste entre lo que digo que hace el código y lo que hace sobre
+datos reales**. No un banco más, sino correr la cosa contra la cartera entera y
+mirar si los números cuadran con lo que uno acaba de afirmar.
+
+De ahí salen las dos cosas que este repo se lleva:
+
+1. **El censo de motivos** (`RadioZigbee.censoMotivos`), publicado siempre en
+   los informes y en la leyenda de la app, con porcentaje y denominador. Un
+   «9,4 % no cubre el vano» al pie del informe de #87 habría saltado a la vista.
+   `tests/test_censo_motivos.js` exige que **salga en la salida**, corriendo el
+   útil de verdad y leyendo su stdout — un contador correcto que nadie imprime
+   no habría cazado nada.
+2. **La regla de las comparaciones** (`tools/auditoria_comparaciones.mjs`): una
+   comparación de flotantes necesita tolerancia **relativa** cuando decide si un
+   dato existe **y** sus dos lados vienen de rutas de cálculo distintas. Si
+   vienen del mismo cálculo, el bit coincide y la tolerancia sobra. Y la
+   tolerancia se prueba a **1 m, 1 mm y 1 µm**: una que no distinga esas tres
+   de 1e-13 no es una tolerancia, es un apagón.
+
+### El mismo método volvió a cazar, y esta vez en la propia CI
+
+Mirando **cuánto tardaba cada paso** de la CI de este repo: cuatro cerraban en
+menos de un segundo. Los cuatro imprimían *«No se ha medido nada. Esto no es un
+verde»* y **salían con 0**, así que en la página de checks se veían exactamente
+igual que los que sí medían. Entre ellos:
+
+| paso | lo que de verdad hace, cuando puede |
+|---|---|
+| `careo_terreno_3d.mjs` | **200.000 muestras bit a bit** contra el `relAt` del 3D |
+| `careo_equipos.mjs` | **17 comprobaciones** de contrato de cotas entre los dos repos |
+
+Dos puertas de verdad que **nunca habían corrido aquí** — y la segunda con un
+nombre de paso («las cotas de equipo copiadas, y sus citas») que ni siquiera lo
+decía. La causa era simple: los cuatro necesitan el repo hermano al lado y la
+CI no lo clonaba. **El hermano es público**: `--depth 1` trae 78 MB en 2 s.
+
+Lo que se lleva de aquí, y es la misma familia que el `rc=2` del banco de
+configuración de cobertura (#738): **el texto de un paso no es su resultado.**
+El agregador lee el código de salida. Un paso que dice «esto no es un verde» y
+sale con 0 **es** un verde. Ahora los cuatro salen con **rc = 2** y un censo
+final publica los tres estados por separado —MIDE / NO COMPROBADO / ROJO— en el
+resumen de la corrida y como anotación junto al tick.
+
+Probado por los cuatro caminos, que es lo único que lo convierte en puerta:
+con hermano los cuatro miden; sin hermano salen los cuatro NO COMPROBADO; con
+una cota del hermano movida el careo de equipos sale ROJO; y con `relAt`
+sesgado **1 mm**, el careo 3D pasa de 0 discrepancias a **57.919**, con
+|Δ| = 1 mm exacto.
 
 **Y esto es lo que más importa de todo el documento: el relieve crece con la
 longitud del vano, y mucho.** Con saltos a vecina —12 m— sale 0 en más de la

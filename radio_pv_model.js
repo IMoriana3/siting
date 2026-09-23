@@ -651,7 +651,32 @@
   function recortaPerfil(perfil, D) {
     if (!perfil || perfil.length < 2 || !(D > 0)) return null;
     var d0 = perfil[0][0], n = perfil.length;
-    if (perfil[n - 1][0] - d0 < D) return null;        // el perfil no llega al final del vano
+    /* ═══ EL PERFIL LLEGA AL FINAL, CON TOLERANCIA RELATIVA ══════════════════
+     *
+     * Esta comparación era `< D` a secas, y eso RECHAZABA 568 de 6.036 enlaces
+     * REALES de la cartera —el 9,4 %, incluidos 65 de Ayora y 275 de San José—
+     * diciendo «el perfil no cubre el vano». Era falso: el déficit peor de toda
+     * la cartera son 2,13e-13 m. Dos décimas de PICÓMETRO.
+     *
+     * De dónde sale: `perfilEntre` construye el perfil con `nSeg` pasos de
+     * `D/nSeg`, y sumar `nSeg` veces un flotante no da D exacto. El preset
+     * calcula su D con `Math.hypot` y el perfil acumula: los dos números
+     * difieren en el último bit y el perfil sale "corto".
+     *
+     * La consecuencia no era un aviso: era que esos enlaces se quedaban SIN
+     * TÉRMINO DE RELIEVE, con motivo `relieve_perfil_no_cubre_el_vano`, y eso
+     * se lee como «nadie ha mirado el terreno» cuando el terreno estaba ahí.
+     * Llevaba así desde que el terreno entró en la app.
+     *
+     * LA TOLERANCIA NO AFLOJA NADA. 1e-9 relativo son 0,45 nm en el vano más
+     * largo de la cartera (447 m) y mil millones de veces más que el defecto
+     * observado. Un perfil que de verdad no cubre el vano se queda corto en
+     * METROS —le falta un tramo—, no en nanómetros, así que sigue cayendo.
+     *
+     * Y `altura(s)` ya está preparada: pasado el último punto devuelve su cota,
+     * no extrapola. Así que el punto final del recorte sale bien igualmente. */
+    var largo = perfil[n - 1][0] - d0;
+    if (largo < D && (D - largo) > 1e-9 * D) return null;
     function altura(s) {
       for (var i = 1; i < n; i++) {
         var a = perfil[i - 1][0] - d0, b = perfil[i][0] - d0;
@@ -662,10 +687,26 @@
       }
       return perfil[n - 1][1];
     }
+    /* DOS PUNTOS A 1e-13 SON UN PUNTO, y hay que decirlo aquí.
+     *
+     * Con la tolerancia de arriba, un perfil que acaba en `D − 1e-13` pasa —y
+     * debe pasar—. Pero entonces su último punto entra como INTERIOR (s < D) y
+     * encima se añade el de `D`: quedan dos cantos separados 1e-13 m, y `nu()`
+     * divide por `d2 = 1e-13`.
+     *
+     * MEDIDO antes de tocar nada: el daño real es 1,07e-14 dB, porque en el
+     * extremo el rayo va a la altura de la antena y ésta está sobre el suelo,
+     * así que ν sale muy negativo y no cobra. O sea que hoy NO rompe nada.
+     *
+     * Pero eso es una cancelación afortunada, no una garantía: depende de que
+     * la antena esté por encima de su suelo en ese punto. Se quita el caso en
+     * vez de confiar en él — con el MISMO umbral relativo que decide si el
+     * perfil cubre el vano, para que no haya dos criterios distintos de «esto
+     * es el mismo punto» en la misma función. */
     var out = [[0, altura(0)]];
     for (var j = 0; j < n; j++) {
       var s = perfil[j][0] - d0;
-      if (s > 0 && s < D) out.push([s, perfil[j][1]]);
+      if (s > 0 && s < D && (D - s) > 1e-9 * D) out.push([s, perfil[j][1]]);
     }
     out.push([D, altura(D)]);
     return out;

@@ -165,6 +165,41 @@
         relieve = relieveDet.db;
         htE = relieveDet.htE;
         hrE = relieveDet.hrE;
+
+        /* ═══ EL UMBRAL DE VANO CORTO DE UN TERRENO SIN RESOLUCION ═══════════
+         *
+         * Con terreno de SOLO DEM, por debajo de cierto vano el relieve que
+         * sale no es impreciso: es INVENTADO. Medido comparando el terreno
+         * empalmado -verdad de campo- contra el mismo sitio con solo DEM,
+         * sobre 400 vanos por banda:
+         *
+         *   vano        relieve VERDADERO p95    el que da el DEM solo p95
+         *   30-50 m           0,00 dB                    9,89 dB
+         *   50-75 m           2,54                      11,10
+         *   75-100 m          1,21                      13,14
+         *
+         * O sea que a 30-50 m el relieve de verdad es CERO EXACTO y el DEM
+         * cobra hasta 9,89 dB. Eso no es ruido alrededor de un valor: es un
+         * termino entero que no existe, pintandose en el mapa.
+         *
+         * Asi que quien carga el terreno declara `vanoMinUtil` -del propio
+         * fichero, `calidad.vano_min_util_m`- y por debajo el relieve va a 0
+         * CON MOTIVO. Cero y no `null`: `null` es «no se ha mirado», y aqui se
+         * ha mirado y la respuesta es que no hay termino.
+         *
+         * Y LAS ALTURAS SE QUEDAN, que es lo que hace esto correcto y no un
+         * apagon. Poner el relieve a cero NO es ignorar el terreno: `htE`/`hrE`
+         * siguen saliendo de la tierra lisa del perfil y alimentan los dos
+         * rayos. Esa parte SI es fiable a vano corto, porque el error del DEM
+         * esta correlado en 80-117 m -medido con el semivariograma- y un vano
+         * por debajo de eso cae DENTRO de la longitud de correlacion: los dos
+         * extremos se desplazan casi lo mismo y el desplazamiento comun no
+         * mueve el balance. Lo que no sobrevive es la DIFERENCIA punto a punto
+         * a lo largo del perfil, que es justo de lo que vive la difraccion. */
+        if (enlace.vanoMinUtil > 0 && D < enlace.vanoMinUtil) {
+          relieve = 0;
+          motivos.push("relieve_dem_sin_resolucion_a_este_vano");
+        }
       }
     }
 
@@ -245,10 +280,65 @@
     return p.margenDb >= (umbralDb == null ? 0 : umbralDb);
   }
 
+  /* ═══ EL CENSO DE MOTIVOS ══════════════════════════════════════════════════
+   *
+   * ESTO EXISTE POR UN DEFECTO QUE ESTUVO UN MES A LA VISTA SIN VERSE.
+   *
+   * `recortaPerfil` rechazaba 568 de 6.036 enlaces —el 9,4 %— por un déficit de
+   * 2,13e-13 m, y esos enlaces salían con el motivo
+   * `relieve_perfil_no_cubre_el_vano`, o sea SIN término de relieve, con el
+   * terreno delante. El motivo estaba ahí, en cada enlace, desde el primer día.
+   * Lo que NO había era nadie que los contara.
+   *
+   * Un 9,4 % en «no cubre el vano» impreso al pie del informe de #87 habría
+   * saltado a la vista. Un motivo por enlace que nadie agrega es un dato que
+   * existe y no se lee.
+   *
+   * Así que esto cuenta, y quien publique un informe o pinte un mapa lo
+   * publica. Devuelve `{ n, motivos: {clave: cuenta}, conMargen, sinMargen }`.
+   *
+   * Y SE DEVUELVE TAMBIÉN `n`, no sólo el mapa: sin el total, «312 sin perfil»
+   * no dice si es de 400 enlaces o de 40.000. Un recuento sin denominador es
+   * la misma media que este repo lleva toda la fase quitando. */
+  function censoMotivos(presupuestos) {
+    var out = { n: 0, motivos: {}, conMargen: 0, sinMargen: 0 };
+    if (!presupuestos || !presupuestos.length) return out;
+    for (var i = 0; i < presupuestos.length; i++) {
+      var p = presupuestos[i];
+      if (!p) continue;
+      out.n++;
+      if (p.margenDb == null) out.sinMargen++; else out.conMargen++;
+      var ms = p.motivos || [];
+      for (var j = 0; j < ms.length; j++) out.motivos[ms[j]] = (out.motivos[ms[j]] || 0) + 1;
+    }
+    return out;
+  }
+
+  /* El censo en una línea, ordenado de más a menos y CON PORCENTAJE. El
+     porcentaje es lo que convierte «568» en «9,4 %», que es el número que
+     habría hecho saltar a alguien. */
+  function censoTexto(censo, soloPrefijo) {
+    if (!censo || !censo.n) return "sin enlaces";
+    var pares = [];
+    for (var k in censo.motivos) {
+      if (!Object.prototype.hasOwnProperty.call(censo.motivos, k)) continue;
+      if (soloPrefijo && k.indexOf(soloPrefijo) !== 0) continue;
+      pares.push([k, censo.motivos[k]]);
+    }
+    if (!pares.length) return "ningun motivo (de " + censo.n + " enlaces)";
+    pares.sort(function (a, b) { return b[1] - a[1]; });
+    var t = [];
+    for (var i = 0; i < pares.length; i++) {
+      t.push(pares[i][0] + " " + pares[i][1] + " (" + (100 * pares[i][1] / censo.n).toFixed(1) + " %)");
+    }
+    return t.join(" · ") + "   [de " + censo.n + " enlaces]";
+  }
+
   var RadioZigbee = {
     TEORICO: TEORICO, CALIBRADO: CALIBRADO,
     correcciones: correcciones, cuenta: cuenta, presupuesto: presupuesto,
-    viable: viable, erf: erf, phi: phi
+    viable: viable, erf: erf, phi: phi,
+    censoMotivos: censoMotivos, censoTexto: censoTexto
   };
   raiz.RadioZigbee = RadioZigbee;
   if (typeof module !== "undefined" && module.exports) module.exports = RadioZigbee;

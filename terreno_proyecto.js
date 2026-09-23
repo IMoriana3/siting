@@ -217,16 +217,98 @@
     }
     var m = cargado.man;
     var TIPOS = { empalme: "DEM + levantamiento", levantamiento: "levantamiento", dem: "DEM global", curvas: "curvas de nivel" };
+    var c = m.calidad || null;
+    /* LA CALIDAD NO ES UN ADORNO, Y VA EN EL TEXTO CORTO.
+       Un terreno empalmado valida a 0,030 m y uno de solo DEM a 0,78–1,20:
+       ×17 a ×28. Pintados igual, quien mira el mapa no puede saber cuál está
+       viendo — y la diferencia decide si el relieve sirve para colocar una NCU
+       o sólo para saber que hay una loma. Si el fichero no dice nada de
+       calidad, se dice ESO, que tampoco es lo mismo que estar validado. */
+    var val = c ? (c.validado === true) : null;
+    var marca = val === true ? "validado" : (val === false ? "⚠ SIN VALIDAR" : "⚠ calidad no declarada");
     return {
       ok: true,
-      texto: (m.planta || "?") + " · " + (TIPOS[m.tipo] || m.tipo || "?"),
+      texto: (m.planta || "?") + " · " + (TIPOS[m.tipo] || m.tipo || "?") + " · " + marca,
       detalle: (m.productor || "productor desconocido") + " · " + (m.generado || "sin fecha") +
                " · malla " + m.nx + "×" + m.nn + " a " + m.paso + " m" +
-               " · eje " + (m.eje_m != null ? m.eje_m.toFixed(2) + " m" : "?") +
-               (m.eje_medido === false ? " DECLARADO" : "") +
+               (c && c.px_tesela_m ? " · píxel " + c.px_tesela_m + " m" : "") +
+               (m.eje_m != null ? " · eje " + m.eje_m.toFixed(2) + " m"
+                                + (m.eje_medido === false ? " DECLARADO" : "") : "") +
                (cargado.shaVerificado ? " · sha ✓" : " · sha NO verificable aquí"),
+      validado: val,
+      /* EL AVISO, que es lo que de verdad hay que leer antes de fiarse. */
+      aviso: val === true
+        ? (c.p50_m != null ? "validado contra " + (c.n_cotas || "?") + " cotas medidas, |err| p50 "
+                           + c.p50_m.toFixed(3) + " m" : "validado")
+        : (c && c.motivo ? c.motivo : "este terreno no se ha validado contra cotas medidas"),
       tipo: m.tipo, sha: m.sha256, shaVerificado: cargado.shaVerificado
     };
+  }
+
+  /* ═══ EL ± DEL RELIEVE, PARA PONERLO AL LADO DEL VALOR ═══════════════════
+   *
+   * Un relieve de 8 dB con ±1 y otro con ±13 no se presentan igual, y hasta
+   * ahora la pantalla no tenía forma de distinguirlos. Esto devuelve, para un
+   * vano de D metros, el ± que lleva el terreno cargado.
+   *
+   * Sale de `calidad.z_db.p90_db`, que el productor escribe en el fichero: el
+   * p90 de |relieve con terreno empalmado − relieve con solo DEM|, medido
+   * sobre 400 vanos por banda en Ayora y San José. Se coge el PEOR de las
+   * plantas medidas, no el más cómodo.
+   *
+   * Devuelve null cuando el fichero no lo trae —y eso NO es «± cero»: es «no
+   * se sabe», y quien lo pinte tiene que decir eso y no un cero tranquilizador.
+   */
+  /* EL VANO POR DEBAJO DEL CUAL ESTE TERRENO NO TIENE RESOLUCION.
+   *
+   * Lo declara el productor en `calidad.vano_min_util_m`, y el motor lo usa
+   * para poner el relieve a 0 CON MOTIVO en vez de cobrar un termino que no
+   * existe. Medido: a 30-50 m el relieve verdadero es CERO EXACTO y el terreno
+   * de solo DEM llega a dar 9,89 dB.
+   *
+   * Devuelve 0 cuando el fichero no lo declara —el terreno empalmado no lo
+   * necesita— y eso apaga la puerta, que es lo correcto: un terreno validado
+   * SI tiene resolucion a vano corto. */
+  function vanoMinUtil(cargado) {
+    if (!cargado || !cargado.ok) return 0;
+    var c = cargado.man && cargado.man.calidad;
+    var v = c && c.vano_min_util_m;
+    return (typeof v === "number" && v > 0) ? v : 0;
+  }
+
+  function incertidumbreDb(cargado, D) {
+    if (!cargado || !cargado.ok || !(D > 0)) return null;
+    var c = cargado.man && cargado.man.calidad;
+    var z = c && c.z_db && c.z_db.p90_db;
+    if (!z) return null;
+    var mejorClave = null, mejorHi = Infinity;
+    for (var k in z) {
+      if (!Object.prototype.hasOwnProperty.call(z, k)) continue;
+      var p = k.split("-");
+      var lo = parseFloat(p[0]), hi = parseFloat(p[1]);
+      if (!(lo >= 0) || !(hi > lo)) continue;
+      if (D >= lo && D < hi) { mejorClave = k; mejorHi = hi; break; }
+      /* Por encima de la última banda se usa la última: extrapolar a cero
+         sería regalar certidumbre justo donde menos la hay. */
+      if (D >= hi && hi < mejorHi) { /* no hace nada: se resuelve abajo */ }
+    }
+    if (mejorClave === null) {
+      var ultLo = -Infinity;
+      for (var k2 in z) {
+        if (!Object.prototype.hasOwnProperty.call(z, k2)) continue;
+        var lo2 = parseFloat(k2.split("-")[0]);
+        if (lo2 > ultLo) { ultLo = lo2; mejorClave = k2; }
+      }
+      if (mejorClave === null) return null;
+    }
+    var v = z[mejorClave];
+    if (!v || !v.length) return null;
+    var peor = v[0];
+    for (var i = 1; i < v.length; i++) if (v[i] > peor) peor = v[i];
+    return { z90: peor, banda: mejorClave,
+             de: (c.z_db.medido_en || []).join("+") || "?",
+             extrapolado: !(D >= parseFloat(mejorClave.split("-")[0])
+                         && D < parseFloat(mejorClave.split("-")[1])) };
   }
 
   /* Para poder MEDIR el desfase residual entre los dos sistemas en vez de
@@ -252,6 +334,8 @@
     carga: carga,
     perfilDeEnlace: perfilDeEnlace,
     rotulo: rotulo,
+    incertidumbreDb: incertidumbreDb,
+    vanoMinUtil: vanoMinUtil,
     desfase: desfase,
     residuoAlinear: residuoAlinear,
     _cache: cache,
