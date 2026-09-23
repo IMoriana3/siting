@@ -73,6 +73,18 @@ jobs:
       - name: A4 · el suelo bajo la placa, medido
         run: node tools/a4_suelo_bajo_placa.mjs
 
+      # A5, EL REPECHO LOCAL. Corre en CI por lo mismo que A4: su conclusion
+      # depende de dos cosas que pueden cambiar. Una, que Epstein-Peterson siga
+      # moviendose con el muestreo mucho mas que Bullington -si dejara de
+      # hacerlo, el limite declarado habria que revisarlo-. Y dos, la guardia
+      # que exige que su `unico` reproduzca `relieveDeltaDb` EXACTAMENTE en los
+      # 3.040 enlaces: el dia que alguien cambie como el motor construye
+      # `real`/`liso`, este util deja de hablar del motor y se para con rc = 2
+      # en vez de publicar numeros que ya no son de nadie. Probada en rojo:
+      # separando la referencia un 2 % señala 498 enlaces y sale con 2.
+      - name: A5 · el repecho local y la prueba de densidad
+        run: node tools/a5_repecho_local.mjs
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
@@ -135,7 +147,8 @@ jobs:
           rojo node tests/test_radio_geom.js filoDesdeSuelo semiCuerda senoPorCoseno sinHueco siemprCruza \
                                              sinExigeF fresnelSinLambda filoSinCorte rupturaMitad bordeDeArriba \
                                              sinReflejado sueloSinPerdida anguloDirecto \
-                                             sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano
+                                             sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano \
+                                             cantoAlMasAlto puntoMudo
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco

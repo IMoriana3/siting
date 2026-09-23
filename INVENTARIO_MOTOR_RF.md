@@ -387,12 +387,66 @@ que A3 vino a quitar —21,66 dB medidos entonces— en pequeño.
 
 Hay dos obstáculos, sí. **Y cada uno está ya en su término.**
 
-**Lo que queda abierto, dicho como incertidumbre y no como tarea**: el relieve
-usa Bullington, un canto equivalente ÚNICO para todo el vano, así que un repecho
-local justo donde el rayo pasa bajo un panel se promedia en ese canto en vez de
-resolverse. Es una propiedad **conocida y elegida** en A3: Deygout lo
-resolvería, pero da 1,10 dB con 2 puntos de perfil y 22,74 con 80. Un relieve
-que depende de cómo se muestreó el DEM no es relieve.
+**Lo que quedaba abierto** era el repecho local: el relieve usa Bullington, un
+canto equivalente ÚNICO para todo el vano, así que un repecho justo donde el
+rayo pasa bajo un panel se promedia en ese canto en vez de resolverse.
+**Medido y cerrado en A5** — ver abajo.
+
+### A5, el repecho local: medido, y cerrado como límite declarado
+
+`tools/a5_repecho_local.mjs`, sobre los 3.040 enlaces de Ayora y San José, con
+el terreno real. Un repecho «cuenta» si cae dentro del radio de la primera zona
+de Fresnel de un cruce de fila por debajo del cual pasa el rayo, y a más de ese
+radio del canto de Bullington — o sea, uno que el canto único **se comió**.
+
+**1 · El efecto existe y no es despreciable.** 69 repechos en 62 de 3.040
+enlaces (**2,0 %**). Ahí, resolverlos aparte con Epstein–Peterson cambia el
+relieve **+5,0 dB de mediana, +16,4 en el p95**. No se cierra por pequeño.
+
+**2 · Pero no hay forma estable de cobrarlo.** Sobre el MISMO terreno,
+cambiando sólo el paso de muestreo y **sin decimar** (0,5× y 1× el paso del
+fichero):
+
+| | p95 | máx |
+|---|---:|---:|
+| canto único (Bullington) | 0,089 dB | 1,259 dB |
+| resuelto aparte (E–P) | **5,212 dB** | **21,367 dB** |
+
+E–P se mueve **más que el propio efecto que pretende corregir**, y por un
+factor 58 en p95.
+
+**3 · Y la causa no era la recursión.** Deygout se descartó por recursionar
+(1,10 dB con 2 puntos, 22,74 con 80). **Epstein–Peterson no recursiona y falla
+igual.** Luego el problema no es el esquema: es **enumerar máximos locales**. El
+número de máximos de una superficie continua muestreada crece con la densidad,
+así que cualquier método que los cuente hereda la dependencia. **La familia
+entera está cerrada, no sólo Deygout.**
+
+**4 · Delta-Bullington tampoco, y no por inestable.** P.1812 ec. (39) es
+`Ld50 = Lbulla + max(Ldsph − Lbulls, 0)`; la parte `Lbulla − Lbulls` (ec. 21) es
+justo lo que este motor ya hace, y lo único que añade —`Ldsph`, ec. (27)— **no
+recibe el perfil**: sólo distancia, frecuencia, radio terrestre efectivo,
+alturas de antena efectivas, fracción de mar y polarización. Es un suelo de
+trayecto, igual para todos los enlaces con la misma (D, f, htE, hrE). No sabe
+dónde está el repecho, luego no puede resolverlo. *(Verificado contra el código
+del SG3 de la UIT y contra pycraf: `itu.int` está bloqueado desde el contenedor,
+así que la cita es de implementaciones de la Recomendación y no del PDF.)*
+
+**Límite declarado del modelo**, escrito también en `radio_pv_model.js` junto al
+término:
+
+> Un repecho local cerca del punto donde el rayo pasa bajo un panel se promedia
+> en el canto equivalente. Afecta al **2,0 %** de los enlaces; ahí el relieve
+> puede quedarse **corto en el orden de 5 dB (p95 16)**. No se corrige porque
+> ningún método conocido da esa corrección de forma estable: sobre el mismo
+> terreno se mueve hasta **21 dB** sólo con cambiar el muestreo.
+
+**Y una corrección a lo que este repo afirmaba**: `radio_pv_model.js` decía que
+Bullington es «invariante al muestreo». **No lo es del todo** — se mueve hasta
+1,259 dB sin decimar y 4,169 decimando a 4×. Es invariante en *construcción* (no
+recursiona), pero sus dos rectas de máxima pendiente se leen sobre muestras, y
+una muestra puede no caer en la cima. Lo que decide sigue siendo la comparación
+con E–P, no el valor absoluto; pero «invariante» era demasiado.
 
 ### La huella: `hw` es código muerto en rf-fv
 
