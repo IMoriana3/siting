@@ -64,11 +64,26 @@ jobs:
       # llevaba dentro uno de los utiles que nadie corria. Sin hermano carga el
       # motor, comprueba que la API que usa sigue existiendo, dice que no ha
       # comprobado nada y sale con 0.
-      - name: el careo del terreno contra el 3D
+      # LAS ONCE PLANTAS, NO UNA. `careo_terreno_3d.mjs` corre por defecto contra
+      # `dicayagua_relieve.json` y punto, asi que «el motor y el 3D leen el
+      # mismo fichero bit a bit» estaba confirmado para UNA de once. Salio al
+      # preguntarse que afirmaciones se apoyaban en este paso, ahora que por fin
+      # corre. Medidas las once: 0 discrepancias y peor |delta| = 0 en todas, y
+      # cuestan 4 s enteras.
+      - name: el careo del terreno contra el 3D (las once plantas)
         run: |
           set +e
-          node tools/careo_terreno_3d.mjs
-          rc=$?
+          rc=0; n=0
+          for f in ../Cobertura-Zigbee/*_relieve.json; do
+            [ -e "$f" ] || continue
+            b=$(basename "$f")
+            case "$b" in *demsolo*) continue;; esac
+            node tools/careo_terreno_3d.mjs --relieve "$b" || rc=$?
+            n=$((n+1))
+          done
+          # cero plantas careadas NO es un verde: es el hermano ausente
+          if [ "$n" = "0" ]; then echo "SIN CAREO: ninguna planta careada"; rc=2; fi
+          echo "plantas careadas: $n"
           set -e
           echo "$rc|el careo del terreno contra el 3D" >> "$RUNNER_TEMP/censo_bancos"
           if [ "$rc" = "1" ]; then exit 1; fi
