@@ -59,6 +59,13 @@ jobs:
       - name: las cotas de equipo copiadas, y sus citas
         run: node tools/careo_equipos.mjs
 
+      # ESTE SI MIDE EN CI, porque el terreno viaja con el proyecto y vive en
+      # este repo: no depende del hermano. Dice cuantos enlaces cambian de
+      # banda en el mapa al meter el terreno, POR BANDA DE VANO — un agregado
+      # sobre todos daria el numero que uno quiera.
+      - name: antes/despues del terreno en la app
+        run: node tools/antes_despues_terreno.mjs
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
@@ -145,6 +152,18 @@ jobs:
           rojo node tests/test_terreno_planta.js sinBordeMalla huecoRelleno bilinealPlana \
                                                  sinExtremo pasoFijo motivoAlReves sueloCero \
                                                  validaFloja coberturaCiega antenaEnterrada
+
+          # EL TERRENO QUE VIAJA CON EL PROYECTO. `shaFingido` salio DORMIDA la
+          # primera vez: al arreglar la cache, la cadena `shaVerificado: sha
+          # !== null };` paso a aparecer DOS veces y `String.replace` cambio la
+          # de la cache, dejando el retorno intacto. Es el robo de ancla de
+          # siempre. Arreglado poniendo la decision en UN solo sitio.
+          # Y `shaPresetCiego` tambien: el caso de prueba lo cazaba el OTRO
+          # sha, asi que no discriminaba. Hizo falta un caso con manifiesto y
+          # fichero coherentes ENTRE SI pero distintos de lo que el preset
+          # espera — o sea, terreno regenerado sin actualizar el proyecto.
+          rojo node tests/test_terreno_proyecto.js shaFicheroCiego shaPresetCiego sinDesfase \
+                                                   origenAOjo rotuloMudo shaFingido sinTerrenoMudo
 
           rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
                                             detalleOtroTope sinOrdenT
