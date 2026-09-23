@@ -481,8 +481,19 @@
    * superficie continua cada nivel vuelve a cobrar el mismo relieve.
    *
    * Bullington construye UN filo equivalente -la interseccion de las dos rectas
-   * de maxima pendiente desde cada extremo- y no recursiona, asi que es
-   * invariante al muestreo.
+   * de maxima pendiente desde cada extremo- y no recursiona.
+   *
+   * ESTA LINEA DECIA «asi que es invariante al muestreo», Y ERA DEMASIADO.
+   * Medido en `tools/a5_repecho_local.mjs` sobre los 3.040 enlaces de Ayora y
+   * San Jose, con el MISMO terreno muestreado a 0,5x y 1x el paso del fichero,
+   * Bullington se mueve p95 0,089 dB y hasta 1,259 en el peor; decimando a 4x,
+   * hasta 4,169. Es invariante en CONSTRUCCION -no recursiona, cada canto se
+   * cobra una vez- pero sus dos rectas de maxima pendiente se leen sobre
+   * MUESTRAS, y una muestra puede no caer en la cima.
+   *
+   * Lo que decide sigue siendo la comparacion, no el valor absoluto:
+   * Epstein-Peterson sobre el mismo terreno se mueve p95 5,212 dB, un factor
+   * 58. Pero «invariante» no era cierto y el numero lo dice.
    *
    * Y DEYGOUT SE QUEDA PARA LOS PANELES, que es su sitio: alli los cantos son
    * POCOS, DISCRETOS y fisicamente reales -el borde de un modulo-, no muestras
@@ -498,7 +509,23 @@
    *
    * `cantos` son `{s, z}` con `z` ABSOLUTA, igual que `difraccionCantosDetalle`. */
   function bullingtonDb(D, zA, zB, cantos, fHz) {
-    if (!cantos || !cantos.length || !(D > 0)) return 0.0;
+    return bullingtonDetalle(D, zA, zB, cantos, fHz).db;
+  }
+
+  /* LO MISMO, DICIENDO ADEMAS DONDE CAYO EL FILO EQUIVALENTE.
+     `bullingtonDb` pasa a ser una envoltura de esto para que haya UNA sola
+     implementacion: la medida del repecho local necesita `sB` y `zBull`, y
+     recalcularlos en el util seria la copia que se separa del original —el
+     mismo error que ya mordio con `rfRows` y con las citas por numero de
+     linea—. Si esta construccion cambia, cambia para los dos a la vez.
+       modo   'sin_cantos' | 'ninguno_dentro' | 'directo' | 'obstruido'
+              | 'denominador_cero' | 'punto_fuera'
+       sB     distancia desde A al filo equivalente, o null
+       zBull  cota ABSOLUTA del filo equivalente, o null
+       v      el nu con el que se cobro, o null */
+  function bullingtonDetalle(D, zA, zB, cantos, fHz) {
+    var nada = { db: 0.0, modo: "sin_cantos", sB: null, zBull: null, v: null };
+    if (!cantos || !cantos.length || !(D > 0)) return nada;
     var sTim = -Infinity, sTr = (zB - zA) / D;
     for (var i = 0; i < cantos.length; i++) {
       var s = cantos[i].s;
@@ -506,8 +533,10 @@
       var p = (cantos[i].z - zA) / s;
       if (p > sTim) sTim = p;
     }
-    if (sTim === -Infinity) return 0.0;              // ningun canto dentro del vano
-    var v;
+    if (sTim === -Infinity) {                        // ningun canto dentro del vano
+      nada.modo = "ninguno_dentro"; return nada;
+    }
+    var v, modo, sB = null, zBull = null;
     if (sTim < sTr) {
       /* VISION DIRECTA: el filo equivalente es el canto de mayor nu. */
       var vMax = -Infinity;
@@ -515,9 +544,9 @@
         var sj = cantos[j].s;
         if (!(sj > 0) || !(sj < D)) continue;
         var w = nu(cantos[j].z - alturaRayo(zA, zB, D, sj), sj, D - sj, fHz);
-        if (w > vMax) vMax = w;
+        if (w > vMax) { vMax = w; sB = sj; zBull = cantos[j].z; }
       }
-      v = vMax;
+      v = vMax; modo = "directo";
     } else {
       /* OBSTRUIDO: el punto de Bullington es donde se cortan las dos rectas de
          maxima pendiente, una desde cada extremo. */
@@ -529,18 +558,27 @@
         if (q > sRim) sRim = q;
       }
       var den = sTim + sRim;
-      if (!(Math.abs(den) > 1e-12)) return 0.0;
-      var sB = (zB - zA + sRim * D) / den;
-      if (!(sB > 0) || !(sB < D)) return 0.0;
-      var zBull = zA + sTim * sB;                    // cota del filo equivalente
+      if (!(Math.abs(den) > 1e-12)) { nada.modo = "denominador_cero"; return nada; }
+      sB = (zB - zA + sRim * D) / den;
+      if (!(sB > 0) || !(sB < D)) {
+        return { db: 0.0, modo: "punto_fuera", sB: null, zBull: null, v: null };
+      }
+      zBull = zA + sTim * sB;                        // cota del filo equivalente
       v = nu(zBull - alturaRayo(zA, zB, D, sB), sB, D - sB, fHz);
+      modo = "obstruido";
     }
-    return v > -0.78 ? perdidaFiloDb(v) : 0.0;
+    return { db: v > -0.78 ? perdidaFiloDb(v) : 0.0,
+             modo: modo, sB: sB, zBull: zBull, v: v };
   }
 
   /* EL RELIEVE, POR DIFERENCIA CONTRA LA TIERRA LISA.
    *
-   *     relieveDb  =  Deygout(perfil REAL)  −  Deygout(la RECTA)
+   *     relieveDb  =  Bullington(perfil REAL)  −  Bullington(la RECTA)
+   *
+   * (ESTA LINEA DECIA «Deygout» HASTA HOY, y el codigo llamaba a Bullington
+   * desde que A3 lo cambio. Es la misma podredumbre que las citas por numero
+   * de linea: un comentario que describe lo que el codigo hacia ANTES miente
+   * con mas autoridad que no tener comentario, porque parece comprobado.)
    *
    * POR QUÉ POR DIFERENCIA Y NO FILTRANDO LO QUE ASOMA. La intención es la
    * misma -que sólo cuente el terreno que sobresale de la referencia- pero
@@ -568,7 +606,42 @@
    * calibrado para 0,25–3.000 km y los 52 enlaces medidos están todos por
    * debajo. El núcleo es el filo de cuchillo de P.526 que este motor ya usa,
    * que es óptica física sin calibrar por distancia, con su guarda de campo
-   * cercano aparte (`campoCercano`). */
+   * cercano aparte (`campoCercano`).
+   *
+   * ═══ LÍMITE DECLARADO DE ESTE TÉRMINO ════════════════════════════════════
+   *
+   * UN REPECHO LOCAL CERCA DEL PUNTO DONDE EL RAYO PASA BAJO UN PANEL SE
+   * PROMEDIA EN EL CANTO EQUIVALENTE, en vez de resolverse.
+   *
+   * Medido (`tools/a5_repecho_local.mjs`, Ayora y San José, 3.040 enlaces):
+   * pasa en 69 repechos repartidos en 62 enlaces, el 2,0 %. Ahí, resolverlos
+   * aparte con Epstein–Peterson cambiaría el relieve 5,0 dB de mediana y 16,4
+   * en el p95: el modelo se queda CORTO en ese orden.
+   *
+   * NO SE CORRIGE, y el motivo está medido, no opinado. Sobre el MISMO terreno,
+   * cambiando sólo el paso de muestreo y SIN decimar (0,5× y 1×), E–P se mueve
+   * p95 5,2 dB y hasta 21,4 — más que el propio efecto que pretende corregir.
+   *
+   * Y LA CAUSA NO ERA LA RECURSIÓN, que es lo que se creyó al descartar Deygout
+   * (1,10 dB con 2 puntos de perfil, 22,74 con 80). Epstein–Peterson NO
+   * recursiona y falla igual. El problema es ENUMERAR MÁXIMOS LOCALES: el
+   * número de máximos de una superficie continua muestreada crece con la
+   * densidad, así que cualquier método que los cuente hereda la dependencia.
+   * La familia entera está cerrada, no sólo Deygout.
+   *
+   * Delta-Bullington tampoco sirve para esto, y no por inestable: P.1812 ec.
+   * (39) es `Ld50 = Lbulla + max(Ldsph − Lbulls, 0)`, la parte `Lbulla − Lbulls`
+   * es justo lo que ya se hace aquí, y lo único que añade —`Ldsph`, ec. (27)—
+   * NO RECIBE EL PERFIL: sólo distancia, frecuencia, radio terrestre efectivo,
+   * alturas de antena efectivas, fracción de mar y polarización. Es un suelo de
+   * trayecto, igual para todos los enlaces con la misma (D, f, htE, hrE); no
+   * sabe dónde está el repecho, luego no puede resolverlo. (Verificado contra
+   * el código del SG3 de la UIT y contra pycraf, no de memoria: itu.int está
+   * bloqueado desde este contenedor, así que la cita es de implementaciones de
+   * la Recomendación y no del PDF, y eso se dice en vez de disimularlo.)
+   *
+   * Vale más un límite acotado y dicho que una corrección que depende de cómo
+   * se muestreó el terreno. */
   /* RECORTA EL PERFIL AL VANO, interpolando los extremos. Sin esto la recta se
      ajustaba sobre TODO el perfil recibido y no sobre el tramo que el enlace
      recorre: con un perfil de 210 m y un vano de 100, `hsr` salia siendo el
@@ -1005,6 +1078,7 @@
     tierraLisa: tierraLisa,
     difraccionCantosDetalle: difraccionCantosDetalle,
     bullingtonDb: bullingtonDb,
+    bullingtonDetalle: bullingtonDetalle,
     recortaPerfil: recortaPerfil,
     relieveDeltaDb: relieveDeltaDb,
     anclaAntena: anclaAntena,

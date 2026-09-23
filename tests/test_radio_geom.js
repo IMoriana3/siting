@@ -27,6 +27,18 @@ const cerca = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-9 : tol);
 // Cada una rompe UNA cosa de la geometría. Si el banco sigue verde con una
 // puesta, esa comprobación no comprobaba nada.
 const MUTACIONES = {
+  /* EL CANTO EQUIVALENTE DEJA DE SER EL CORTE DE LAS DOS RECTAS y pasa a ser
+     simplemente el canto MÁS ALTO. Es el error que parece igual y no lo es:
+     con dos cerros iguales, Bullington pone el canto ENTRE ellos y más arriba
+     que ninguno, porque el rayo tiene que salvar a los dos. */
+  cantoAlMasAlto: ['radio_pv_model.js', /sB = \(zB - zA \+ sRim \* D\) \/ den;/,
+    'sB = cantos.reduce(function (m, c) { return (c.s > 0 && c.s < D && (m === null || c.z > m.z)) ? c : m; }, null).s;'],
+  /* Y EL PUNTO DEJA DE PUBLICARSE. Sin ruido: `db` sigue bien, los bancos del
+     relieve siguen verdes, y lo único que se rompe es que
+     `a5_repecho_local.mjs` ya no puede saber si un repecho está lejos del
+     canto — o sea, su 2,0 % de enlaces afectados pasa a ser inventado. */
+  puntoMudo:      ['radio_pv_model.js', /modo: modo, sB: sB, zBull: zBull, v: v \};/,
+    'modo: modo, sB: null, zBull: null, v: v };'],
   // el error del modelo antiguo, reintroducido a propósito: filo desde el suelo
   filoDesdeSuelo: ['tests/referencia_banda_vertical.js', /zBot: eje - semi,/, 'zBot: sueloM == null ? 0 : sueloM,'],
   // media cuerda en vez de cuerda entera: la banda sale con la mitad de alto
@@ -286,6 +298,51 @@ check('un perfil MAS LARGO que el vano se recorta y da lo mismo que el justo',
       cerca(R.relieveDeltaDb(100, 3.475, 3.475, [[-10, 3], [200, 3]], FREL).htE, 0.475));
 check('y uno MAS CORTO que el vano no se inventa nada: null',
       R.relieveDeltaDb(100, 0.475, 0.475, [[0, 0], [50, 0]], FREL) === null);
+
+// ── EL PUNTO DE BULLINGTON, QUE AHORA SE PUBLICA ─────────────────────────────
+// `bullingtonDetalle` existe porque `tools/a5_repecho_local.mjs` necesita SABER
+// DÓNDE cayó el canto equivalente: un repecho sólo está «comido» si está lejos
+// de él. Si `sB` saliera mal, A5 clasificaría al revés y su número —el 2,0 % de
+// enlaces afectados— sería falso sin que nada chillara.
+//
+// Y `bullingtonDb` pasó a ser una envoltura de esto, así que aquí se comprueba
+// además que las dos dan LO MISMO: una segunda implementación es justo lo que
+// esta refactorización vino a quitar.
+console.log('\n· el punto de Bullington, y que la envoltura no se separa');
+{
+  const FB = 2.45e9;
+  // Un cerro ÚNICO y simétrico a mitad de vano: el canto equivalente tiene que
+  // caer en la cima, que es el único sitio donde puede estar.
+  const cerro = [];
+  for (let s = 10; s < 200; s += 10) cerro.push({ s: s, z: s === 100 ? 12 : 0 });
+  const d = R.bullingtonDetalle(200, 1, 1, cerro, FB);
+  check('con un cerro único, el canto cae en su cima', cerca(d.sB, 100, 1e-9), d.sB);
+  check('y con su cota', cerca(d.zBull, 12, 1e-9), d.zBull);
+  check('obstruido, porque el cerro tapa', d.modo === 'obstruido', d.modo);
+  check('bullingtonDb devuelve exactamente lo mismo',
+        R.bullingtonDb(200, 1, 1, cerro, FB) === d.db);
+
+  // DOS cerros: el canto equivalente NO es ninguno de los dos, es el corte de
+  // las dos rectas de máxima pendiente. Este caso es el que distingue a
+  // Bullington de «coge el más alto», y es el que se comería una mutación.
+  const dos = [{ s: 50, z: 10 }, { s: 150, z: 10 }];
+  const d2 = R.bullingtonDetalle(200, 1, 1, dos, FB);
+  check('con dos cerros iguales el canto va ENTRE ellos, no en uno',
+        d2.sB > 50 + 1e-6 && d2.sB < 150 - 1e-6, d2.sB);
+  check('y por encima de los dos', d2.zBull > 10, d2.zBull);
+
+  // Sin nada dentro del vano no se inventa un punto.
+  const v = R.bullingtonDetalle(200, 1, 1, [{ s: 0, z: 50 }, { s: 200, z: 50 }], FB);
+  check('ningún canto DENTRO del vano: 0 dB y sin punto',
+        v.db === 0 && v.sB === null && v.modo === 'ninguno_dentro', v.modo);
+
+  // Visión directa: el rayo pasa por encima de todo, y el canto es el de mayor
+  // ν, no el primero que se encuentre.
+  const bajo = [{ s: 40, z: -5 }, { s: 100, z: -1 }, { s: 160, z: -5 }];
+  const dv = R.bullingtonDetalle(200, 20, 20, bajo, FB);
+  check('en visión directa manda el de mayor ν', dv.modo === 'directo' && cerca(dv.sB, 100, 1e-9),
+        [dv.modo, dv.sB]);
+}
 
 // ── TECNOLOGÍA: paridad con el modelo congelado ──────────────────────────────
 // Las fórmulas compartidas NO se escriben de memoria: se citan de

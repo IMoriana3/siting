@@ -214,6 +214,20 @@ Tres lecturas, y las tres son del dato:
   centros de transformación—; a 800–1600 m se perdían 248 de 300. El DEM los
   llena, y por eso las dos últimas bandas existen aquí y antes no.
 
+> **Y estos números tienen un límite declarado, medido en A5.** El relieve usa
+> un canto equivalente ÚNICO (Bullington), así que un repecho local cerca del
+> punto donde el rayo pasa bajo un panel **se promedia en vez de resolverse**.
+> Pasa en el **2,0 %** de los enlaces (62 de 3.040), y ahí el relieve puede
+> quedarse **corto en el orden de 5 dB, p95 16**.
+>
+> No se corrige, y no por pereza: sobre el MISMO terreno, sólo cambiando el
+> paso de muestreo y sin decimar, cualquier método que enumere máximos locales
+> se mueve **hasta 21 dB** — más que el efecto que pretende corregir. Deygout
+> se descartó por recursionar; Epstein–Peterson **no recursiona y falla igual**,
+> así que la familia entera está cerrada. Detalle y cifras en
+> `INVENTARIO_MOTOR_RF.md` §«A5, el repecho local» y en
+> `tools/a5_repecho_local.mjs`, que corre en CI.
+
 ---
 
 ## 5. La avería que se disfraza del caso bueno
