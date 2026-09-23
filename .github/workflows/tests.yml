@@ -206,6 +206,21 @@ jobs:
       - name: ¿se corren todas las mutaciones que hay?
         run: node tools/alcance_mutaciones.mjs
 
+      # MEDIDO FRENTE A PREDICHO (fase 4 · punto 3). Corre en CI porque lleva
+      # TRES puertas sobre la unión de nodos —`desig`, la distancia del fichero
+      # y la posición nodo a nodo— y las tres cazaron el mismo defecto: la clave
+      # era (NCU, esclavo) y no el esclavo a secas. Con la clave mala el informe
+      # daba 91,8 % de aciertos, que suena perfectamente razonable.
+      - name: medido frente a predicho (El Burgo)
+        run: |
+          set +e
+          node tools/medido_vs_predicho.mjs
+          rc=$?
+          set -e
+          echo "$rc|medido frente a predicho" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::medido vs predicho no ha comparado nada (rc=$rc)"; fi
+
       - name: vanos muestreados contra enlaces reales
         run: node tools/vanos_muestreados_vs_reales.mjs > /dev/null
 
@@ -421,7 +436,7 @@ jobs:
           #    solo hacia la segunda — el mismo defecto que vino a arreglar.
           #    El numero se sube A MANO al anyadir un paso que alimente el
           #    censo, y si alguien se olvida, esto se para.
-          ESPERADOS=4
+          ESPERADOS=5
           censados=$(grep -c . "$f" || true)
           mide=0; nc=0; rojo=0
           {
