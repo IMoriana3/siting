@@ -60,7 +60,7 @@ declare -A PISO=(
   [test_siting_ncu.js]=153
   [test_terreno_planta.js]=62
   [test_terreno_proyecto.js]=45
-  [test_una_holgura.js]=13
+  [test_una_holgura.js]=14
   [test_utiles_rf.js]=23
   [test_vis_importadores.js]=42
   # el careo de los dos motores, que es Python

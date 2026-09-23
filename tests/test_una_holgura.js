@@ -155,6 +155,40 @@ console.log('· el motor no puede tener dos funciones que den el despeje de una 
 const js = lee('radio_pv_model.js'), py = lee('radio_pv_model.py');
 check('los dos motores están donde se espera', js !== null && py !== null);
 
+/* ══ EL ALCANCE, Y POR QUÉ SIN ÉL ESTA PUERTA NO VALÍA ═══════════════════════
+   Esta puerta afirma algo de TODO EL REPO —«el despeje de una fila lo da UNA
+   sola función»— y miraba DOS ficheros: `radio_pv_model.js` y su espejo de
+   Python. Metiendo una segunda función de despeje en `radio_zigbee.js` seguía
+   dando «TODO OK — 13 comprobaciones». Medido hoy, no razonado.
+
+   Y habría pasado la prueba clásica: romperle el dato a `cortaPanel` la ponía
+   roja, como debe. Lo que no decía es CUÁNTO había mirado.
+
+   Una puerta verde afirma dos cosas: «he mirado» y «está bien». Ahora barre
+   los seis ficheros de motor del repo, publica cuántos ha barrido de cuántos
+   hay, y si no llega al piso sale con rc = 2 en vez de con 0. */
+const CANDIDATOS = fs.readdirSync(RAIZ)
+  .filter(f => /\.js$/.test(f) && !/^(index|app)\./.test(f))
+  .sort();
+const PISO_ALCANCE = 6;   // MEDIDO el 2026-09-23; se BAJA a propósito y con motivo
+const despejesFuera = [];
+for (const f of CANDIDATOS) {
+  if (f === 'radio_pv_model.js') continue;
+  const src = lee(f);
+  if (src === null) continue;
+  for (const fn of troceaJs(src).filter(z => produceDespeje(z.cuerpo))) despejesFuera.push(f + ':' + fn.nombre);
+}
+console.log('\n· el alcance: ' + CANDIDATOS.length + ' ficheros de motor barridos'
+          + ' (piso ' + PISO_ALCANCE + ') + el espejo de Python');
+check('ninguna SEGUNDA función de despeje fuera del motor',
+      despejesFuera.length === 0, despejesFuera.join(', '));
+if (CANDIDATOS.length < PISO_ALCANCE) {
+  console.log('\nALCANCE INSUFICIENTE: ' + CANDIDATOS.length + ' ficheros barridos y el piso son '
+            + PISO_ALCANCE + '.');
+  console.log('Una puerta verde afirma dos cosas: «he mirado» y «está bien». Esto no ha mirado.');
+  process.exit(2);   // 2 = no comprobado, no 0
+}
+
 const jsProd = troceaJs(js).filter(f => produceDespeje(f.cuerpo)).map(f => f.nombre);
 const pyProd = troceaPy(py).filter(f => produceDespeje(f.cuerpo)).map(f => f.nombre);
 check('en el motor JS el despeje de una fila lo da UNA sola función',
