@@ -45,6 +45,26 @@ const yml = fs.readFileSync(WF, 'utf8');
 const dirTests = path.join(RAIZ, 'tests');
 const bancos = fs.existsSync(dirTests)
   ? fs.readdirSync(dirTests).filter(f => /^test_.*\.(js|py)$/.test(f)).sort() : [];
+
+/* ── EL DENOMINADOR, que es lo que le faltaba a este útil ─────────────────
+   Publicaba «140 de 140 mutaciones, en 13 bancos con tabla» y ese 100 % es
+   sobre los bancos QUE TIENEN TABLA. Si alguien borra un bloque MUTACIONES
+   entero, esto pasa a decir «100 %, en 12 bancos» y se queda verde: la tabla
+   desaparecida no la echa de menos nadie.
+   Es el mismo defecto que este fichero vino a cazar, en sí mismo — la novena
+   vez en el día que una comprobación mira un conjunto más pequeño del que
+   debe. Ahora lleva el denominador y un PISO de bancos con tabla.
+   El piso se MIDE y sólo se BAJA a propósito: hoy 13 de 19 bancos tienen
+   tabla, y los 6 sin ella no son un defecto —no todo banco necesita
+   mutaciones—, pero perder una SÍ lo es. */
+const PISO_BANCOS = 13;   // MEDIDO el 2026-09-23
+
+/* Y los de `tools/`, que este útil no barre. Hoy no hay ninguno con tabla;
+   si aparece, se dice en vez de ignorarlo. */
+const dirTools = path.join(RAIZ, 'tools');
+const conTablaFuera = (fs.existsSync(dirTools) ? fs.readdirSync(dirTools) : [])
+  .filter(f => /^test_.*\.(mjs|js|py)$/.test(f))
+  .filter(f => /(?:const )?MUTACIONES\s*[=:]\s*\{/.test(fs.readFileSync(path.join(dirTools, f), 'utf8')));
 if (!bancos.length) {
   console.log('SIN ALCANCE: no hay bancos en tests/.');
   console.log('No se ha mirado nada. Esto no es un verde.');
@@ -86,12 +106,28 @@ for (const b of bancos) {
   for (const k of sin) faltan.push(b + ' · ' + k);
 }
 console.log('');
-console.log('  ALCANCE: %d de %d mutaciones, en %d bancos con tabla', nCI, nMut, nBancos);
+console.log('  ALCANCE: %d de %d mutaciones · %d de %d bancos tienen tabla (piso %d)',
+  nCI, nMut, nBancos, bancos.length, PISO_BANCOS);
+if (conTablaFuera.length)
+  console.log('  ⚠ y %d banco(s) con tabla en tools/, que este útil NO barre: %s',
+    conTablaFuera.length, conTablaFuera.join(', '));
 console.log('');
 console.log('  Una puerta verde afirma dos cosas: «he mirado» y «está bien».');
 console.log('  El corredor de mutaciones comprobaba la segunda —exige rc = 1 exacto—');
 console.log('  y no la primera: corría las que alguien apuntó, no las que hay.');
 
+if (nBancos < PISO_BANCOS) {
+  console.log('\n  ⚠ BANCOS CON TABLA: %d, y el piso son %d.', nBancos, PISO_BANCOS);
+  console.log('  Un bloque MUTACIONES borrado no lo echa de menos nadie: el porcentaje');
+  console.log('  sigue saliendo 100 %, sobre un conjunto más pequeño. Si el recorte es a');
+  console.log('  propósito, baja el piso aquí y escribe por qué.');
+  process.exit(1);
+}
+if (conTablaFuera.length) {
+  console.log('\n  ⚠ hay tablas de mutaciones en tools/ y este útil sólo barre tests/.');
+  console.log('  Muévelas, o amplía el barrido. Mientras, NO están vigiladas.');
+  process.exit(1);
+}
 if (faltan.length) {
   console.log('\n  ⚠ DEFINIDAS Y NO CORRIDAS EN CI:');
   for (const f of faltan) console.log('      ' + f);
