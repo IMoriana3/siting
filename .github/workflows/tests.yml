@@ -191,8 +191,12 @@ jobs:
           # sha, asi que no discriminaba. Hizo falta un caso con manifiesto y
           # fichero coherentes ENTRE SI pero distintos de lo que el preset
           # espera — o sea, terreno regenerado sin actualizar el proyecto.
+          # `rotuloMudo` salio rc = 2 al anyadir la calidad al rotulo: el ancla
+          # se habia movido. Es JUSTO lo que la regla de «rc = 1 EXACTO» existe
+          # para cazar, y por eso no se relaja nunca a «distinto de cero».
           rojo node tests/test_terreno_proyecto.js shaFicheroCiego shaPresetCiego sinDesfase \
-                                                   origenAOjo rotuloMudo shaFingido sinTerrenoMudo
+                                                   origenAOjo rotuloMudo shaFingido sinTerrenoMudo \
+                                                   calidadMuda sinIncertidumbre incertidumbreComoda
 
           rojo node tests/test_rf_panel.js mapaAparte detalleOtraH firmaSinMotor sinParamsMiente \
                                             detalleOtroTope sinOrdenT

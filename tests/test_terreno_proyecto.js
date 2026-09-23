@@ -40,9 +40,25 @@ const MUTACIONES = {
   // un preset sin origen UTM deja de ser un problema y se sitúa a ojo
   origenAOjo:      ['terreno_proyecto.js', /if \(!preset \|\| preset\.ox == null \|\| preset\.oy == null\) return null;/,
                                            'if (!preset) return null; if (preset.ox == null) preset = { ox: 0, oy: 0 };'],
-  // el rótulo deja de distinguir de qué está hecho el terreno
-  rotuloMudo:      ['terreno_proyecto.js', /texto: \(m\.planta \|\| "\?"\) \+ " · " \+ \(TIPOS\[m\.tipo\] \|\| m\.tipo \|\| "\?"\),/,
-                                           'texto: "terreno",'],
+  /* el rótulo deja de distinguir de qué está hecho el terreno.
+     EL ANCLA SE MOVIÓ AL AÑADIR LA CALIDAD al texto y la mutación salió rc = 2
+     —«ya no casa»—, que es lo que la regla de «rc = 1 EXACTO» existe para
+     cazar. Se re-ancla en el trozo que de verdad distingue el tipo. */
+  rotuloMudo:      ['terreno_proyecto.js', /\(TIPOS\[m\.tipo\] \|\| m\.tipo \|\| "\?"\) \+ " · " \+ marca,/,
+                                           '"terreno",'],
+  /* LA CALIDAD DESAPARECE DEL RÓTULO: un terreno de solo DEM se presentaría
+     igual que uno validado contra levantamiento, que es de ×17 a ×28 peor. */
+  calidadMuda:     ['terreno_proyecto.js', /var marca = val === true \? "validado" : \(val === false \? "⚠ SIN VALIDAR" : "⚠ calidad no declarada"\);/,
+                                           'var marca = "validado";'],
+  /* EL ± DEL RELIEVE DEJA DE PUBLICARSE. Nada más se rompe: el mapa sigue
+     pintando igual y los bancos del relieve siguen verdes. Lo único que se
+     pierde es que un relieve de 8 dB con ±13 se enseñe como si fuera exacto. */
+  sinIncertidumbre:['terreno_proyecto.js', /if \(!z\) return null;/, 'if (!z) return null; return null;'],
+  /* Y SE COGE EL MEJOR DE LOS DOS EN VEZ DEL PEOR. Ayora da ±3,74 donde San
+     José da ±12,94: quedarse con el cómodo cuenta menos de un tercio del
+     error, y nadie lo notaría porque el número sigue saliendo. */
+  incertidumbreComoda: ['terreno_proyecto.js', /for \(var i = 1; i < v\.length; i\+\+\) if \(v\[i\] > peor\) peor = v\[i\];/,
+                                           'for (var i = 1; i < v.length; i++) if (v[i] < peor) peor = v[i];'],
   // «no se pudo verificar el sha» se presenta como verificado
   shaFingido:      ['terreno_proyecto.js', /var verificado = \(sha !== null\);/, 'var verificado = true;'],
   // la planta sin terreno deja de decirlo y se calla
@@ -285,6 +301,51 @@ const TABLA = { 'terreno/banco_relieve.sha256.json': JSON.stringify(MAN),
   check('y el rótulo lo distingue',
         /sha NO verificable/.test(ctxSin.TerrenoProyecto.rotulo(c8).detalle),
         ctxSin.TerrenoProyecto.rotulo(c8).detalle);
+
+  /* ══ 7 · LA CALIDAD Y EL ±, QUE ES LO QUE DECIDE SI EL RELIEVE SIRVE ═══
+     Un terreno empalmado valida a 0,030 m y uno de solo DEM a 0,78–1,20: de
+     ×17 a ×28. Si los dos se presentan igual, quien mira el mapa no puede
+     saber cuál tiene delante. */
+  console.log('\n── 7 · el rótulo de calidad y el ± del relieve ──');
+  const TPm = ctx0.TerrenoProyecto;
+  const rotCal = (cal) => TPm.rotulo({ ok: true, shaVerificado: true,
+                                    man: Object.assign({}, MAN, { calidad: cal }) });
+
+  const VALIDADO = { validado: true, metodo: 'contra cotas as-built',
+                     n_cotas: 3004, p50_m: 0.030, p95_m: 0.114 };
+  const Z_DB = { nota: 'medido en otras plantas', medido_en: ['ayora', 'sanjose'],
+                 p90_db: { '20-50': [0.00, 6.57], '100-200': [3.74, 12.94],
+                           '800-1600': [4.59, 12.87] } };
+  const SOLODEM = { validado: false, motivo: 'sin levantamiento', px_tesela_m: 7.2, z_db: Z_DB };
+
+  check('un terreno VALIDADO lo dice', /validado/.test(rotCal(VALIDADO).texto)
+        && !/SIN VALIDAR/.test(rotCal(VALIDADO).texto), rotCal(VALIDADO).texto);
+  check('y con su error medido al lado', /0\.030/.test(rotCal(VALIDADO).aviso), rotCal(VALIDADO).aviso);
+  check('uno de solo DEM sale SIN VALIDAR', /SIN VALIDAR/.test(rotCal(SOLODEM).texto), rotCal(SOLODEM).texto);
+  check('con el motivo, no en la consola', /sin levantamiento/.test(rotCal(SOLODEM).aviso), rotCal(SOLODEM).aviso);
+  check('validado true/false se distingue del «no lo dice»',
+        rotCal(VALIDADO).validado === true && rotCal(SOLODEM).validado === false);
+
+  /* EL TEST QUE DE VERDAD IMPORTA: un fichero SIN bloque de calidad no puede
+     presentarse como validado. Es el caso del terreno viejo, y el que se
+     colaría sin darse cuenta. */
+  const sinCal = rotCal(undefined);
+  check('sin bloque de calidad NO se presenta como validado',
+        !/^.*· validado$/.test(sinCal.texto) && /no declarada/.test(sinCal.texto), sinCal.texto);
+  check('y `validado` sale null, que no es false', sinCal.validado === null, sinCal.validado);
+
+  const car = { ok: true, shaVerificado: true, man: Object.assign({}, MAN, { calidad: SOLODEM }) };
+  const z150 = TPm.incertidumbreDb(car, 150);
+  check('el ± sale de la banda del vano', z150 && z150.banda === '100-200', z150);
+  check('y se coge el PEOR de las plantas medidas, no el cómodo',
+        z150 && Math.abs(z150.z90 - 12.94) < 1e-9, z150 && z150.z90);
+  const z40 = TPm.incertidumbreDb(car, 40);
+  check('otra banda, otro ±', z40 && Math.abs(z40.z90 - 6.57) < 1e-9, z40 && z40.z90);
+  check('por encima de la última banda NO se extrapola a cero',
+        (() => { const z = TPm.incertidumbreDb(car, 5000); return z && z.z90 > 0 && z.extrapolado === true; })(),
+        TPm.incertidumbreDb(car, 5000));
+  check('sin bloque z_db devuelve null, NO cero',
+        TPm.incertidumbreDb({ ok: true, man: Object.assign({}, MAN, { calidad: VALIDADO }) }, 150) === null);
 
   console.log('');
   if (MUTA) console.log(ko ? '### bien: la mutacion «' + MUTA + '» sale roja'
