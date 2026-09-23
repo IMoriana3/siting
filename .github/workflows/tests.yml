@@ -99,7 +99,15 @@ jobs:
       # vez de seguir diciendo que esta vigilada. Ademas comprueba que la
       # tolerancia sigue distinguiendo 1e-13 de 1 um: el dia que alguien la
       # afloje, esto lo dice.
-      - name: las comparaciones de coma flotante, catalogadas y medidas
+      #
+      # MIDE LOS DOS MOTORES Y CAREA SUS VEREDICTOS, no solo el de JS. La
+      # primera version solo miraba el JS y dio el trabajo por hecho mientras
+      # `recorta_perfil` de Python arrastraba el mismo defecto del picometro
+      # que se acababa de arreglar en JS. Si falta python3 sale rc = 1 con
+      # «la mitad de la auditoria no se ha hecho», NO verde: aqui python3 esta
+      # -este mismo job corre `test_paridad_radio.py`-, pero el dia que deje de
+      # estar tiene que enterarse alguien.
+      - name: las comparaciones de coma flotante, catalogadas y medidas (los dos motores)
         run: node tools/auditoria_comparaciones.mjs
 
       # EL CAREO DE VANOS MUESTREADOS CONTRA ENLACES REALES. Corre en CI porque

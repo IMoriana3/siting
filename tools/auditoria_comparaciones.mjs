@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { spawnSync as cpSync } from 'node:child_process';
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -168,6 +169,84 @@ console.log('  donde tiene que mirarse: aquí sólo se deja anotado que existe y
 console.log('  el mismo problema que el picómetro —no es un bit, es una decisión física');
 console.log('  con su número—.');
 
+/* ══ 5 · Y LOS MISMOS SITIOS EN EL MOTOR DE PYTHON ═════════════════════════
+   Esta seccion existe porque la primera version de esta auditoria NO estaba:
+   se catalogaron y midieron los nueve sitios del JS y se dio el trabajo por
+   hecho, con `recorta_perfil` de Python arrastrando el MISMO defecto del
+   picometro que se acababa de arreglar en JS. La paridad no lo vio porque
+   ningun caso suyo tenia un perfil corto por coma flotante.
+
+   O sea que la leccion no es «habia un defecto en Python»: es que auditar un
+   motor de dos NO es auditar el motor. Aqui se miden los dos, y ademas se
+   CAREAN los veredictos — que es lo unico que impide volver a arreglar un
+   lado y dejar el otro. */
+console.log('\n═══ 5 · LOS MISMOS SITIOS, EN EL MOTOR DE PYTHON ═══\n');
+{
+  const py = `
+import json, sys, importlib.util
+spec = importlib.util.spec_from_file_location("m", ${JSON.stringify(path.join(RAIZ, 'radio_pv_model.py'))})
+M = importlib.util.module_from_spec(spec); spec.loader.exec_module(M)
+o = {"recorte": {}, "hobs": {}, "regimen": {}, "sep": None}
+for etq, d in [("1 m",1.0),("1 mm",1e-3),("1 um",1e-6),("1e-13 m",1e-13)]:
+    o["recorte"][etq] = M.recorta_perfil([[0,0.0],[50,1.0],[100-d,2.0]], 100) is not None
+r = M.recorta_perfil([[0,0.0],[40,3.0],[100-1e-13,1.0]], 100)
+o["sep"] = (r[-1][0] - r[-2][0]) if r and len(r) >= 2 else None
+for cota in [0.0, 100.0, 739.23, 1605.3]:
+    p = [[200.0*i/20, cota] for i in range(21)]
+    L = M.tierra_lisa(p)
+    rel = M.relieve_delta_db(200, cota+0.505, cota+3.15, p, ${F})
+    o["hobs"][str(cota)] = [L["hobs"], (rel or {}).get("db")]
+for etq, n in [("1 m",1.0),("1 mm",1e-3),("1 um",1e-6),("1 nm",1e-9),("0,1 nm",1e-10)]:
+    o["regimen"][etq] = M.regimen(n, 0, 0, 1, 10)["tipo"]
+print(json.dumps(o))
+`;
+  const r = cpSync(process.execPath ? 'python3' : 'python3', ['-c', py], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    console.log('  ⚠ no se pudo correr el motor de Python: ' + (r.stderr || '').slice(0, 300));
+    console.log('  Esto NO es un aprobado: la mitad de la auditoria no se ha hecho.');
+    paradas++;
+  } else {
+    const P = JSON.parse(r.stdout.trim().split('\n').pop());
+
+    console.log('  recortaPerfil / recorta_perfil — el careo de los dos veredictos\n');
+    console.log('  déficit               JS        Python    ¿coinciden?   ¿es lo correcto?');
+    for (const [etq, d] of ESCALAS) {
+      const js = R.recortaPerfil([[0, 0], [50, 1], [100 - d, 2]], 100) !== null;
+      const pyv = P.recorte[etq.replace('µ', 'u')];
+      const debe = d <= 1e-7;
+      const igual = js === pyv, bien = igual && js === debe;
+      console.log('  ' + etq.padEnd(22) + (js ? 'sí' : 'NO').padEnd(10) + (pyv ? 'sí' : 'NO').padEnd(10)
+                + (igual ? 'sí' : '⚠ NO').padEnd(14) + (bien ? 'sí' : '⚠ NO'));
+      if (!bien) paradas++;
+    }
+    const sepOk = P.sep != null && P.sep > 1e-7;
+    console.log('\n  separación de los dos últimos puntos, en Python: '
+              + (P.sep == null ? 'null' : P.sep.toExponential(2) + ' m')
+              + '  ' + (sepOk ? '(no hay duplicado)' : '⚠ HAY DUPLICADO'));
+    if (!sepOk) paradas++;
+
+    console.log('\n  tierraLisa / tierra_lisa — hobs y el relieve del perfil plano\n');
+    console.log('  cota                  hobs (py)   relieve (py)   ¿cero exacto?');
+    for (const cota of [0, 100, 739.23, 1605.3]) {
+      const [h, db] = P.hobs[String(Number(cota).toFixed(0) === String(cota) ? cota + '.0' : cota)]
+                   || P.hobs[String(cota)] || [null, null];
+      const bien = h != null && !(h > 0) && db === 0;
+      console.log('  ' + String(cota).padEnd(22) + (h == null ? 'null' : h.toExponential(2)).padEnd(12)
+                + (db == null ? 'null' : db.toExponential(2)).padEnd(15) + (bien ? 'sí' : '⚠ NO'));
+      if (!bien) paradas++;
+    }
+
+    console.log('\n  regimen — el umbral absoluto de 1e-9, careado\n');
+    console.log('  vano                  JS            Python        ¿coinciden?');
+    for (const [etq, n] of [['1 m', 1], ['1 mm', 1e-3], ['1 µm', 1e-6], ['1 nm', 1e-9], ['0,1 nm', 1e-10]]) {
+      const js = R.regimen(n, 0, 0, 1, 10).tipo, pyv = P.regimen[etq.replace('µ', 'u')];
+      const igual = js === pyv;
+      console.log('  ' + etq.padEnd(22) + js.padEnd(14) + String(pyv).padEnd(14) + (igual ? 'sí' : '⚠ NO'));
+      if (!igual) paradas++;
+    }
+  }
+}
+
 console.log('\n═══ VEREDICTO ═══\n');
 if (paradas) {
   console.log('  ⚠ ' + paradas + ' comprobación(es) en rojo. Algo de arriba no se cumple.');
@@ -178,9 +257,16 @@ console.log('  La de clase ACUMULADO (hobs) da cero exacto hasta 1.605 m de cota
 console.log('  Las de MISMA RUTA, CONSTANTE FÍSICA e ÍNDICE no necesitan tolerancia, y se');
 console.log('  dice por qué en vez de dejarlas sin mirar.');
 console.log('');
-console.log('  LA REGLA QUE SALE DE AQUÍ, para la próxima:');
-console.log('    una comparación de flotantes necesita tolerancia RELATIVA cuando decide');
-console.log('    si un dato existe Y sus dos lados vienen de rutas de cálculo distintas.');
-console.log('    Si vienen del mismo cálculo, el bit coincide y la tolerancia sobra.');
-console.log('    Y la tolerancia se prueba a 1 m, 1 mm y 1 µm: una que no distinga esas');
-console.log('    tres de 1e-13 no es una tolerancia, es un apagón.');
+console.log('  LAS DOS REGLAS QUE SALEN DE AQUÍ, para la próxima:\n');
+console.log('    1 · una comparación de flotantes necesita tolerancia RELATIVA cuando');
+console.log('    decide si un dato existe Y sus dos lados vienen de rutas de cálculo');
+console.log('    distintas. Si vienen del mismo cálculo, el bit coincide y la tolerancia');
+console.log('    sobra. Y la tolerancia se prueba a 1 m, 1 mm y 1 µm: una que no distinga');
+console.log('    esas tres de 1e-13 no es una tolerancia, es un apagón.\n');
+console.log('    2 · y se audita EL MOTOR, no un motor. Esta misma auditoría, en su');
+console.log('    primera versión, catalogó y midió los nueve sitios del JS y dio el');
+console.log('    trabajo por cerrado mientras Python arrastraba el mismo defecto recién');
+console.log('    arreglado. La paridad no lo vio: ningún caso suyo tenía un perfil corto');
+console.log('    por coma flotante, así que los dos motores coincidían en todo lo que se');
+console.log('    les preguntaba. Donde hay dos implementaciones, el careo de VEREDICTOS');
+console.log('    —no de números— es lo que impide arreglar un lado y dejar el otro.');
