@@ -208,8 +208,28 @@ const FUERA_POS = { 'TCU_SUNNER_ID_108': 'posición discrepante entre layout y c
 }
 
 /* ── 5 · EVALUAR CON EL rfEnlace DE LA APP ──────────────────────────────── */
+/* ── WILSON AL 95 % ────────────────────────────────────────────────────
+   Un porcentaje sobre 48 casos sin su intervalo no distingue un modelo bueno
+   de uno mediocre: 1 de 48 es 2,1 % con un intervalo que va del 0,4 % al
+   10,9 %. Se publica SIEMPRE al lado, no cuando el resultado incomoda. */
+function wilson(k, n, z = 1.96) {
+  if (!n) return null;
+  const d = n + z * z, c = (k + z * z / 2) / d;
+  const h = (z / d) * Math.sqrt(k * (n - k) / n + z * z / 4);
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+const ic = (k, n) => { const w = wilson(k, n); return w ? '[' + (100 * w[0]).toFixed(1) + '–' + (100 * w[1]).toFixed(1) + ' %]' : ''; };
+
+/* MOTIVOS QUE SIGNIFICAN «A ESTE ENLACE LE FALTAN TÉRMINOS», no «el modelo se
+   equivoca». Un enlace que el modelo tapa por −0,32 dB llevando encima
+   «relieve no evaluado» y «vegetación no modelada» no es un fallo del modelo:
+   es un enlace al que le faltan dos términos, y uno de ellos —el relieve—
+   suele sumar despeje. Meterlo en «lo mata» sería cobrarle al modelo un
+   número que no ha calculado. */
+const FALTA_TERMINO = /relieve_no_evaluado|relieve_dem_sin_resolucion|relieve_perfil_no_cubre|vegetacion_no_modelada|parametros_no_cargados/;
+
 const rows = ctx.rfRows();
-const clases = { acierto: [], mata: [], noEval: [], sinNodo: [], excluido: [] };
+const clases = { acierto: [], mata: [], incompleto: [], noEval: [], sinNodo: [], excluido: [] };
 for (const par of pares) {
   const A = nodos.get(par.a), B = nodos.get(par.b);
   if (FUERA_POS[par.a] || FUERA_POS[par.b]) { clases.excluido.push(par); continue; }
@@ -218,7 +238,9 @@ for (const par of pares) {
   let pr; try { pr = ctx.rfEnlace(n, m, rows); } catch (e) { clases.noEval.push({ ...par, err: e.message }); continue; }
   const mg = pr && pr.margenDb;
   if (mg == null) clases.noEval.push({ ...par, motivos: pr && pr.motivos });
-  else if (mg >= 0) clases.acierto.push({ ...par, mg, D: pr.D });
+  else if (mg >= 0) clases.acierto.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
+  else if ((pr.motivos || []).some(x => FALTA_TERMINO.test(x)))
+    clases.incompleto.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
   else clases.mata.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
 }
 
@@ -240,9 +262,15 @@ console.log('    pares evaluados               ' + (N - clases.sinNodo.length - 
 
 console.log('  ═══ VEREDICTO ═══');
 const ev = N - clases.sinNodo.length - clases.excluido.length;
-console.log('    ACIERTO       ' + String(clases.acierto.length).padStart(4) + '  ' + pct(clases.acierto.length, ev).padEnd(8) + ' el modelo da viable un enlace que la planta usa');
-console.log('    LO MATA       ' + String(clases.mata.length).padStart(4) + '  ' + pct(clases.mata.length, ev).padEnd(8) + ' ← la clase que vale: el modelo tapa un enlace REAL');
-console.log('    NO EVALUADO   ' + String(clases.noEval.length).padStart(4) + '  ' + pct(clases.noEval.length, ev).padEnd(8) + ' el modelo no da veredicto');
+const fila = (et, arr, nota) => console.log('    ' + et.padEnd(14) + String(arr.length).padStart(4) + '  '
+  + pct(arr.length, ev).padEnd(8) + ic(arr.length, ev).padEnd(17) + nota);
+fila('ACIERTO', clases.acierto, 'el modelo da viable un enlace que la planta usa');
+fila('LO MATA', clases.mata, '← fallo del modelo: tapa un enlace REAL y con todos sus términos');
+fila('INCOMPLETO', clases.incompleto, 'lo tapa, pero le faltan términos — NO es un fallo del modelo');
+fila('NO EVALUADO', clases.noEval, 'el modelo no da veredicto');
+console.log('');
+console.log('    El intervalo es Wilson al 95 %. Con ' + ev + ' casos NO distingue un modelo');
+console.log('    bueno de uno mediocre, y por eso va siempre al lado del porcentaje.');
 if (clases.sinNodo.length) console.log('    sin nodo      ' + String(clases.sinNodo.length).padStart(4) + '           un extremo no cruza con el layout');
 
 if (clases.mata.length) {
@@ -254,7 +282,27 @@ if (clases.mata.length) {
   if (clases.mata.length > 12) console.log('    … y ' + (clases.mata.length - 12) + ' más');
 }
 
+if (clases.incompleto.length) {
+  console.log('\n  ═══ LOS INCOMPLETOS (tapados, pero sin todos sus términos) ═══');
+  console.log('    hijo → padre              D(m)   margen   qué le falta');
+  for (const x of clases.incompleto.sort((p, q) => p.mg - q.mg).slice(0, 12))
+    console.log('    ' + ((nodos.get(x.a).props.etiqueta || x.a) + ' → ' + (nodos.get(x.b).props.etiqueta || x.b)).padEnd(24)
+      + String(x.D.toFixed(0)).padStart(5) + '  ' + x.mg.toFixed(2).padStart(7) + '   '
+      + (x.motivos || []).filter(m => FALTA_TERMINO.test(m)).join(', '));
+}
+
 console.log('\n  ═══ LO QUE ESTO NO DICE ═══');
+console.log('');
+console.log('    SESGO DE SUPERVIVENCIA, y es lo más importante de esta pantalla.');
+console.log('    Los ' + N + ' enlaces son el ÁRBOL DE ENCAMINAMIENTO: de cada vecindario, el');
+console.log('    que la malla eligió POR SER EL MEJOR. Que el modelo acierte en los');
+console.log('    enlaces que la propia malla seleccionó por buenos es lo ESPERABLE');
+console.log('    aunque el modelo fuera flojo — no es una validación, es una');
+console.log('    comprobación de que no se rompe en el caso fácil.');
+console.log('    Eso, y no sólo el tamaño de la muestra, es por lo que hacen falta los');
+console.log('    ~950 pares observados: ahí están los enlaces MALOS, que es donde un');
+console.log('    modelo flojo se separa de uno bueno.');
+console.log('');
 console.log('    NO se publica «predicciones sin respaldo». El geojson dibuja un ÁRBOL');
 console.log('    —un padre por TCU— y los nodos declaran entre 6 y 30 padres distintos');
 console.log('    cada uno, unos 950 en total. Contar las predicciones que sobran de los');
