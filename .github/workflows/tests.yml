@@ -174,7 +174,17 @@ jobs:
           # `py_sin_hueco`, `py_borde_top`, `js_semi_cuerda` y `js_borde_top`
           # se han ido con las familias de banda: esas funciones ya no existen
           # en ningun motor, asi que sus mutaciones no tendrian que mutar.
+          # LAS TRES DE LA GEOMETRIA IMPOSIBLE. La paridad estuvo VERDE con once
+          # casos que llevaban la antena bajo tierra, porque los dos motores se
+          # equivocaban IGUAL. `py_sin_guarda`/`js_sin_guarda` tumban la guarda por
+          # un lado -y entonces la familia `relieve` ya discrepa-, y
+          # `js_guarda_todo` prueba el otro extremo: un «no» universal, que pasaria
+          # todas las comprobaciones de «no». El caso de los DOS motores rotos a la
+          # vez no lo puede producir una mutacion de un solo lado, y lo cubre la
+          # comprobacion de clases: probado rompiendo los dos, `relieve` sale OK y
+          # la de clases saca 22 cruces.
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+                                                   py_sin_guarda js_sin_guarda js_guarda_todo \
                                                    py_csqrt_rama \
                                                    js_tol_regimen js_fase_signo \
                                                    py_ancla_fija js_sin_lateral py_patron_iso \

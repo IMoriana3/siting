@@ -81,6 +81,22 @@ MUTACIONES = {
     # la rama de la raíz compleja pierde el signo, SOLO en Python. `eps` tiene
     # parte imaginaria negativa siempre (−60·λ·σ), así que esto actúa seguro
     "py_csqrt_rama":  ("py", r'if z\[1\] < 0:\n        im = -im', 'if False:\n        im = -im'),
+
+    # ── LA GEOMETRIA IMPOSIBLE, por los dos lados ───────────────────────────
+    # LAS DOS SON DEL MOTOR, NO DEL BANCO, y es deliberado: lo que hay que
+    # impedir es que la paridad vuelva a estar verde con las dos copias
+    # equivocadas igual. Si la guarda se cae en UN solo motor, la familia
+    # `relieve` ya discrepa; si se cayera en los dos a la vez —el caso que
+    # ninguna comparacion js-contra-py puede ver— lo caza la comprobacion de
+    # clases, que no pregunta a ningun motor.
+    # la guarda se cae SOLO en Python: los once casos enterrados vuelven a dar
+    # numero alli y None aqui
+    "py_sin_guarda":  ("py", r'if not \(ht_e > 0\) or not \(hr_e > 0\):', 'if False:'),
+    # y SOLO en JS
+    "js_sin_guarda":  ("js", r'if \(!\(htE > 0\) \|\| !\(hrE > 0\)\) \{', 'if (false) {'),
+    # la guarda se pasa de frenada SOLO en JS y se come geometrias sanas: un
+    # «no» universal pasa todas las comprobaciones de «no»
+    "js_guarda_todo": ("js", r'if \(!\(htE > 0\) \|\| !\(hrE > 0\)\) \{', 'if (true) {'),
 }
 MUTA = os.environ.get("MUTA")
 
@@ -558,6 +574,80 @@ check("y por los dos regimenes, mas el degenerado",
 noCero = [x[0] for x in JS["paneles"] if x[0] > 0]
 check("y hay difraccion de panel que cobra de verdad, no todo ceros",
       len(noCero) > 100, "%d de %d" % (len(noCero), len(JS["paneles"])))
+
+# ── NINGUN CASO DE RELIEVE PUEDE SER UNA GEOMETRIA IMPOSIBLE SIN DECLARARLO ──
+#
+# ESTO NACE DE UNA AVERIA REAL DE ESTE MISMO FICHERO. Antes de que el motor
+# tuviera la guarda, ONCE de los 44 casos de relieve llevaban la antena POR
+# DEBAJO del suelo de su propio extremo -el perfil llano de Ayora a 739 m con
+# antenas a 1,5, la rampa, el cerro, el llano a 5 m- y el motor les contestaba
+# con un numero. La paridad estaba VERDE porque los dos motores se equivocaban
+# IGUAL. Una paridad verde sobre geometrias imposibles no prueba nada: prueba
+# que las dos copias comparten el fallo.
+#
+# La comprobacion clasifica cada caso POR SU GEOMETRIA, sin preguntarle al
+# motor —el suelo se interpola aqui, con `suelo_en()`— y exige que las tres
+# clases se correspondan EXACTAMENTE con las tres respuestas posibles:
+#
+#   no cubre el vano        ->  los dos motores devuelven None
+#   antena bajo el suelo    ->  los dos devuelven db=None con motivo
+#   geometria posible       ->  los dos devuelven un numero
+#
+# Cualquier cruce es rojo. En particular «antena enterrada y el motor contesta
+# un numero», que es exactamente la averia de arriba volviendo.
+def suelo_en(p, s):
+    """El suelo del perfil en s, lineal entre puntos. Lo calcula ESTE fichero:
+    preguntarselo al motor seria clasificar los casos con lo que se comprueba."""
+    if not p:
+        return None
+    if s <= p[0][0]:
+        return p[0][1]
+    for k in range(1, len(p)):
+        if s <= p[k][0]:
+            a, b = p[k - 1], p[k]
+            if b[0] == a[0]:
+                return b[1]
+            return a[1] + (b[1] - a[1]) * (s - a[0]) / (b[0] - a[0])
+    return p[-1][1]
+
+
+def clase_geometrica(zA, zB, D, p):
+    if not p or (p[-1][0] - p[0][0]) < D:
+        return "no_cubre"
+    if zA <= suelo_en(p, p[0][0]) or zB <= suelo_en(p, p[0][0] + D):
+        return "antena_enterrada"
+    return "posible"
+
+
+ESPERADO = {"no_cubre": "None", "antena_enterrada": "guarda", "posible": "numero"}
+
+
+def respuesta(fila):
+    if fila is None:
+        return "None"
+    # [db, bruto, hst, hsr, hstd, hsrd, htE, hrE, motivo]
+    return "guarda" if fila[0] is None else "numero"
+
+
+cruces, conteo = [], {}
+for i, (zA, zB, D, p) in enumerate(CASOS["relieve"]):
+    cls = clase_geometrica(zA, zB, D, p)
+    conteo[cls] = conteo.get(cls, 0) + 1
+    for motor, salida in (("js", JS["relieve"]), ("py", PYR["relieve"])):
+        if i >= len(salida):
+            continue
+        r = respuesta(salida[i])
+        if r != ESPERADO[cls]:
+            cruces.append("#%d %s: geometria=%s pero %s responde %s" % (i, motor, cls, motor, r))
+
+check("ningun caso de relieve es una geometria imposible sin declararlo",
+      not cruces, "%d cruces; el primero: %s" % (len(cruces), cruces[0]) if cruces else None)
+# Y QUE LAS TRES CLASES ESTEN POBLADAS. Si un dia el generador dejara de
+# producir enterradas, la comprobacion de arriba pasaria sola y sin mirar nada:
+# un «no hay cruces» sobre cero casos es el verde vacio de siempre.
+check("las tres clases de geometria estan pobladas (%s)"
+      % ", ".join("%s=%d" % (k, conteo.get(k, 0)) for k in ESPERADO),
+      all(conteo.get(k, 0) > 0 for k in ESPERADO), conteo)
 
 # ── EL SUELO DE LA PLATAFORMA ──────────────────────────────────────────────
 # Por qué la tolerancia no es cero, dicho con números y no de palabra.

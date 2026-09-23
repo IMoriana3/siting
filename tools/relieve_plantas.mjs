@@ -138,7 +138,13 @@ for (const nom of PLANTAS) {
             + Math.min(...cotas).toFixed(1) + ' a ' + Math.max(...cotas).toFixed(1) + ' m)');
 
   /* EL RELIEVE POR LONGITUD DE VANO. Pares al azar con semilla fija, para que
-     dos ejecuciones den lo mismo y se pueda comparar entre versiones. */
+     dos ejecuciones den lo mismo y se pueda comparar entre versiones.
+
+     EL AVISO SE IMPRIME CON LA TABLA, no solo en el documento: quien copie
+     estos numeros a un correo se lleva el aviso pegado. Un agregado sobre una
+     variable con estructura fuerte es lo que ya mordio en el careo de El
+     Burgo, donde la media de +1,1 dB escondia +27,1 con 0 filas y -28,4 con 24. */
+  console.log('\n  ── NO SE AGREGA: promediar estas bandas da el numero que uno quiera ──');
   console.log('\n  vano          n    p50      p95      máx    a cero   sin perfil');
   let s = 7; const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
   for (const [lo, hi] of [[10, 20], [20, 50], [50, 100], [100, 200], [200, 400], [400, 800], [800, 1600]]) {

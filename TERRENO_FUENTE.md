@@ -112,12 +112,35 @@ El 100,0 % de Ayora coincide con el que declara el censo por su cuenta.
 
 ## 4. Qué cobra el terreno, de verdad
 
+> ### ⚠ ESTA TABLA NO SE AGREGA. NUNCA.
+>
+> **Una cifra de relieve «sobre los enlaces», sin separar por longitud de vano,
+> no significa nada.** Las bandas de abajo van de **0,000 dB a 4,246 de
+> mediana** y hasta **14,7 de máximo**: promediarlas da el número que uno
+> quiera según cuántos vanos cortos haya en la muestra, y la muestra la elige
+> la malla, no la física.
+>
+> **Es exactamente el mismo error que ya mordió en el careo de El Burgo.** Allí
+> la media del residuo es **+1,1 dB**, que suena a motor bien centrado, y lo
+> que esconde es que el residuo vale **+27,1 dB con 0 filas cruzadas y −28,4 dB
+> con 24** (`INVENTARIO_MOTOR_RF.md`). Los dos errores se compensan en la media
+> y la media no valida nada. `tools/careo_elburgo.mjs` lo lleva escrito en su
+> §6 desde entonces: *«una media no valida nada: +1,1 dB es compatible con
+> acertar y con fallar ±25 dB compensándose»*.
+>
+> Aquí la variable oculta es la **longitud del vano** en vez de las **filas
+> cruzadas**, pero la avería es la misma: un agregado sobre una variable con
+> estructura fuerte. Si alguien necesita un solo número, que sea **por banda de
+> vano y con su n**, nunca uno solo.
+
 **Y esto es lo que más importa de todo el documento: el relieve crece con la
 longitud del vano, y mucho.** Con saltos a vecina —12 m— sale 0 en más de la
 mitad de los casos, y eso invita a concluir que el terreno no cobra. **Es
 falso**: a 12 m dos filas vecinas están sobre un plano y la tierra lisa se lo
-come entero, que es justo lo que tiene que hacer. Cualquier cifra agregada
-«sobre los enlaces» sin separar por longitud dice lo que uno quiera.
+come entero, que es justo lo que tiene que hacer.
+
+Yo mismo casi me lo trago: la primera medida la hice a vecina más próxima y
+daba **p50 = 0,000 dB**. Sólo al separar por longitud apareció lo que hay.
 
 **Ayora** — 90 m de desnivel:
 
