@@ -36,6 +36,16 @@ const MUTACIONES = {
   /* ...o se afloja hasta ser una puerta de mentira: con 1 % relativo, a un
      perfil de un vano de 447 m le pueden faltar 4,5 METROS y colar. */
   toleranciaFloja:['radio_pv_model.js', /\(D - largo\) > 1e-9 \* D/, '(D - largo) > 1e-2 * D'],
+  /* EL PUNTO PEGADO AL EXTREMO SE DUPLICA: `recortaPerfil` mete el interior a
+     1e-13 m del extremo Y ADEMAS el extremo, o sea dos cantos pegados, y `nu()`
+     dividiendo por esa distancia.
+     Esto se mata AQUI y no en el careo js-contra-py: el duplicado solo muerde
+     si el suelo del extremo queda por encima del rayo, y el rayo en el extremo
+     va a la altura de la antena —o sea, con la antena bajo tierra, que es un
+     caso que para antes su propia guarda. Medido: 1,07e-14 dB. Ninguna
+     comparacion de salidas puede verlo; la FORMA de lo devuelto, si. */
+  puntoDuplicado: ['radio_pv_model.js', /if \(s > 0 && s < D && \(D - s\) > 1e-9 \* D\) out\.push/,
+                                        'if (s > 0 && s < D) out.push'],
   /* EL CANTO EQUIVALENTE DEJA DE SER EL CORTE DE LAS DOS RECTAS y pasa a ser
      simplemente el canto MÁS ALTO. Es el error que parece igual y no lo es:
      con dos cerros iguales, Bullington pone el canto ENTRE ellos y más arriba
@@ -327,6 +337,20 @@ console.log('\n· el perfil corto por coma flotante, y que la tolerancia no aflo
   const r = R.recortaPerfil([[0, 10], [50, 20], [100 - 1e-13, 30]], 100);
   check('el punto final lleva la cota del ultimo punto, sin extrapolar',
         cerca(r[r.length - 1][1], 30, 1e-9), r[r.length - 1]);
+
+  /* Y NO DEVUELVE DOS PUNTOS PEGADOS. Esto se mira sobre la FORMA de lo
+     devuelto, no sobre los dB: aceptar el perfil corto obliga a no volver a
+     meter ese mismo punto como interior, y si se metiera, `nu()` dividiria por
+     1e-13 m. El danyo medido son 1,07e-14 dB —invisible en cualquier careo de
+     salidas— asi que el unico sitio donde se puede cazar es aqui. */
+  check('no devuelve dos puntos pegados en el extremo',
+        r.length >= 2 && (r[r.length - 1][0] - r[r.length - 2][0]) > 1e-7,
+        r.map(function (q) { return q[0]; }).join(','));
+  const r2 = R.recortaPerfil([[0, 0], [40, 3], [100 - 1e-13, 1]], 100);
+  check('tampoco con el ultimo punto mas bajo que el canto', 
+        r2 && (r2[r2.length - 1][0] - r2[r2.length - 2][0]) > 1e-7,
+        r2 && r2.map(function (q) { return q[0]; }).join(','));
+  check('y el interior de verdad SI se conserva', r.length === 3, r.length);
 }
 
 // ── EL PUNTO DE BULLINGTON, QUE AHORA SE PUBLICA ─────────────────────────────
