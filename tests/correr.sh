@@ -115,6 +115,22 @@ leeFallos(){
   echo "$n"
 }
 
+# ── EL ALCANCE, PUBLICADO ────────────────────────────────────────────────
+# Este corredor barre `tests/`. Un banco en `tools/` no lo ve, y hoy no hay
+# ninguno —19 en tests/, 0 en tools/— pero eso hay que DECIRLO, no suponerlo:
+# «he mirado» y «está bien» son dos afirmaciones y hasta hoy sólo se publicaba
+# la segunda. Si aparece un `tools/test_*`, esto lo dice en vez de ignorarlo.
+hay_tests=$(ls tests/test_*.js tests/test_*.py 2>/dev/null | wc -l)
+hay_tools=$(ls tools/test_*.js tools/test_*.py tools/test_*.mjs 2>/dev/null | wc -l)
+con_piso=${#PISO[@]}
+echo "alcance: $hay_tests bancos en tests/ · $con_piso con piso en la tabla · $hay_tools en tools/ (fuera del barrido)"
+if [ "$hay_tools" != "0" ]; then
+  echo "ROJO · hay $hay_tools banco(s) en tools/ y este corredor sólo barre tests/"
+  echo "       muévelos, o amplía el barrido y mide sus pisos"
+  exit 1
+fi
+echo ""
+
 rojo=0; verde=0
 printf '%-30s %8s %8s %s\n' banco cuenta piso estado
 for _t in tests/test_*.js tests/test_*.py; do

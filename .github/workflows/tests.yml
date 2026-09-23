@@ -414,6 +414,15 @@ jobs:
         run: |
           f="$RUNNER_TEMP/censo_bancos"
           [ -f "$f" ] || { echo "::error::el censo no se escribio: ningun paso lo alimento"; exit 1; }
+          # ── CUANTOS ESPERABA. El censo sabia decir lo que le contaron y NO
+          #    cuantos deberian haberle contado: si un paso moria antes de
+          #    escribir su linea, censaba 3 de 4 y se quedaba tan ancho.
+          #    «He mirado» y «esta bien» son dos afirmaciones, y esta puerta
+          #    solo hacia la segunda — el mismo defecto que vino a arreglar.
+          #    El numero se sube A MANO al anyadir un paso que alimente el
+          #    censo, y si alguien se olvida, esto se para.
+          ESPERADOS=4
+          censados=$(grep -c . "$f" || true)
           mide=0; nc=0; rojo=0
           {
             echo "### Censo de bancos"
@@ -437,6 +446,14 @@ jobs:
           echo ""
           echo "  miden: $mide · NO COMPROBADOS: $nc · rojos: $rojo"
           printf '\n**miden %d · NO COMPROBADOS %d · rojos %d**\n' "$mide" "$nc" "$rojo" >> "$GITHUB_STEP_SUMMARY"
+          echo "  censados: $censados de $ESPERADOS esperados"
+          if [ "$censados" != "$ESPERADOS" ]; then
+            echo "::error title=CENSO INCOMPLETO::han llegado $censados lineas y se esperaban $ESPERADOS."
+            echo "  Un paso que alimenta el censo no ha llegado a escribir su linea, o se ha"
+            echo "  anyadido uno sin subir ESPERADOS. En los dos casos el censo esta mintiendo."
+            printf '\n> ❌ censo incompleto: %s de %s\n' "$censados" "$ESPERADOS" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if [ "$rojo" != "0" ]; then echo "::error::$rojo banco(s) en rojo"; exit 1; fi
           if [ "$nc" != "0" ]; then
             echo "::warning title=NO COMPROBADO::$nc banco(s) no han medido nada. Esto NO es un verde entero."
