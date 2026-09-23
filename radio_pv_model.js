@@ -636,6 +636,37 @@
       liso.push({ s: s, z: L.hst + pend * s });
     }
     var htE = zA - L.hst, hrE = zB - L.hsr;      // para los dos rayos, ec. (94)
+    /* Y AQUI SE COMPRUEBA, porque el parrafo de arriba es una INVARIANTE y las
+       invariantes dependen de quien llama.
+
+       Con (92) puesto, `hst <= h[0]` y `hsr <= h[n-1]`, o sea que la recta pasa
+       por debajo del terreno en los dos extremos. Si ademas `zA = h[0] + hAnt`
+       con `hAnt > 0` -que es lo que dice el contrato de `presupuesto`: alturas
+       ABSOLUTAS, cota del terreno mas antena-, entonces `htE >= hAnt > 0`
+       SIEMPRE. Luego `htE <= 0` no es un caso raro de terreno: es que quien
+       llama ha mezclado datos.
+
+       Y NO ES TEORICO, ES LA AVERIA QUE MAS BARATO SALE COMETER. Medido con un
+       cerro gaussiano de 3 m a media distancia sobre terreno a 739,23 m:
+
+         dato correcto  (zA = suelo + 0,475)   relieve 13,3297 dB, htE = 0,4750
+         dato mezclado  (zA = 0,475 a secas)   relieve  0,0029 dB, htE = -739,161
+
+       O sea que el error NO se nota en el resultado: no revienta, no sale
+       negativo, no sale enorme. Sale CASI CERO, que es indistinguible de
+       «terreno llano», con la antena 739 m bajo tierra. Las dos Bullington
+       salen gigantes y casi iguales, y la resta se las come. Un fallo que se
+       disfraza del caso bueno tiene que avisar el, porque nadie lo va a ver.
+
+       Se devuelve `db: null` CON MOTIVO y no se lanza: el motor entero esta
+       construido sobre decir «no lo se» en vez de inventar, y una excepcion
+       aqui tiraria el mapa de la planta entera por un enlace mal pasado. */
+    if (!(htE > 0) || !(hrE > 0)) {
+      return { db: null, motivo: "antena_bajo_la_tierra_lisa", bruto: null,
+               real: null, liso: null,
+               hst: L.hst, hsr: L.hsr, hstd: L.hstd, hsrd: L.hsrd,
+               hobs: L.hobs, htE: htE, hrE: hrE };
+    }
     var a = bullingtonDb(D, zA, zB, real, fHz);
     var b = bullingtonDb(D, zA, zB, liso, fHz);
     /* Y SE RECORTA EN CERO. Donde el terreno va POR DEBAJO de la referencia
@@ -644,7 +675,7 @@
        devolver un numero negativo aqui seria regalar margen por tener un hoyo
        delante. P.1812 recorta igual: `Ld50 = Lbulla + max(Ldsph − Lbulls, 0)`. */
     var d = a - b;
-    return { db: d > 0 ? d : 0.0, bruto: d, real: a, liso: b,
+    return { db: d > 0 ? d : 0.0, motivo: null, bruto: d, real: a, liso: b,
              hst: L.hst, hsr: L.hsr, hstd: L.hstd, hsrd: L.hsrd,
              hobs: L.hobs, htE: htE, hrE: hrE };
   }

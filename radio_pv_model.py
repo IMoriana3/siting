@@ -399,10 +399,22 @@ def relieve_delta_db(D, zA, zB, perfil, f_hz):
         liso.append({"s": s, "z": L["hst"] + pend * s})
     ht_e = zA - L["hst"]
     hr_e = zB - L["hsr"]
+    # ANTENA BAJO SU PROPIA TIERRA LISA: quien llama ha mezclado alturas
+    # absolutas con relativas. Con la ec. (92) puesta, `hst <= h[0]`, asi que
+    # `htE >= altura de antena > 0` siempre que `zA` venga en el dato del
+    # perfil. Medido: un cerro de 3 m sobre terreno a 739,23 m da 13,3297 dB con
+    # el dato bueno y 0,0029 dB con el mezclado -casi cero, indistinguible de
+    # llano- con htE = -739,161. Se devuelve `db: None` con motivo, igual que el
+    # JS. Ver el comentario largo en `radio_pv_model.js`.
+    if not (ht_e > 0) or not (hr_e > 0):
+        return {"db": None, "motivo": "antena_bajo_la_tierra_lisa", "bruto": None,
+                "real": None, "liso": None,
+                "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
+                "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
     a = bullington_db(D, zA, zB, real, f_hz)
     b = bullington_db(D, zA, zB, liso, f_hz)
     d = a - b
-    return {"db": d if d > 0 else 0.0, "bruto": d, "real": a, "liso": b,
+    return {"db": d if d > 0 else 0.0, "motivo": None, "bruto": d, "real": a, "liso": b,
             "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
             "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
 

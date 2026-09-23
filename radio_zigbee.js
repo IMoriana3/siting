@@ -136,6 +136,7 @@
      * (`htE`, `hrE`, ec. (94)), no sobre la cota cero: si la referencia de la
      * difraccion y la del rebote fueran distintas, la resta no cancelaria. */
     var relieve = null, relieveDet = null;   // `null` = no evaluado, como la vegetacion
+    var salidaSinMargen = false;             // dato mezclado: se para, ver abajo
     var htE = zA, hrE = zB;                  // sin perfil, el suelo es la cota 0
     if (!enlace.perfil || !enlace.perfil.length) {
       motivos.push("relieve_no_evaluado_sin_perfil");
@@ -145,6 +146,21 @@
         /* El perfil no cubre el vano entero -o tiene menos de dos puntos-. No
            se ha mirado nada, y eso NO es un 0: se dice, igual que la ausencia. */
         motivos.push("relieve_perfil_no_cubre_el_vano");
+      } else if (relieveDet.db === null) {
+        /* ALTURAS MEZCLADAS, Y AQUI SE PARA EL BALANCE ENTERO.
+         *
+         * `relieveDeltaDb` ha visto la antena por debajo de su propia tierra
+         * lisa, o sea que `zA`/`zB` no vienen en el dato del perfil. Eso no
+         * estropea solo el relieve: `dosRayosDb` recibiria como altura sobre el
+         * suelo una cota sobre el nivel del mar -739 m en Ayora-, y el resultado
+         * seria un margen con pinta de bueno salido de una antena enterrada.
+         *
+         * Asi que se devuelve SIN MARGEN, con el motivo, igual que se hace sin
+         * sensibilidad y con el balance incompleto. Es el unico sitio del
+         * relieve donde no vale con anotar y seguir, porque el dato malo se
+         * propaga al rebote y no se queda en su termino. */
+        motivos.push("relieve_" + relieveDet.motivo);
+        salidaSinMargen = true;
       } else {
         relieve = relieveDet.db;
         htE = relieveDet.htE;
@@ -171,6 +187,11 @@
       prxDbm: null, margenDb: null, pEnlace: null, motivos: motivos,
       calibracion: c.modo === CALIBRADO ? { version: c.version, campana: c.campana } : null
     };
+
+    /* Antes que nada: si las alturas venian mezcladas, no hay balance que dar.
+       Va aqui y no arriba para que `salida` lleve igualmente los terminos
+       calculados y el motivo, que es lo que se necesita para diagnosticarlo. */
+    if (salidaSinMargen) return salida;
 
     if (variante.ptx_dbm == null || variante.gtx_dbi == null || variante.grx_dbi == null) {
       motivos.push("balance_incompleto");

@@ -40,6 +40,12 @@ const MUTACIONES = {
   // el perfil que no cubre el vano se confunde con un vano llano
   relieveCortoCero: ['zigbee', /motivos\.push\("relieve_perfil_no_cubre_el_vano"\);/,
                                'relieve = 0;'],
+  // las alturas mezcladas se anotan y se sigue, en vez de pararse: el balance
+  // saldria de una antena 739 m bajo tierra y con pinta de bueno
+  mezclaSigue:   ['zigbee', /salidaSinMargen = true;/, 'salidaSinMargen = false;'],
+  // ...o se para SIEMPRE, que pasaria todas las comprobaciones de «no» sin dar
+  // ni un margen bueno. Un «no» universal es tan falso como un «si» universal
+  mezclaSiempre: ['zigbee', /if \(salidaSinMargen\) return salida;/, 'return salida;'],
   // los dos rayos vuelven a la cota cero en vez de a la tierra lisa: la
   // referencia de la difraccion y la del rebote dejan de ser la misma
   dosRayosSinLisa: ['zigbee', /var dosRayos = RPV\.dosRayosDb\(D, htE, hrE, f,/,
@@ -367,6 +373,36 @@ check('ni la perdida total', Math.abs(rLlano.perdidaTotalDb - rAlto.perdidaTotal
 check('el relieve no evaluado NO se suma como 0 escondido: la perdida cuadra',
       Math.abs(rSin.perdidaTotalDb - rSin.dosRayosDb - rSin.difraccionDb) < 1e-9,
       rSin.perdidaTotalDb + ' vs ' + (rSin.dosRayosDb + rSin.difraccionDb));
+
+/* ── EL CUARTO ESTADO: ALTURAS MEZCLADAS, Y AQUI NO SE ANOTA, SE PARA ─────
+   Los tres de arriba son «no se ha mirado» y se anotan. Este es distinto: el
+   perfil viene en cota ABSOLUTA -739,23 m, Ayora- y las antenas en cota
+   RELATIVA -0,475 a secas-. Eso no estropea solo el relieve: `dosRayosDb`
+   recibiria 739 m como altura sobre el suelo.
+
+   Y LO QUE LO HACE PELIGROSO ES QUE NO SE NOTA. El relieve no sale negativo ni
+   enorme: sale 0,0029 dB, indistinguible de «terreno llano», porque las dos
+   Bullington salen gigantes y casi iguales y la resta se las come. Medido en
+   `tests/test_terreno_planta.js` §9. Un fallo que se disfraza del caso bueno
+   tiene que avisar el.
+
+   Asi que `presupuesto` devuelve SIN MARGEN, como con el balance incompleto. */
+const rMezcla = ZB.presupuesto(Object.assign({ zA: 0.475, zB: 0.475,
+  perfil: PERF(() => 739.23, 100) }, baseRel), PRO, PROP, null);
+check('alturas mezcladas: el relieve es null y lo dice con SU motivo',
+      rMezcla.relieveDb === null &&
+      rMezcla.motivos.indexOf('relieve_antena_bajo_la_tierra_lisa') >= 0,
+      rMezcla.relieveDb + ' ' + rMezcla.motivos.join(','));
+check('alturas mezcladas: NO se da margen, que es lo que separa este del resto',
+      rMezcla.margenDb === null, rMezcla.margenDb);
+check('...y tampoco Prx, para que nadie lo reste a mano',
+      rMezcla.prxDbm === null, rMezcla.prxDbm);
+/* Y EL MISMO VANO CON EL DATO BIEN PUESTO SI DA MARGEN. Sin esto, la guarda
+   podria estar comiendose enlaces sanos y el banco no se enteraria: un «no»
+   universal pasa todas las comprobaciones de «no». */
+check('el MISMO vano con las alturas bien puestas si da margen',
+      rAlto.margenDb !== null && rAlto.relieveDb === 0,
+      rAlto.margenDb + ' / ' + rAlto.relieveDb);
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'
                        : 'TODO OK — ' + ok + ' comprobaciones'));

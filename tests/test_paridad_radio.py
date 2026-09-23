@@ -142,9 +142,56 @@ def casos_relieve():
         [[0, 5.0], [200, 5.0]],                        # solo dos puntos
     ]
     out = []
+    # ── BLOQUE 1: alturas FIJAS. Es el que estaba, y es el que pisa la GUARDA.
+    # La cuarta geometria se anyadio con ella: 739,705 = 739,23 + 0,475 es el
+    # dato BIEN PUESTO para el perfil llano de Ayora, y tiene que dar 0 exacto,
+    # mientras que las tres primeras -antenas a metros del CERO contra un
+    # terreno a 739 m- dejan la antena 737 m bajo su propia tierra lisa y tienen
+    # que dar `db: None` con motivo. Las dos ramas, comparadas.
     for p in perfiles:
-        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 180), (3.15, 0.775, 120)):
+        for zA, zB, D in ((1.5, 1.5, 100), (0.775, 3.15, 180), (3.15, 0.775, 120),
+                          (739.705, 739.705, 100)):
             out.append([zA, zB, D, p])
+
+    # ── BLOQUE 2: alturas DERIVADAS DEL PROPIO PERFIL, y este bloque hay que
+    # explicarlo porque nacio de un hallazgo.
+    #
+    # Al poner la guarda se vio que ONCE de los 44 casos del bloque 1 tenian la
+    # antena bajo tierra, y no solo los tres del perfil de Ayora: tambien la
+    # rampa (a 100 m de una pendiente 0,05 el suelo esta a 5 m y la antena a
+    # 1,5), el cerro y el perfil llano a 5 m. O sea que el bloque 1 llevaba
+    # desde el principio casos FISICAMENTE IMPOSIBLES a los que el motor
+    # respondia con un numero, y la paridad los daba por buenos porque los dos
+    # lados se equivocaban igual.
+    #
+    # Con la guarda esos once pasan a `None`, que es lo correcto, PERO ENTONCES
+    # LA PARIDAD COMPARA MENOS ARITMETICA: once perfiles inclinados dejan de
+    # ejercitar `bullington_db`. Este bloque lo repone y lo mejora: la antena se
+    # pone sobre EL SUELO DE SU PROPIO EXTREMO, asi que el dato es consistente
+    # por construccion y la guarda no puede saltar nunca aqui.
+    def suelo(p, s):
+        """Cota del perfil en s, lineal entre puntos. La calcula ESTE fichero,
+        no el motor: pedirsela al motor seria generar los casos con lo que se
+        quiere comprobar."""
+        if not p:
+            return None
+        if s <= p[0][0]:
+            return p[0][1]
+        for i in range(1, len(p)):
+            if s <= p[i][0]:
+                a, b = p[i - 1], p[i]
+                if b[0] == a[0]:
+                    return b[1]
+                return a[1] + (b[1] - a[1]) * (s - a[0]) / (b[0] - a[0])
+        return p[-1][1]
+
+    for p in perfiles:
+        for D in (100, 180, 120):
+            if not p or p[-1][0] - p[0][0] < D:
+                continue                       # no cubre: ya lo mira el bloque 1
+            z0, z1 = suelo(p, p[0][0]), suelo(p, p[0][0] + D)
+            for ant in (0.475, 1.5, 3.15):
+                out.append([z0 + ant, z1 + ant, D, p])
     return out
 
 
@@ -283,7 +330,7 @@ const out = {};
 out.regimen = casos.regimen.map(([e, f, tol]) => {
   const r = R.regimen(e[0], e[1], f[0], f[1], tol); return [r.tipo, r.anguloDeg]; });
 out.relieve = casos.relieve.map(([zA, zB, D, p]) => { const r = R.relieveDeltaDb(D, zA, zB, p, 2.45e9);
-  return r === null ? null : [r.db, r.bruto, r.hst, r.hsr, r.hstd, r.hsrd, r.htE, r.hrE]; });
+  return r === null ? null : [r.db, r.bruto, r.hst, r.hsr, r.hstd, r.hsrd, r.htE, r.hrE, r.motivo]; });
 out.escalares = casos.escalares.map(c => {
   switch (c[0]) {
     case 'fspl':    return R.fsplDb(c[1], c[2]);
@@ -339,7 +386,7 @@ def corre_python(mod, casos):
         r = mod.relieve_delta_db(D, zA, zB, p, 2.45e9)
         out["relieve"].append(None if r is None else
                               [r["db"], r["bruto"], r["hst"], r["hsr"],
-                               r["hstd"], r["hsrd"], r["htE"], r["hrE"]])
+                               r["hstd"], r["hsrd"], r["htE"], r["hrE"], r["motivo"]])
     out["escalares"] = []
     for c in casos["escalares"]:
         k = c[0]
