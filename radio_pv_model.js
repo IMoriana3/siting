@@ -687,10 +687,26 @@
       }
       return perfil[n - 1][1];
     }
+    /* DOS PUNTOS A 1e-13 SON UN PUNTO, y hay que decirlo aquí.
+     *
+     * Con la tolerancia de arriba, un perfil que acaba en `D − 1e-13` pasa —y
+     * debe pasar—. Pero entonces su último punto entra como INTERIOR (s < D) y
+     * encima se añade el de `D`: quedan dos cantos separados 1e-13 m, y `nu()`
+     * divide por `d2 = 1e-13`.
+     *
+     * MEDIDO antes de tocar nada: el daño real es 1,07e-14 dB, porque en el
+     * extremo el rayo va a la altura de la antena y ésta está sobre el suelo,
+     * así que ν sale muy negativo y no cobra. O sea que hoy NO rompe nada.
+     *
+     * Pero eso es una cancelación afortunada, no una garantía: depende de que
+     * la antena esté por encima de su suelo en ese punto. Se quita el caso en
+     * vez de confiar en él — con el MISMO umbral relativo que decide si el
+     * perfil cubre el vano, para que no haya dos criterios distintos de «esto
+     * es el mismo punto» en la misma función. */
     var out = [[0, altura(0)]];
     for (var j = 0; j < n; j++) {
       var s = perfil[j][0] - d0;
-      if (s > 0 && s < D) out.push([s, perfil[j][1]]);
+      if (s > 0 && s < D && (D - s) > 1e-9 * D) out.push([s, perfil[j][1]]);
     }
     out.push([D, altura(D)]);
     return out;

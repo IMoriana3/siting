@@ -166,6 +166,67 @@ techo del error ES el escalón del propio dato entre filas vecinas.
 > cruzadas**, pero la avería es la misma: un agregado sobre una variable con
 > estructura fuerte. Si alguien necesita un solo número, que sea **por banda de
 > vano y con su n**, nunca uno solo.
+>
+> ### ⚠ Y NINGÚN ENLACE REAL DE LA CARTERA LLEGA A 800 m
+>
+> La banda de 800–1.600 m, donde el relieve pega más fuerte, **no existe en la
+> instalación**. Medido sobre los presets de las diez plantas
+> (`tools/vanos_muestreados_vs_reales.mjs`): el enlace más largo de toda la
+> cartera son **447 m** (San José), y sólo **7 de 6.036** pasan de 400 m.
+>
+> Esta tabla sale de **vanos muestreados** —parejas de TCU al azar— y describe
+> el TERRENO: «si hubiera un enlace de 1.200 m aquí, cuánto relieve tendría».
+> El antes/después describe la INSTALACIÓN. Los dos números son correctos y hay
+> que publicar los dos: dar sólo el primero exagera, y dar sólo el segundo deja
+> creer que el terreno no importa — hasta el día que alguien alargue un vano.
+>
+> *(Y hay un segundo motivo por el que las dos cifras no se carean directamente:
+> `relieve_plantas.mjs` pone antena de TCU en los DOS extremos porque es una
+> sonda del terreno entre seguidores, mientras el enlace real va contra una NCU
+> con la antena a 3,15 m. Medido: 7,847 dB con TCU a los dos lados frente a
+> 5,907 con TCU→NCU. La antena de la NCU se come 1,94 dB ella sola.)*
+
+---
+
+## ⚠ Lo que de verdad cazó el defecto del picómetro, y no fue el banco
+
+Merece su sitio aquí, pegado al apartado de arriba, porque es la misma familia
+de error: **un número que existe y nadie lee.**
+
+`recortaPerfil` comparaba `largo < D` a secas y rechazaba **568 de 6.036
+enlaces reales (9,4 %)** por un déficit de **2,13e-13 m** — dos décimas de
+picómetro. Esos enlaces salían con motivo `relieve_perfil_no_cubre_el_vano`, o
+sea **sin término de relieve, con el terreno delante**, y llevaban así desde
+que el terreno entró en la app.
+
+**Los 17 bancos estaban verdes. Las 43 mutaciones, rojas. La paridad, verde.**
+Nada de eso lo vio, y no por estar mal hechos: ningún banco tenía un caso donde
+el perfil llegara al vano *salvo por un último bit*, porque a nadie se le
+ocurre escribir ese caso a mano.
+
+**Lo que lo cazó fue otra cosa**: poner una puerta nueva —el umbral de vano
+corto— y **ver que NO disparaba donde tenía que disparar**. Benante tenía 146
+enlaces por debajo de 100 m y la puerta sólo saltaba en 139. Ir a ver por qué
+faltaban 7 fue lo que destapó el picómetro.
+
+O sea: **el contraste entre lo que digo que hace el código y lo que hace sobre
+datos reales**. No un banco más, sino correr la cosa contra la cartera entera y
+mirar si los números cuadran con lo que uno acaba de afirmar.
+
+De ahí salen las dos cosas que este repo se lleva:
+
+1. **El censo de motivos** (`RadioZigbee.censoMotivos`), publicado siempre en
+   los informes y en la leyenda de la app, con porcentaje y denominador. Un
+   «9,4 % no cubre el vano» al pie del informe de #87 habría saltado a la vista.
+   `tests/test_censo_motivos.js` exige que **salga en la salida**, corriendo el
+   útil de verdad y leyendo su stdout — un contador correcto que nadie imprime
+   no habría cazado nada.
+2. **La regla de las comparaciones** (`tools/auditoria_comparaciones.mjs`): una
+   comparación de flotantes necesita tolerancia **relativa** cuando decide si un
+   dato existe **y** sus dos lados vienen de rutas de cálculo distintas. Si
+   vienen del mismo cálculo, el bit coincide y la tolerancia sobra. Y la
+   tolerancia se prueba a **1 m, 1 mm y 1 µm**: una que no distinga esas tres
+   de 1e-13 no es una tolerancia, es un apagón.
 
 **Y esto es lo que más importa de todo el documento: el relieve crece con la
 longitud del vano, y mucho.** Con saltos a vecina —12 m— sale 0 en más de la

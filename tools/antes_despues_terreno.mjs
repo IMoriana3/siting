@@ -153,6 +153,11 @@ for (const [planta, preNom] of PLANTAS) {
               + '  (medido en ' + (cal.z_db.medido_en || []).join('+') + ', NO en esta planta)');
   }
 
+  /* EL CENSO DE MOTIVOS, que se publica SIEMPRE y no en un log. Un 9,4 % en
+     «no cubre el vano» impreso aqui habria hecho saltar a alguien hace un mes:
+     el motivo estaba en cada enlace desde el primer dia, lo que faltaba era
+     quien los contara. */
+  const todosPres = [];
   const BANDAS = [[0, 50], [50, 100], [100, 200], [200, 400], [400, 800], [800, 1e9]];
   console.log('\n  vano          n   cambian   Δmargen p50    p05      p95    sin relieve      ±Z');
   let totCambian = 0, totSin = {}, tot = 0;
@@ -169,6 +174,7 @@ for (const [planta, preNom] of PLANTAS) {
                                     /* EL UMBRAL DE VANO CORTO, como lo aplica la app: sin esto el
                                        informe publicaria relieve que la pantalla ya no pinta. */
                                     vanoMinUtil: (cal && cal.vano_min_util_m) || 0 }, V, PROP, null);
+      todosPres.push(conT);
       if (conT.margenDb == null || sinT.margenDb == null) {
         sin++; totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] =
           (totSin[(conT.motivos || []).find(m => /relieve/.test(m)) || 'sin_margen'] || 0) + 1;
@@ -187,6 +193,9 @@ for (const [planta, preNom] of PLANTAS) {
   }
   console.log('\n  TOTAL: ' + totCambian + ' de ' + tot + ' enlaces cambian de banda en el mapa ('
             + (100 * totCambian / tot).toFixed(1) + ' %)');
+  const censo = RZ.censoMotivos(todosPres);
+  console.log('  CENSO DE MOTIVOS DE RELIEVE: ' + RZ.censoTexto(censo, 'relieve'));
+  console.log('  sin margen: ' + censo.sinMargen + ' de ' + censo.n);
   if (Object.keys(totSin).length) console.log('  sin relieve: ' + JSON.stringify(totSin));
   console.log('');
 }

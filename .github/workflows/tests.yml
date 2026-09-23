@@ -94,6 +94,21 @@ jobs:
       - name: la incertidumbre de la cota, en dB por banda de vano
         run: node tools/relieve_incertidumbre.mjs --reps 8
 
+      # LAS COMPARACIONES QUE DECIDEN SI UN DATO EXISTE. Corre en CI porque su
+      # catalogo cita FUNCIONES, y si alguien renombra una el barrido se para en
+      # vez de seguir diciendo que esta vigilada. Ademas comprueba que la
+      # tolerancia sigue distinguiendo 1e-13 de 1 um: el dia que alguien la
+      # afloje, esto lo dice.
+      - name: las comparaciones de coma flotante, catalogadas y medidas
+        run: node tools/auditoria_comparaciones.mjs
+
+      # EL CAREO DE VANOS MUESTREADOS CONTRA ENLACES REALES. Corre en CI porque
+      # el hecho que lo cierra —que ningun enlace de la cartera llega a 800 m—
+      # deja de ser cierto en cuanto alguien mueva una NCU, y entonces la lectura
+      # de la tabla de relieve por banda cambia.
+      - name: vanos muestreados contra enlaces reales
+        run: node tools/vanos_muestreados_vs_reales.mjs > /dev/null
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
@@ -168,6 +183,11 @@ jobs:
                                               relieveCallado relieveCortoCero dosRayosSinLisa \
                                               mezclaSigue mezclaSiempre \
                                               sinUmbralCorto umbralApaga
+
+          # EL CENSO DE MOTIVOS TIENE QUE SALIR PUBLICADO, no en un log. Existe
+          # porque 568 enlaces llevaban un mes con motivo `no cubre el vano` y
+          # nadie los contaba: el dato estaba y no se leia.
+          rojo node tests/test_censo_motivos.js sinDenominador sinPorcentaje sinMudos informeMudo
 
           # EL TERRENO DE LA PLANTA. `terreno_planta.js` lee el MISMO
           # `<planta>_relieve.json` que consume el 3D de cobertura-zigbee, y de

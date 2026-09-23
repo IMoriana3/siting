@@ -2639,7 +2639,29 @@ function rfEnlace(n,m,rows){
   pr.detalle=RadioPV.difraccionPanelesDetalle(D,zA,zB,cruces,V.f_hz);
   pr.cruces=cruces; pr.D=D; pr.zA=zA; pr.zB=zB; pr.variante=V.nombre||null;
   const e=rfEjeTubo(); if(e&&e.motivo) pr.motivos=(pr.motivos||[]).concat([e.motivo]);
+  /* EL CENSO DE MOTIVOS, ACUMULADO AQUI, que es el unico sitio por donde pasan
+     TODOS los enlaces del mapa y del panel.
+     Existe por un defecto que estuvo a la vista sin verse: 568 de 6.036
+     enlaces salian con `relieve_perfil_no_cubre_el_vano` por un deficit de
+     2,13e-13 m, o sea SIN relieve y con el terreno delante. El motivo estaba
+     en cada enlace desde el primer dia; lo que faltaba era quien los contara.
+     Un 9,4 % en la leyenda habria saltado a la vista. */
+  if(S._censo){ S._censo.n++;
+    if(pr.margenDb==null) S._censo.sinMargen++;
+    for(const mo of (pr.motivos||[])) S._censo.motivos[mo]=(S._censo.motivos[mo]||0)+1; }
   return pr;
+}
+
+/* Se arranca el censo antes de pintar y se lee despues. Se REINICIA en cada
+   pintado: un contador que acumula entre pintados cuenta el mismo enlace
+   muchas veces y el porcentaje deja de significar nada. */
+function censoArranca(){ S._censo={n:0,sinMargen:0,motivos:{}}; }
+function censoTexto(){
+  const c=S._censo; if(!c||!c.n) return null;
+  const pares=Object.entries(c.motivos).filter(([k])=>k.startsWith("relieve"));
+  if(!pares.length) return null;
+  pares.sort((a,b)=>b[1]-a[1]);
+  return pares.map(([k,v])=>k.replace(/^relieve_/,"")+" "+v+" ("+(100*v/c.n).toFixed(1)+" %)").join(" · ");
 }
 
 /* El margen del MOTOR NUEVO. El mapa llama aquí, y el panel también. */
@@ -2845,6 +2867,7 @@ function covRaster(){
      indistinguible de «no llega a ningún sitio», y con el motor nuevo hay un
      motivo nuevo: que `radio_params.json` no haya cargado. */
   S._covMotivo=null;
+  censoArranca();
   if(!tx) S._covMotivo="pon el Tx con un clic";
   else if(!S.motors.length) S._covMotivo="la planta no tiene seguidores";
   else if(modo==="margen"&&rfMotor()==="antiguo"&&!rfParams()) S._covMotivo="el modelo antiguo (A) no está cargado";
@@ -3294,6 +3317,10 @@ function renderLegend(){
            de 8 dB con ±1 y otro con ±13 no se presentan igual. Se enseña el de
            la banda donde caen MÁS enlaces de esta planta, que es la que el
            usuario está mirando de hecho. */
+        /* EL CENSO, EN PANTALLA. No en la consola: un motivo que sale por
+           consola lo lee quien esta depurando, no quien decide donde va la NCU. */
+        const cen = censoTexto();
+        if(cen) h+=`<div class="li"><span class="sub">motivos de relieve: ${cen}</span></div>`;
         const inc = rfIncertidumbreDominante();
         if(inc) h+=`<div class="li"><span class="sub" style="color:var(--warn,#e0a72c)">`
          + `relieve ±${inc.z90.toFixed(1)} dB en la banda de ${inc.banda} m `
