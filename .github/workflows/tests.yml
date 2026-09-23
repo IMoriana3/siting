@@ -85,6 +85,15 @@ jobs:
       - name: A5 · el repecho local y la prueba de densidad
         run: node tools/a5_repecho_local.mjs
 
+      # DE METROS DE ERROR EN LA COTA A dB DE RELIEVE. Corre en CI porque la
+      # respuesta depende de la construccion delta del motor: el dia que el
+      # relieve deje de cancelar un desplazamiento uniforme, la columna de
+      # correlacion larga dejaria de dar cero y esto lo enseñaria. No baja
+      # nada de la red: las longitudes de correlacion son MEDIDAS y van
+      # escritas, y el terreno vive en este repo.
+      - name: la incertidumbre de la cota, en dB por banda de vano
+        run: node tools/relieve_incertidumbre.mjs --reps 8
+
       # PARIDAD JS/PYTHON. El visor predice en JS y la calibración ajusta en
       # Python; si los dos motores se separan, el ajuste calibra un modelo que
       # nadie usa. Este banco ejecuta el JS DE VERDAD con node sobre el fichero
