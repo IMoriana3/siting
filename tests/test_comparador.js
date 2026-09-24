@@ -40,6 +40,8 @@ const MUTACIONES = {
   // «sin camino alternativo» se cuenta sumando en vez de uniendo
   sumaEnVezDeUnion: ['radio_malla.js', 'perdidos++; sinAlt.add(vivos[i]);',
                      'perdidos++; sinAlt.add(vivos[i] + "@" + caido);'],
+  // «ningún criterio varía» se publica como «la hora da igual»
+  horaDaIgual: ['radio_tecnologias.js', 'saturada: !!satur,', 'saturada: false,'],
   // con un solo candidato se declara que el veredicto no depende del módulo:
   // convertir «no lo he podido mirar» en «lo he mirado y no cambia»
   unCandidatoBasta: ['radio_tecnologias.js', 'if (!e || e.n < 2) { sinExtremos.push(tecs[i]); }',
@@ -188,6 +190,26 @@ check('un criterio que no declare nada no puede salir callando',
       RT.loQueFalta({}, 'inventado').length === 1);
 
 
+/* LA HORA: CUANDO LA TABLA NO SE ENTERA, HAY QUE DECIR POR QUÉ ─────────────
+   «Ningún criterio varía» se lee como «la hora da igual», y es falso: en El
+   Burgo entran y salen 1.086 pares (8,1 %) entre la mejor y la peor hora. Lo que
+   pasa es que estos criterios están SATURADOS con Zigbee. La tabla lo lleva
+   encima, no en una nota al pie, porque en cuanto entren LoRa y Wi-SUN dejarán
+   de estarlo. */
+check('la tabla dice si la hora la mueve o no', !!tabla.saturacion);
+check('  y con esta malla de juguete sale SATURADA', tabla.saturacion.saturada === true,
+      JSON.stringify(tabla.saturacion.conDato));
+check('  y el texto aclara que NO es que la hora dé igual',
+      /NO significa que la hora dé igual/.test(tabla.saturacion.texto));
+check('  con la medida al lado, no como opinión',
+      /1\.086 pares/.test(tabla.saturacion.texto) && /8,1 %/.test(tabla.saturacion.texto));
+check('  y dice que con LoRa y Wi-SUN dejará de estar saturada',
+      /LoRa y Wi-SUN/.test(tabla.saturacion.texto) && /Fresnel/.test(tabla.saturacion.texto));
+check('si algún criterio SÍ varía, no se declara saturada',
+      RT.compara('x', NODOS, ['N'], TEC2(), HORAS, (v, h) => (p, q) =>
+        ({ viable: (CADENA[p.id] || []).indexOf(q.id) >= 0 && !(h === 12 && q.id === 'd'), margenDb: 10 }),
+        null).saturacion.saturada === false);
+
 /* ── LA SENSIBILIDAD DEL VEREDICTO AL MÓDULO ────────────────────────────────
    La elección del módulo cambia el veredicto, así que la comparación se corre
    con el mejor candidato de cada tecnología y con el peor. Lo que este banco
@@ -234,7 +256,7 @@ for (const t of ['lora_eu868', 'wisun_fan_863']) {
 }
 
 /* ── EL ALCANCE ─────────────────────────────────────────────────────────── */
-const PISO = 40, PISO_MUT = 6;
+const PISO = 48, PISO_MUT = 7;
 console.log('\nalcance: ' + tabla.filas.length + ' criterios · ' + tabla.tecnologias.length +
             ' tecnologías · ' + HORAS.length + ' horas · ' +
             Object.keys(MUTACIONES).length + ' mutaciones (piso ' + PISO_MUT + ')');
