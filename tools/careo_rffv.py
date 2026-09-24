@@ -122,13 +122,17 @@ tx = {"x": 0, "y": 0, "ground": 0, "h": 0.805}
 rx = {"x": 24, "y": 0, "ground": 0, "h": 0.805}
 o = R.predict_link(tx, rx, R.params_elburgo(), [])
 print('\nY un enlace de 24 m de El Burgo, por rf-fv:')
-for k in ('distance_m', 'prx_dbm', 'margin_db', 'p_link'):
+for k in ('distance_m', 'prx_dbm', 'margin_db'):
     if k in o:
         print('  %-14s %.4f' % (k, o[k]))
+print('  %-14s %s' % ('p_link', o.get('p_link')))
+print('  %-14s %s' % ('  motivo', o.get('p_link_motivo')))
+print('  %-14s %s  ← el que la escalaba' % ('  sigma', o.get('p_link_sigma_usado')))
 print("""
-  `p_link` es UNA PROBABILIDAD, y sale de `sigma_db = 6,0`, que es justamente el
-  valor que este repo se niega a heredar. El canon, ante lo mismo, devuelve
-  `pEnlace: null` con el motivo `sin_sigma_no_hay_probabilidad`.
+  ANTES `p_link` era UNA PROBABILIDAD salida de ese sigma. DESDE EL 2026-09-24
+  sale `None` con su motivo, y la interfaz dice qué desapareció y por qué en vez
+  de dejar un hueco. El canon hacía lo mismo desde la fase 5, con el motivo
+  `sin_sigma_no_hay_probabilidad`: ahora los dos coinciden también en esto.
 
   O sea que la diferencia entre los dos motores NO ESTÁ EN LA FÍSICA —%d casos
   a %.0e— sino en QUÉ SE ATREVEN A AFIRMAR con los mismos números. Migrar rf-fv
