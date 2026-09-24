@@ -141,6 +141,14 @@
     var art = articulaciones(ady);
     var aislaA = new Map();
     for (var n of ady.keys()) aislaA.set(n, 0);
+    /* QUIÉN SE QUEDA SIN CAMINO, no sólo cuántos. `aislaA` cuenta por nodo
+       caído, y sumar esas cuentas DOBLA: un mismo nodo puede colgar de dos
+       articulaciones distintas. El comparador de tecnologías necesita la UNIÓN
+       —«TCU sin camino alternativo»— y la unión sale de aquí gratis: es el
+       mismo bucle, guardando en vez de contando.
+       La RAÍZ se deja fuera a propósito: que caiga la NCU no es «quedarse sin
+       camino alternativo», es quedarse sin NCU, y eso es otro fallo. */
+    var sinAlt = new Set();
     for (var caido of art) {
       if (raices.indexOf(caido) >= 0) continue;         // la raíz aparte
       var sub = new Map();
@@ -151,11 +159,12 @@
       var d2 = saltos(sub, raices.filter(function (r) { return r !== caido; }));
       var perdidos = 0;
       for (var i = 0; i < vivos.length; i++) {
-        if (vivos[i] !== caido && d2.get(vivos[i]) === null) perdidos++;
+        if (vivos[i] !== caido && d2.get(vivos[i]) === null) { perdidos++; sinAlt.add(vivos[i]); }
       }
       aislaA.set(caido, perdidos);
     }
-    return { aislaA: aislaA, articulaciones: art, alcanzables: vivos.length };
+    return { aislaA: aislaA, articulaciones: art, alcanzables: vivos.length,
+             sinAlternativa: Array.from(sinAlt) };
   }
 
   /* ── ANÁLISIS COMPLETO ───────────────────────────────────────────────────── */
@@ -177,6 +186,7 @@
          en un árbol todo nodo interno lo es. Va en la salida a propósito. */
       esArbol: aristas === nodos.length - 1 && sinRuta.length === 0,
       sinRuta: sinRuta, articulaciones: r.articulaciones, aislaA: r.aislaA,
+      sinAlternativa: r.sinAlternativa,
       gradoMin: grados.length ? Math.min.apply(null, grados) : 0,
       gradoMax: grados.length ? Math.max.apply(null, grados) : 0,
       gradoMedio: grados.length ? grados.reduce(function (a, b) { return a + b; }, 0) / grados.length : 0,

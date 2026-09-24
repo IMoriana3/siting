@@ -286,6 +286,105 @@
       "rx_sens_dbm": null,
       "_fuente": "código: el mismo comentario de `defaultParams()` dice «Estándar +8» para la potencia.",
       "_pendiente_fase_2": "La SENSIBILIDAD del estándar NO aparece en el código y no se inventa: `null` hasta leerla del datasheet. Con `null` esta variante no emite margen."
+    },
+
+    "_las_dos_de_sub_giga": [
+      "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
+      "",
+      "El comparador de tecnologías (punto 6 del visor) necesita tres columnas, y una",
+      "columna que no existe no se puede comparar ni decir que falta. Así que las dos",
+      "están aquí, con la misma forma que las de Zigbee, y con TODO lo de radio a",
+      "`null`: ni potencia, ni sensibilidad, ni plan de canal.",
+      "",
+      "NO ES PEREZA NI PRUDENCIA GENÉRICA: es que no se han podido leer. El encargo",
+      "pide «Ptx, sensibilidad y plan de canal de un módulo de referencia CITADO, y la",
+      "regulación verificada contra la norma». Desde este entorno la red no llega ni a",
+      "las webs de fabricante ni a etsi.org, así que cualquier cifra que pusiera aquí",
+      "saldría de la memoria y no de un documento — que es exactamente lo que este",
+      "fichero existe para impedir.",
+      "",
+      "Con los `null` puestos, el comparador NO calcula esas columnas: publica qué",
+      "falta y de qué documento sale. En cuanto lleguen los datasheets se rellenan",
+      "estos campos y las columnas se encienden solas, sin tocar una línea de código."
+    ],
+
+    "lora_eu868": {
+
+      "procedencia": "pendiente",
+      "nombre": "LoRa EU868 — PREDICCIÓN, sin campaña y sin datasheet leído",
+      "f_hz": null,
+      "ptx_dbm": null,
+      "gtx_dbi": null,
+      "grx_dbi": null,
+      "rx_sens_dbm": null,
+      "canal": { "valor": null, "procedencia": "pendiente" },
+      "candidatos": {
+        "_que_es": [
+          "LOS MÓDULOS ENTRE LOS QUE HAY QUE ELEGIR, y la elección NO es un detalle:",
+          "cambia el veredicto. Un SX1262 a 22 dBm y un módulo a 14 dBm no dan el mismo",
+          "resultado, y presentar «LoRa» como si fuera UNA cosa esconde esos ocho dB.",
+          "",
+          "Por eso el comparador corre la tabla DOS VECES —con el mejor candidato de cada",
+          "tecnología y con el peor— y publica en qué criterios el veredicto cambia. Si",
+          "cambia, ESO es el resultado.",
+          "",
+          "Cada candidato necesita, CITADO: Ptx, sensibilidad POR MODO (SF y ancho de banda",
+          "en LoRa; modo PHY en Wi-SUN), plan de canal, consumo en transmisión, y si el",
+          "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
+          "no entra."
+        ],
+        "_estado": "VACÍA. Desde este entorno la red no llega a ninguna web de fabricante ni de distribuidor ni a etsi.org (probados y denegados por el proxy de salida: semtech, ti, silabs, microchip, st, mouser, digikey, etsi). Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
+        "lista": []
+      },
+      "_que_falta": {
+        "modulo_de_referencia": "Ninguno elegido. Hace falta UNO, nombrado, no «un módulo LoRa».",
+        "ptx_dbm": "del datasheet del módulo, con la página.",
+        "rx_sens_dbm": "del datasheet, Y CON SU SF Y SU ANCHO DE BANDA: en LoRa la sensibilidad no es un número, es una tabla. Sin decir a qué SF se declara, el dato no significa nada.",
+        "plan_de_canal": "sub-bandas de EU868 con su e.r.p. máxima y su ciclo de trabajo, de la norma (ETSI EN 300 220-2 / CEPT ERC REC 70-03), no de memoria.",
+        "f_hz": "sale del plan de canal, así que depende de lo anterior."
+      },
+      "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: clase C multicast —el nodo escucha siempre, la orden llega sin esperar ventana— y el ciclo de trabajo del 1 % limita al EMISOR, no al receptor: para una orden de stow (rara, corta, unidireccional) no muerde; para los reintentos sí. Eso es arquitectura, no balance, y no necesita datasheet.",
+      "_ojo_sub_giga": "A 868 MHz la longitud de onda es ~2,8 veces la de 2,45 GHz, así que el radio de Fresnel es ~1,7 veces mayor: LA MISMA GEOMETRÍA DESPEJA MENOS. El canon ya lo calcula bien (`radioFresnel` depende de λ), pero es la razón por la que una calibración hecha a 2,4 GHz NO se traslada."
+    },
+
+    "wisun_fan_863": {
+
+      "procedencia": "pendiente",
+      "nombre": "Wi-SUN FAN 863-870 MHz — PREDICCIÓN, sin campaña y sin datasheet leído",
+      "f_hz": null,
+      "ptx_dbm": null,
+      "gtx_dbi": null,
+      "grx_dbi": null,
+      "rx_sens_dbm": null,
+      "canal": { "valor": null, "procedencia": "pendiente" },
+      "candidatos": {
+        "_que_es": [
+          "LOS MÓDULOS ENTRE LOS QUE HAY QUE ELEGIR, y la elección NO es un detalle:",
+          "cambia el veredicto. Un SX1262 a 22 dBm y un módulo a 14 dBm no dan el mismo",
+          "resultado, y presentar «Wi-SUN» como si fuera UNA cosa esconde esos ocho dB.",
+          "",
+          "Por eso el comparador corre la tabla DOS VECES —con el mejor candidato de cada",
+          "tecnología y con el peor— y publica en qué criterios el veredicto cambia. Si",
+          "cambia, ESO es el resultado.",
+          "",
+          "Cada candidato necesita, CITADO: Ptx, sensibilidad POR MODO (SF y ancho de banda",
+          "en LoRa; modo PHY en Wi-SUN), plan de canal, consumo en transmisión, y si el",
+          "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
+          "no entra."
+        ],
+        "_estado": "VACÍA. Desde este entorno la red no llega a ninguna web de fabricante ni de distribuidor ni a etsi.org (probados y denegados por el proxy de salida: semtech, ti, silabs, microchip, st, mouser, digikey, etsi). Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
+        "lista": []
+      },
+      "_que_falta": {
+        "modulo_de_referencia": "Ninguno elegido.",
+        "ptx_dbm": "del datasheet del módulo, con la página.",
+        "rx_sens_dbm": "del datasheet, Y CON SU MODO PHY: Wi-SUN FAN define varios (distinta tasa y distinto índice de modulación) y la sensibilidad cambia con el modo. Un solo número sin decir el modo no vale.",
+        "plan_de_canal": "el plan de 863-870 MHz con su separación de canales, su e.r.p. máxima y su ciclo de trabajo, de la norma.",
+        "f_hz": "sale del plan de canal."
+      },
+      "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: multicast por MPL, pensado justo para una orden como el stow; y malla multisalto como Zigbee, con la MISMA dependencia de la profundidad — que es el parámetro que hoy no está medido para ninguna de las tres."
     }
   },
 
