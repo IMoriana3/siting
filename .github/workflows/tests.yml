@@ -305,6 +305,22 @@ jobs:
           # nadie los contaba: el dato estaba y no se leia.
           rojo node tests/test_censo_motivos.js sinDenominador sinPorcentaje sinMudos informeMudo
 
+          # EL ARRANQUE DE CADA TCU EN UN STOW. Las cuatro primeras son las que
+          # el banco sintetico encontro midiendo, no supuestas: sin la recta de
+          # seguimiento salia +0,52 s de SESGO PURO (error medio y error
+          # absoluto medio identicos), con las muestras parciales de los
+          # extremos la velocidad salia un 5 % baja, y sin el suelo de
+          # cuantizacion la cobertura a 2 sigma se quedaba en 32 de 40.
+          #
+          # Una quinta, `gradosDeLibertad` (ssRes/(n-2) por ssRes/n), esta
+          # RETIRADA A PROPOSITO y dicha en el banco: se probo y dejaba el
+          # banco VERDE, porque desde que manda el suelo de cuantizacion ese
+          # termino no mueve ningun numero publicado. No se apunta aqui porque
+          # una mutacion que no mueve lo que la puerta mira no es evidencia.
+          rojo node tests/test_arranques_stow.js arranquePorPrimeraMuestra sinRectaDeSeguimiento \
+                                                 sinSueloDeCuantizacion conMuestrasParciales \
+                                                 siempreValor extrapolaSinPartida
+
           # EL TERRENO DE LA PLANTA. `terreno_planta.js` lee el MISMO
           # `<planta>_relieve.json` que consume el 3D de cobertura-zigbee, y de
           # ahi sale el perfil con el que el motor calcula el relieve.
