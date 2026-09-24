@@ -16,9 +16,9 @@ Fecha de esta versión: **2026-09-24**.
 | 3 | Medido frente a predicho | hecho, sobre 52 de ~736 pares |
 | 4 | Robustez | hecho |
 | 5 | Estados e incertidumbre | hecho, sin probabilidad |
-| 6 | Comparador de tecnologías | **no empezado · sin definir del todo** |
-| 7 | Escenario guardable | **no empezado · sin definir del todo** |
-| 8 | Informe | **no empezado · sin definir del todo** |
+| 6 | Comparador de tecnologías | **definido**, no empezado |
+| 7 | Escenario guardable | **definido**, no empezado |
+| 8 | Informe | **definido**, no empezado |
 
 ---
 
@@ -179,84 +179,90 @@ podrá calcular cuando lleguen los 736 pares.
 
 ---
 
-# Los tres que faltan
+# Los tres que faltan — ya definidos (2026-09-24)
 
-> **AVISO SOBRE ESTA PARTE.** De los puntos 6, 7 y 8 sólo existe el enunciado
-> corto que se dijo en su día — *«comparador de tecnologías, escenario
-> guardable, informe»*— y lo que se ha ido acordando de pasada. Lo que sigue
-> separa **lo acordado** de **lo que hay que decidir**, y no rellena el segundo
-> grupo: inventarse un alcance y luego construirlo es peor que no tener plan.
+Estos tres vivían sólo en una conversación. Ahora están acordados y escritos.
+Lo que sigue **no es una propuesta**: es el alcance, y lo que se construya se
+mide contra esto.
 
 ## 6 · Comparador de tecnologías
 
-**Acordado:**
+### Qué se compara — por planta y por tecnología
 
-- compara **Zigbee 2,4 GHz contra LoRa EU868 y Wi-SUN FAN** sobre la misma
-  planta y la misma geometría;
-- **`A2` es prerequisito** y ya está hecho para el rayo directo: sin patrón
-  parametrizable, `gtx_dbi` como escalar no se puede llevar a sub-GHz, porque
-  allí la antena es otra con otro patrón;
-- **el punto 2 lo condiciona**: con un tilt fijo la comparación mide menos de
-  lo que dice;
-- la fase 3 (`FASE3_LATENCIA_STOW.md`) ya dice que **no hay veredicto de
-  latencia** y por qué: ni el tiempo por salto ni el número de transacciones
-  están medidos en ningún repo. Un ranking sin eso delante se lee como si lo
-  estuviera.
+| criterio | |
+|---|---|
+| **TCU cubiertas** | cuántas tienen enlace |
+| **TCU sin camino alternativo** | las que dependen de un solo salto |
+| **NCU o gateways necesarios** | cuántos, y **a qué altura** |
+| **saltos** | máximo y mediano |
+| **latencia de la orden de stow** | hasta la **ÚLTIMA** TCU, no la media |
+| **capacidad de telemetría** | cuánta se usa de la disponible |
+| **legalidad en España** | verificada contra la norma |
 
-**Por decidir, y no me lo invento:**
+### Qué se declara para LoRa y Wi-SUN
 
-- **qué se compara**: ¿alcance por salto, número de NCU necesarias, latencia a
-  la última TCU, coste, las cuatro?
-- **qué se declara y qué se calibra** para LoRa y Wi-SUN: hoy no hay datasheet
-  citado de ninguna de las dos, y el criterio del repo es que un número sin
-  procedencia no entra;
-- **cómo se presenta** un resultado en el que una tecnología gana en una cosa
-  y pierde en otra;
-- **si el comparador vive en el visor o es un útil de línea de órdenes** que
-  publica una tabla.
+Todo rotulado **PREDICCIÓN**, sin campaña. Ptx, sensibilidad y plan de canal de
+un **módulo de referencia citado**; la regulación **verificada contra la norma**,
+no recordada.
+
+### Empate parcial
+
+**No se resuelve con un índice único.** Tabla por criterio. Donde la
+incertidumbre tape la diferencia se dice **«no distinguible con lo medido»**.
+Nada de puntuaciones agregadas: un número único esconde de qué está hecho, que
+es el defecto que este documento lleva toda la fase quitando.
+
+### Dónde, y a qué hora
+
+En el visor, con el selector que ya estaba previsto. Y **la comparación se
+evalúa a varias horas del día, no a una**: con hasta **27,8 dB de variación por
+la hora** (medido en el punto 2), comparar tecnologías a una hora fija no
+compara nada.
 
 ## 7 · Escenario guardable
 
-**Acordado:**
+### Qué entra
 
-- que se pueda **guardar y recuperar** un estado del visor para volver a él o
-  pasárselo a otro, en vez de reconstruirlo a mano;
-- por la regla del repo, un escenario guardado tiene que llevar **con qué
-  parámetros se generó** — si no, se convierte en una captura más que se lee
-  igual de bien que una de hoy y dice otra cosa, que es justo lo que ha pasado
-  con el motor antiguo.
+Planta · tecnología · variante de radio · **fecha y hora** · altura de eje ·
+vegetación · terreno usado **y su calidad** · posiciones de NCU o gateways · y
+la **versión de `radio_params` con su sha**.
 
-**Por decidir:**
+### Dónde
 
-- **qué entra** en un escenario: ¿planta, NCU colocadas, tilt, variante,
-  terreno, capa activa, parámetros?
-- **dónde se guarda**: ¿fichero descargable, `localStorage`, repo?
-- **qué pasa al abrir un escenario viejo** cuyos parámetros ya no son los de
-  hoy: ¿se recalcula, se avisa, se niega?
-- **versionado**: un escenario sin versión de `radio_params.json` no es
-  reproducible.
+En la **URL** si cabe; si no, un **JSON que se descarga y se carga**. **Nada de
+almacenamiento del navegador**: lo que no se puede pasar a otro no es un
+escenario compartible, y lo que vive en un navegador se pierde sin avisar.
+
+### Al abrir uno viejo
+
+Se compara la versión de parámetros con la actual. Si difieren: **se avisa y se
+ofrece recalcular**. **Nunca** se pinta con los de hoy diciendo que son los de
+entonces — que es exactamente lo que pasó con las capturas del motor antiguo.
+
+### Versionado
+
+El escenario lleva **su propia versión de formato** y el **commit del motor**.
 
 ## 8 · Informe
 
-**Acordado:**
+### Formato
 
-- sacar del visor un documento con el resultado de una planta, para llevárselo
-  a una reunión o a un cliente;
-- tiene que llevar **la procedencia y el alcance** encima: con qué motor, con
-  qué parámetros, cuántos enlaces mirados de cuántos, y qué mecanismos no se
-  han podido evaluar. Un informe que no lo diga hereda todos los problemas que
-  esta fase lleva cerrando.
+**Markdown reproducible desde un útil**, con el escenario del punto 7 como
+entrada. PDF, después, si se quiere.
 
-**Por decidir:**
+### Secciones
 
-- **formato**: ¿PDF como el que ya emite el visor, Markdown, HTML?
-- **qué secciones**, y cuáles son obligatorias;
-- **qué se hace cuando faltan datos** (sin terreno, sin campaña, sin canal):
-  ¿se emite con los huecos rotulados, o no se emite?
-- **si el informe es reproducible**: mismo escenario → mismo informe, que
-  enlaza con el punto 7.
+1. **escenario y procedencia**
+2. **resultado por criterio**
+3. **alcance** — qué población y qué denominador
+4. **lo no medido**
+5. **qué haría falta para cerrarlo**
 
----
+### Huecos
+
+Se listan **como huecos, con su motivo**. Y la regla dura:
+
+> **Un informe sin la sección de lo que falta no se publica.**
 
 ## Lo que bloquea, en una lista
 
