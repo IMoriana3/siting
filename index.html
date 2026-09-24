@@ -2593,7 +2593,14 @@ function rfEnlace(n,m,rows){
      pasa el punto de destino como un {x,y} pelado. Mientras `rfAngulo` devuelva
      el tilt global esto da igual; cuando el angulo sea por seguidor y por hora
      -punto 2 de la fase 4- hay que pasar el indice de los DOS extremos. */
-  let zA=rfAlturaAntena(rfAngulo(n.i)), zB=rfAlturaAntena(rfAngulo(m.i));
+  /* LA ALTURA DE ANTENA DEL EXTREMO, SI EL NODO LA DECLARA. Un extremo que no
+     es un seguidor —la NCU, con el latigo a 3,15 m segun `antena_ncu_m`— no
+     tiene indice de seguidor y con `rfAlturaAntena(rfAngulo(i))` salia a la
+     cota de un TCU: 0,505 m. Los tres enlaces TCU->NCU de El Burgo se estaban
+     evaluando con la fisica equivocada y el careo los daba por buenos igual.
+     Con `antenaM` declarado se usa ese, y si no, el del seguidor como siempre. */
+  let zA=(n&&n.antenaM!=null)?n.antenaM:rfAlturaAntena(rfAngulo(n.i));
+  let zB=(m&&m.antenaM!=null)?m.antenaM:rfAlturaAntena(rfAngulo(m.i));
   /* EL TERRENO, SI LO HAY. `rfAlturaAntena` da la altura SOBRE EL SUELO; el
      motor quiere cotas ABSOLUTAS cuando se le pasa perfil, o la antena queda
      bajo su propia tierra lisa y el relieve sale 0,0029 dB —indistinguible de

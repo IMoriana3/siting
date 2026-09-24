@@ -40,7 +40,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cargaApp, uneNodos, ic } from './_motor_app.mjs';
+import { cargaApp, uneNodos, ic, ncuDeLayout, ANTENA_NCU_M } from './_motor_app.mjs';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
@@ -88,7 +88,11 @@ const ctx = APP.ctx;
    MI distancia contra la `distancia_m` del fichero: ratios de 1,00 en los que
    acertaban y de hasta 33,8 en los que no. Un factor uniforme habría sido un
    problema de sistema de coordenadas; factores dispares son identidad. */
-const { nodos, sinCruzar, desigDiscrepa } = uneNodos(REAL, ctx.S.motors);
+/* El gw de los enlaces medidos dice CUÁL de las NCU del layout es el
+   coordinador; su posición sale del bloque `ncus`, declarada. */
+const GW = (REAL.features.find(f => f.geometry.type === 'LineString') || { properties: {} }).properties.gw;
+const NCU = ncuDeLayout(L, GW);
+const { nodos, sinCruzar, desigDiscrepa } = uneNodos(REAL, ctx.S.motors, NCU);
 
 /* ── 4 · LOS PARES A EVALUAR ─────────────────────────────────────────────
    Dos fuentes, y se dice cuál se ha usado. Sin `--pares`, los 52 del árbol. */
@@ -176,16 +180,25 @@ const FUERA_POS = { 'TCU_SUNNER_ID_108': 'posición discrepante entre layout y c
 const FALTA_TERMINO = /relieve_no_evaluado|relieve_dem_sin_resolucion|relieve_perfil_no_cubre|vegetacion_no_modelada|parametros_no_cargados/;
 
 const rows = ctx.rfRows();
-const clases = { acierto: [], mata: [], incompleto: [], noEval: [], sinNodo: [], excluido: [] };
+const clases = { acierto: [], mata: [], incompleto: [], noEval: [], sinNodo: [], excluido: [], coord: [] };
 for (const par of pares) {
   const A = nodos.get(par.a), B = nodos.get(par.b);
   if (FUERA_POS[par.a] || FUERA_POS[par.b]) { clases.excluido.push(par); continue; }
-  if (!A || !B || A.coord || B.coord || A.i == null || B.i == null) { clases.sinNodo.push(par); continue; }
-  const n = { ...ctx.S.motors[A.i], i: A.i }, m = { ...ctx.S.motors[B.i], i: B.i };
+  const pt = z => z && (z.i != null ? { ...ctx.S.motors[z.i], i: z.i }
+                      : (z.pos ? { ...z.pos, i: -1, az: 0, antenaM: z.antenaM } : null));
+  const n = pt(A), m = pt(B);
+  if (!n || !m) {
+    clases.sinNodo.push({ ...par,
+      porQue: [[par.a, A], [par.b, B]].filter(([, z]) => !pt(z))
+        .map(([id, z]) => id + ': ' + ((z && z.sinPos) || 'no cruza con el layout')).join(' · ') });
+    continue;
+  }
+  const conCoord = !!(A.coord || B.coord);
   let pr; try { pr = ctx.rfEnlace(n, m, rows); } catch (e) { clases.noEval.push({ ...par, err: e.message }); continue; }
   const mg = pr && pr.margenDb;
-  if (mg == null) clases.noEval.push({ ...par, motivos: pr && pr.motivos });
-  else if (mg >= 0) clases.acierto.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
+  if (mg == null) { clases.noEval.push({ ...par, motivos: pr && pr.motivos }); if (conCoord) clases.coord.push({ ...par, mg: null, motivos: pr && pr.motivos }); continue; }
+  if (conCoord) clases.coord.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
+  if (mg >= 0) clases.acierto.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
   else if ((pr.motivos || []).some(x => FALTA_TERMINO.test(x)))
     clases.incompleto.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
   else clases.mata.push({ ...par, mg, D: pr.D, motivos: pr.motivos });
@@ -236,6 +249,29 @@ if (clases.incompleto.length) {
     console.log('    ' + ((nodos.get(x.a).props.etiqueta || x.a) + ' → ' + (nodos.get(x.b).props.etiqueta || x.b)).padEnd(24)
       + String(x.D.toFixed(0)).padStart(5) + '  ' + x.mg.toFixed(2).padStart(7) + '   '
       + (x.motivos || []).filter(m => FALTA_TERMINO.test(m)).join(', '));
+}
+
+if (clases.coord.length) {
+  console.log('\n  ═══ LOS ENLACES TCU → NCU, APARTE ═══');
+  console.log('    Su física NO es la de un enlace entre TCU: la antena de la NCU va a '
+            + ANTENA_NCU_M.toFixed(2) + ' m');
+  console.log('    frente a los ' + (clases.acierto[0] ? '0,51' : '0,5') + ' de un seguidor. Y elegir dónde va la NCU es');
+  console.log('    para lo que existe esta herramienta, así que van contados también solos.');
+  console.log('');
+  console.log('    posición de la NCU        (' + NCU.x + ', ' + NCU.n + ')  «' + NCU.name + '»  — ' + NCU.porQue);
+  console.log('    residuo contra el censo   1,04 m p50 sobre 51 TCU (los seguidores cuadran a 0,16:');
+  console.log('                              la NCU se conoce PEOR, y sobre 29 m eso no es poco)');
+  console.log('');
+  console.log('    enlace                    D(m)   margen   veredicto');
+  for (const x of clases.coord.sort((p, q) => (p.mg ?? 0) - (q.mg ?? 0))) {
+    const et = (nodos.get(x.a).props.etiqueta || 'NCU') + ' → ' + (nodos.get(x.b).props.etiqueta || 'NCU');
+    console.log('    ' + et.padEnd(24) + String((x.D || 0).toFixed(0)).padStart(5) + '  '
+      + (x.mg == null ? '   null' : x.mg.toFixed(2).padStart(7)) + '   '
+      + (x.mg == null ? 'no evaluado' : x.mg >= 0 ? 'ACIERTO' : 'lo mata'));
+  }
+  console.log('');
+  console.log('    ' + clases.coord.filter(x => x.mg != null && x.mg >= 0).length + ' de ' + clases.coord.length
+            + ' aciertos  ' + ic(clases.coord.filter(x => x.mg != null && x.mg >= 0).length, clases.coord.length));
 }
 
 console.log('\n  ═══ LO QUE ESTO NO DICE ═══');

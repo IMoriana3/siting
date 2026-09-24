@@ -66,18 +66,64 @@ export function cargaApp(layout) {
    esclavo, 28 nodos de El Burgo apuntaban al seguidor equivocado y el informe
    daba un 91,8 % de aciertos perfectamente creíble. Va aquí para que los dos
    útiles usen la misma. */
+/* la cota de la antena de la NCU, leída del JSON versionado y no escrita aquí */
+export const ANTENA_NCU_M = (() => {
+  const p = JSON.parse(fs.readFileSync(path.join(RAIZ, 'radio_params.json'), 'utf8'));
+  const v = p.geometria && p.geometria.antena_ncu_m;
+  if (!v || !(v.valor > 0)) throw new Error('radio_params.json no trae `geometria.antena_ncu_m`');
+  return v.valor;
+})();
+
 export const claveTcu = (ncu, esclavo) => String(Number(ncu)) + ':' + String(Number(esclavo));
+
+/* ── EL COORDINADOR, QUE ES LA NCU ───────────────────────────────────────
+   El COORD de la malla medida NO es un seguidor y no tiene índice en
+   `S.motors`, así que sus enlaces quedaban fuera de toda comparación — y son
+   justo los que importan, porque elegir dónde va la NCU es para lo que existe
+   Siting.
+
+   SU POSICIÓN ESTÁ DECLARADA, no se deduce de sus hijos: `<planta>_layout.json`
+   trae un bloque `ncus` con `{x, n, name}`. En El Burgo son dos, y CUÁL es el
+   coordinador lo dice el DATO: los 52 enlaces medidos llevan `gw: "NCU1-GW2"`.
+   Comprobado además por geometría —el residuo de la posición del COORD del
+   geojson contra la NCU 1 del layout es p50 1,04 m sobre 51 TCU, y contra la
+   NCU 2 sería 180 m—, que es confirmación independiente, no la fuente.
+
+   OJO CON ESE 1,04 m: los seguidores cuadran entre los dos ficheros a 0,16 m y
+   la NCU a 1,04. La posición de la NCU se conoce con MENOS precisión que la de
+   un seguidor, y sobre un enlace de 29 m eso no es despreciable. Va dicho.
+
+   SU ANTENA VA A 3,15 m, no a 0,48: `radio_params.json` → `antena_ncu_m`, con
+   su cita («código: Cobertura-Zigbee/equipos.js `ncuAntY: 3.15` — CENTRO del
+   látigo»). La física de un TCU→NCU no es la de un TCU→TCU. */
+export function ncuDeLayout(layout, gw) {
+  const ncus = layout.ncus || [];
+  if (!ncus.length) return null;
+  if (ncus.length === 1) return { ...ncus[0], idx: 0, porQue: 'el layout declara una sola NCU' };
+  const m = /NCU\s*(\d+)/i.exec(String(gw || ''));
+  if (!m) return null;
+  const i = ncus.findIndex(n => new RegExp('NCU\\s*' + m[1] + '\\b', 'i').test(n.name || ''));
+  return i < 0 ? null : { ...ncus[i], idx: i, porQue: 'los enlaces medidos declaran gw «' + gw + '»' };
+}
 
 /* Une los nodos de una malla medida con los seguidores del layout, por la
    clave declarada. Devuelve {nodos, sinCruzar, desigDiscrepa} — el que llama
-   decide qué hace con los dos últimos, pero NO se emparejan por cercanía. */
-export function uneNodos(real, motors) {
+   decide qué hace con los dos últimos, pero NO se emparejan por cercanía.
+   `ncu` (opcional) da posición al COORD para que sus enlaces se evalúen. */
+export function uneNodos(real, motors, ncu) {
   const porId = new Map(motors.map((m, i) => [claveTcu(m.ncu, m.id), i]));
   const nodos = new Map(), sinCruzar = [], desigDiscrepa = [];
   for (const f of real.features) {
     if (f.geometry.type !== 'Point') continue;
     const p = f.properties, m = /TCU_SUNNER_ID_(\d+)/.exec(p.id || '');
-    if (!m) { nodos.set(p.id, { coord: true, props: p }); continue; }
+    if (!m) {
+      /* el COORD con posición declarada entra como un nodo más, con su cota de
+         antena propia; sin ella se queda fuera y SE DICE por qué */
+      nodos.set(p.id, ncu
+        ? { coord: true, props: p, pos: { x: ncu.x, y: ncu.n }, antenaM: ANTENA_NCU_M, ncu }
+        : { coord: true, props: p, sinPos: 'el layout no declara la posición de su NCU' });
+      continue;
+    }
     const i = porId.get(claveTcu(p.ncu, m[1]));
     if (i == null) { sinCruzar.push(p.id); continue; }
     if (p.desig && motors[i].desig && p.desig !== motors[i].desig)
