@@ -393,6 +393,10 @@ jobs:
                                             sinRotularSeCuela procedenciaOptimista corteTecleado \
                                             demCuelaComoVisto anillaPorTapado tapadoEnRojo
 
+          # la copia fijada de `sol.js`: una copia sin quien la caree se queda
+          # vieja en silencio, que es lo que le pasó a SolarGPTfull
+          rojo node tests/test_sol_pin.js copiaDesviada lockRancio sinBacktracking sinTope
+
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
                                                    py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \

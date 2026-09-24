@@ -8,6 +8,7 @@
 <link rel="icon" href="favicon.svg">
 <!-- sin fuentes de Google: offline (fuentes del sistema) -->
 <script src="lib/xlsx.full.min.js"></script><!-- SheetJS LOCAL (sin CDN): offline -->
+<script src="lib/sol.js"></script><!-- COPIA FIJADA de Cobertura-Zigbee/sol.js: sol NOAA + singleaxis de pvlib. Ver lib/sol.lock.json y tests/test_sol_pin.js -->
 <script src="zigbee_pv_model.js"></script><!-- modelo ANTIGUO (A), congelado: se conserva en el selector para comparar -->
 <script src="radio_pv_model.js"></script><!-- motor NUEVO: geometría de banda + física por frecuencia -->
 <script src="radio_zigbee.js"></script><!-- la capa Zigbee: balance, variantes, lo que no se sabe apagado -->
@@ -2260,7 +2261,15 @@ const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
   /* MOTOR: "nuevo" por defecto, "antiguo" conserva zigbee_pv_model.js con su
      sesgo de El Burgo dentro. Los dos van ROTULADOS en pantalla: quien mire un
      mapa tiene que saber cual esta viendo. */
-  rf:{motor:"nuevo", variante:"zigbee_pro_24"},
+  rf:{motor:"nuevo", variante:"zigbee_pro_24",
+      /* EL SOL, para el ángulo por seguidor y por hora (fase 4, punto 2).
+         `on:false` = el deslizador de siempre, que es lo que había. Al
+         encenderlo hacen falta `lat`, `lon` y `horaUTC`; si falta alguna, el
+         enlace sale CON MOTIVO y no con un ángulo inventado.
+         PENDIENTE: el control en pantalla. Hoy lo enciende
+         `tools/careo_angulo_hora.mjs`, que es lo que mide cuánto mueve. */
+      sol:{on:false, lat:null, lon:null, horaUTC:null, gcr:null,
+           axisTilt:0, axisAz:0, backtrack:true, maxAngle:60}},
   /* EL TERRENO DE LA PLANTA. `null` = no se ha intentado; un objeto con
      `ok:false` = se intentó y NO se pudo, con su motivo. Los dos se leen
      distinto y por eso no se mezclan. Lo carga `abreTerreno()` al aplicar un
@@ -2550,7 +2559,52 @@ function rfPropagacion(){ const p=rfParamsNuevo(); if(!p)return null;
   return {eps_r_suelo:p.propagacion.eps_r_suelo.valor, sigma_suelo_s_m:p.propagacion.sigma_suelo_s_m.valor,
           polarizacion:p.propagacion.polarizacion.valor, sigma_db:p.propagacion.sigma_db.valor,
           vegetacion:{modelo:p.vegetacion.modelo.valor}}; }
-function rfAngulo(_i){ return rfTilt(); }          // punto 2: por seguidor y por hora
+/* ══ EL ÁNGULO DE UN SEGUIDOR, POR SEGUIDOR Y POR HORA ════════════════════
+   (fase 4, punto 2 del visor)
+
+   Hasta hoy esto devolvía `rfTilt()` —el deslizador— para TODOS los seguidores
+   y a TODAS las horas. El parámetro `_i` existía desde la fase 2 esperando
+   justo esto, con el comentario que lo decía.
+
+   EL MODELO NO SE ESCRIBE AQUÍ. Sale de `lib/sol.js`, que es de
+   Cobertura-Zigbee y está contrastado contra pvlib en `backtracking.html`:
+   posición NOAA del sol y el `singleaxis` de pvlib con backtracking por GCR.
+   Hay copia fijada con su lock porque esta app se sirve desde Pages y no puede
+   leer un repo hermano en marcha, y `tests/test_sol_pin.js` la carea byte a
+   byte contra el canon — sin hermano sale rc = 2, no verde.
+
+   LO QUE «POR SEGUIDOR» VALE HOY, MEDIDO: en las DOCE plantas del hermano,
+   TODOS los seguidores tienen la MISMA rotación de eje. Como `singleaxis`
+   depende del azimut del eje y de la posición del sol —que sobre 500 m no
+   cambia—, hoy el ángulo sale idéntico para todos. O sea que el efecto entero
+   está en la mitad «POR HORA». El `i` se pasa de verdad igualmente, porque el
+   día que llegue una planta con bloques girados distinto —o seguimiento
+   adaptado a pendiente— funcionará sin tocar nada. Va MEDIDO y escrito para
+   que nadie lo lea como un olvido.
+
+   SIN DATOS NO SE INVENTA UN ÁNGULO: si falta la posición de la planta o la
+   hora, se cae al deslizador Y SE ANOTA EL MOTIVO, que viaja hasta la salida
+   de `rfEnlace`. Un valor por defecto callado aquí movería todos los enlaces
+   del mapa sin que nada lo dijera. */
+let _rfAngMotivo=null;
+function rfAnguloMotivo(){ return _rfAngMotivo; }
+function rfAngulo(i){
+  const s=S.rf&&S.rf.sol;
+  if(!s||!s.on){ return rfTilt(); }
+  if(typeof Sol==="undefined"||!Sol.singleaxis){ _rfAngMotivo="modelo_de_sol_no_cargado"; return rfTilt(); }
+  if(s.lat==null||s.lon==null){ _rfAngMotivo="posicion_de_planta_no_declarada"; return rfTilt(); }
+  if(s.horaUTC==null){ _rfAngMotivo="hora_no_declarada"; return rfTilt(); }
+  const p=Sol.solarPos(s.horaUTC, s.lat, s.lon);
+  if(!(p.elev>0)){ _rfAngMotivo="sol_bajo_el_horizonte"; return rfTilt(); }
+  /* EL EJE ES EL DEL SEGUIDOR `i`, no uno común: eso es el «por seguidor». */
+  const m=(i!=null&&S.motors&&S.motors[i])?S.motors[i]:null;
+  const axisAz=(m&&m.az!=null)?m.az:(s.axisAz||0);
+  const a=Sol.singleaxis(90-p.elev, p.az, {axisTilt:s.axisTilt||0, axisAz:axisAz,
+                                           backtrack:s.backtrack!==false, gcr:s.gcr,
+                                           maxAngle:s.maxAngle==null?60:s.maxAngle});
+  if(!isFinite(a)){ _rfAngMotivo="el_modelo_no_da_angulo"; return rfTilt(); }
+  return a;
+}
 /* LA COTA DEL EJE DEL TUBO, POR PLANTA. `alturaEje` lee `eje_m` del `montaje`
    de la planta y, si no esta, cae al defecto declarado CON MOTIVO —que es lo
    que pasa en las DOCE, porque nadie lo ha medido—. El motivo viaja hasta la
@@ -2582,6 +2636,7 @@ function rfCruces(n,m,rows){
 }
 
 function rfEnlace(n,m,rows){
+  _rfAngMotivo=null;
   const P=rfPropagacion(), V=rfVariante();
   if(!P||!V) return {margenDb:null, motivos:["parametros_no_cargados"], cruces:[], D:0};
   const D=Math.hypot(m.x-n.x,m.y-n.y);
@@ -2668,6 +2723,10 @@ function rfEnlace(n,m,rows){
   pr.detalle=RadioPV.difraccionPanelesDetalle(D,zA,zB,cruces,V.f_hz);
   pr.cruces=cruces; pr.D=D; pr.zA=zA; pr.zB=zB; pr.variante=V.nombre||null;
   const e=rfEjeTubo(); if(e&&e.motivo) pr.motivos=(pr.motivos||[]).concat([e.motivo]);
+  /* EL MOTIVO DEL ÁNGULO, hasta la salida. Si el modelo de sol estaba pedido y
+     no se ha podido usar, el enlace se ha evaluado con el deslizador y eso NO
+     puede quedarse callado. */
+  const am=rfAnguloMotivo(); if(am) pr.motivos=(pr.motivos||[]).concat(["angulo_"+am]);
   /* EL CENSO DE MOTIVOS, ACUMULADO AQUI, que es el unico sitio por donde pasan
      TODOS los enlaces del mapa y del panel.
      Existe por un defecto que estuvo a la vista sin verse: 568 de 6.036

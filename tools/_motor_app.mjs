@@ -36,11 +36,17 @@ export function cargaApp(layout) {
 
   const ctx = {
     console, require, Math, JSON, Object, Array, Number, String, isFinite, parseFloat,
+    /* EL SOL, para el ángulo por seguidor y por hora. Es la COPIA FIJADA de
+       Cobertura-Zigbee, careada byte a byte por `tests/test_sol_pin.js`. */
+    Sol: require(path.join(RAIZ, 'lib', 'sol.js')),
     RadioPV: require(path.join(RAIZ, 'radio_pv_model.js')),
     RadioZigbee: require(path.join(RAIZ, 'radio_zigbee.js')),
     ZigbeePV: require(path.join(RAIZ, 'zigbee_pv_model.js')),
     document: { getElementById: () => null },
-    S: { motors: [], p: { twid: 12, tlen: 64 }, bifila: null, _rfRows: null, rf: {} },
+    S: { motors: [], p: { twid: 12, tlen: 64 }, bifila: null, _rfRows: null,
+         rf: { motor: 'nuevo', variante: 'zigbee_pro_24',
+               sol: { on: false, lat: null, lon: null, horaUTC: null, gcr: null,
+                      axisTilt: 0, axisAz: 0, backtrack: true, maxAngle: 60 } } },
   };
   ctx.window = ctx;
   vm.createContext(ctx);

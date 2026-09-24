@@ -12,7 +12,7 @@ Fecha de esta versión: **2026-09-24**.
 | | punto | estado |
 |---|---|---|
 | 1 | Motor único, parámetros con procedencia | hecho, con reservas |
-| 2 | Ángulo por seguidor y por hora | **no empezado** |
+| 2 | Ángulo por seguidor y por hora | hecho en el motor; falta el control en pantalla |
 | 3 | Medido frente a predicho | hecho, sobre 52 de ~736 pares |
 | 4 | Robustez | hecho |
 | 5 | Estados e incertidumbre | hecho, sin probabilidad |
@@ -46,23 +46,63 @@ vocabulario cerrado, y lo que no se sabe va a `null` con motivo.
 
 ## 2 · Ángulo por seguidor y por hora
 
-**No empezado.** `rfAngulo(_i)` devuelve hoy el tilt global para todos los
-seguidores, y el parámetro `_i` existe precisamente para que deje de hacerlo:
-el comentario de `rfEnlace` lo dice desde la fase 2.
+**Hecho en el motor** (2026-09-24). `rfAngulo(i)` ya no devuelve el deslizador:
+con `S.rf.sol.on` saca el ángulo de `lib/sol.js` —posición NOAA del sol y el
+`singleaxis` de pvlib con backtracking por GCR— para la hora pedida y con el
+eje de CADA seguidor.
 
-Qué implica, tal como está entendido:
+El modelo **no se reescribe aquí**: es copia fijada del de Cobertura-Zigbee,
+contrastado contra pvlib en `backtracking.html`, con su lock y un banco que la
+carea byte a byte contra el canon (`tests/test_sol_pin.js`; sin hermano, rc=2).
 
-- cada extremo del enlace se evalúa con el **alfa de SU seguidor**, no con uno
-  común — la altura de antena ya sale del eje de su fila con ese alfa;
-- y por HORA, porque el seguimiento mueve los paneles a lo largo del día: el
-  mismo enlace tiene despeje distinto a las 8 y a las 14;
-- el raster de cobertura pasa `{x, y}` **pelados** a propósito (son receptores
-  hipotéticos, no equipos), así que ahí no hay índice de seguidor y hay que
-  decidir qué alfa se usa. Hoy eso no importa porque el alfa es global; **en
-  cuanto sea por seguidor, importa.**
+**Cuánto mueve, medido sobre 6.036 enlaces de 10 plantas** —
+`tools/careo_angulo_hora.mjs`, solsticio de verano:
 
-**Por qué bloquea al punto 6:** un comparador de tecnologías que evalúe todo
-con un tilt fijo compara menos de lo que dice comparar.
+| planta | enlaces | p50 \|Δ\| | p95 \|Δ\| | máx \|Δ\| |
+|---|---|---|---|---|
+| ayora | 751 | 1,93 | 6,50 | **17,06** |
+| benante | 730 | 2,40 | 6,38 | **27,31** |
+| elburgo | 215 | 5,70 | 9,60 | 16,54 |
+| panbianco | 1476 | 2,27 | 6,09 | **27,82** |
+| sanjose | 2289 | 1,77 | 5,89 | 16,46 |
+
+Δ = margen con el ángulo del sol − margen con el tilt fijo de 30°.
+
+**El contraste que el punto 6 necesita** — mediodía SOLAR de cada planta contra
+la hora en que el backtracking corrige de verdad:
+
+| planta | mediodía | p50 Δ | backtracking | p50 Δ | razón |
+|---|---|---|---|---|---|
+| elburgo | 12:00 (1°) | 6,67 | 5:00 (20°, corr −40°) | 2,26 | ×3,0 |
+| fayon | 12:00 (0°) | 10,04 | 5:00 (22°, corr −38°) | 2,10 | ×4,8 |
+| sanjose | 17:00 (−3°) | 5,89 | 12:00 (51°, corr −9°) | 1,52 | ×3,9 |
+| tunez | 11:00 (5°) | 8,98 | 18:00 (−26°, corr 34°) | 1,08 | ×8,3 |
+
+**Y una validación interna:** en El Burgo, a las 10:00 el seguidor va a 29,2° —
+casi el 30° fijo— y la diferencia cae a **0,16 dB**. El método coincide consigo
+mismo exactamente donde los ángulos coinciden.
+
+### Lo que «por seguidor» vale hoy, y está medido
+
+En las **doce** plantas del repo hermano, todos los seguidores tienen la
+**misma rotación de eje**. Como `singleaxis` depende del azimut del eje y de la
+posición del sol —que sobre 500 m no cambia—, hoy el ángulo sale idéntico para
+todos: **el efecto entero está en la mitad «por hora»**. El índice se pasa de
+verdad igualmente, para el día que llegue una planta con bloques girados
+distinto o seguimiento adaptado a pendiente.
+
+### Lo que queda fuera
+
+- **El control en pantalla.** Hoy `S.rf.sol` lo enciende el útil de careo; la
+  app sigue con el deslizador. Falta decidir cómo se elige la hora y si el
+  deslizador se queda como anulación manual.
+- **El raster de cobertura** pasa `{x, y}` pelados a propósito —son receptores
+  hipotéticos, no equipos—, así que ahí no hay índice de seguidor. Con el alfa
+  global daba igual; con el alfa por seguidor hay que decidir qué ángulo usa.
+- **Un solo día.** El careo barre el solsticio de verano, que es el de mayor
+  recorrido. El invierno mueve otra cosa y no está medido.
+- Sin datos no se inventa un ángulo: si falta la posición de la planta o la
+  hora, se cae al deslizador **con motivo** (`angulo_*`), que viaja a la salida.
 
 ## 3 · Medido frente a predicho
 

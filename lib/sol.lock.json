@@ -1,0 +1,31 @@
+{
+ "_lee_esto_primero": [
+  "COPIA FIJADA de `sol.js`, que es de Cobertura-Zigbee y vive allí.",
+  "",
+  "Por qué hay copia y no un enlace: la app de Siting es un HTML que se sirve",
+  "desde Pages y no puede leer un repo hermano en tiempo de ejecución. Y por qué",
+  "no se reescribe aquí: el modelo de seguimiento —posición NOAA del sol y el",
+  "`singleaxis` de pvlib con backtracking por GCR— está CONTRASTADO contra pvlib",
+  "en `backtracking.html`, y una segunda versión de la ecuación del tiempo es",
+  "exactamente lo que ese módulo se creó para evitar. Su propia cabecera lo dice.",
+  "",
+  "La copia se carea byte a byte contra el canon en `tests/test_sol_pin.js`, que",
+  "usa el clon hermano que la CI ya hace. Sin hermano sale rc = 2, no verde: «no",
+  "he podido mirar» no es «está bien».",
+  "",
+  "Si el canon cambia: se vuelve a copiar, se actualiza este fichero, y se mira",
+  "qué se mueve en el careo de `tools/careo_angulo_hora.mjs` antes de darlo por",
+  "bueno. Un modelo de seguimiento que cambia mueve TODOS los enlaces."
+ ],
+ "canon": {
+  "repo": "imoriana3/cobertura-zigbee",
+  "ruta": "sol.js",
+  "version": "0.3.0"
+ },
+ "copia": {
+  "ruta": "lib/sol.js",
+  "sha256": "28b91f891211845b33a528fac3548c61251be7869d4c2fceb5dd662a87f89d7a",
+  "fijada": "2026-09-24"
+ },
+ "_para_que": "El ángulo de cada seguidor a cada hora (fase 4, punto 2 del visor). Hasta ahora `rfAngulo` devolvía el tilt global del deslizador para todos y a todas horas."
+}

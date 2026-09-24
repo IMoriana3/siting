@@ -59,7 +59,7 @@ const bancos = fs.existsSync(dirTests)
    El piso se MIDE y sólo se BAJA a propósito: hoy 13 de 19 bancos tienen
    tabla, y los 6 sin ella no son un defecto —no todo banco necesita
    mutaciones—, pero perder una SÍ lo es. */
-const PISO_BANCOS = 14;   // MEDIDO el 2026-09-24 (sube con test_rf_estado.js)
+const PISO_BANCOS = 15;   // MEDIDO el 2026-09-24 (sube con test_sol_pin.js)
 
 /* Y los de `tools/`, que este útil no barre. Hoy no hay ninguno con tabla;
    si aparece, se dice en vez de ignorarlo. */

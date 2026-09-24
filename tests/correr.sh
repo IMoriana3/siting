@@ -57,6 +57,7 @@ declare -A PISO=(
   [test_rf_indice.js]=16
   [test_rf_panel.js]=47
   [test_scada_vivo.js]=36
+  [test_sol_pin.js]=16
   [test_siting_auto.js]=25
   [test_siting_ncu.js]=153
   [test_terreno_planta.js]=62
