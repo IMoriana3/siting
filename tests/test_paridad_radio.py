@@ -41,6 +41,17 @@ MUTACIONES = {
                               'return {"dz": -radio_m, "lateral": 0.0}'),
     # el lateral se pierde SOLO en JS: es el que decide por que lado sale el rayo
     "js_sin_lateral": ("js", r'lateral: r \* Math\.sin\(a\)', 'lateral: 0'),
+    # ── A2: EL PATRON APLICADO AL ENLACE ───────────────────────────────────
+    # la elevacion se calcula con los argumentos cambiados SOLO en Python: deja
+    # de ser el angulo del enlace y pasa a ser su complementario
+    "py_patron_elev":   ("py", r'    elev = math\.atan2\(zB - zA, D\)', '    elev = math.atan2(D, zB - zA)'),
+    # el patron se cobra por UN extremo, solo en JS
+    "js_patron_uno":    ("js", r'return \{ elevRad: elev, porExtremoDb: g, totalDb: 2 \* g \};',
+                                'return { elevRad: elev, porExtremoDb: g, totalDb: g };'),
+    # el vano nulo deja de estar acotado en Python y se cuela un atan2(dz, 0)
+    "py_patron_vano0":  ("py", r'    if not \(D > 0\):\n        return \{"elevRad": 0\.0, "porExtremoDb": 0\.0, "totalDb": 0\.0\}',
+                                '    if False:\n        return {"elevRad": 0.0, "porExtremoDb": 0.0, "totalDb": 0.0}'),
+
     # ── LO NUEVO DEL PUNTO 5: ν PUBLICADO, BULLINGTON CON DETALLE Y ESTADO ──
     # el nuMax se queda en el nivel 0 SOLO en Python: la recursion lo sube en el
     # 27,8 % de los casos del corpus, asi que esto tiene que cazarse
@@ -415,6 +426,28 @@ def casos_estado():
             1e-9, 0.001, 0.5, 3.0, 40.0]
 
 
+def casos_patron_enlace():
+    """A2: EL PATRON APLICADO A UN ENLACE, por sus dos extremos.
+
+    `ganancia_patron_db` ya estaba careada a una elevacion suelta. Lo que no
+    estaba es la cuenta que el BALANCE usa: sacar la elevacion del enlace y
+    cobrarla por los dos extremos. Ahi es donde se equivoca uno, no en el
+    coseno.
+
+    Se barren alturas IGUALES —donde tiene que salir 0,000000 exacto— y el caso
+    TCU->NCU real (0,505 contra 3,15), que es donde deja de ser cero, a vanos
+    de 12 a 350 m. Y el enlace dado la vuelta, porque el patron es PAR."""
+    out = []
+    for patron in ["dipolo", "iso", None]:
+        for D in [12.0, 27.5, 37.0, 47.1, 100.0, 158.0, 350.0]:
+            out.append([D, 0.805, 0.805, patron])      # dos TCU: elevacion 0
+            out.append([D, 0.505, 3.15, patron])       # TCU -> NCU
+            out.append([D, 3.15, 0.505, patron])       # el mismo, del reves
+            out.append([D, 0.505, 6.50, patron])       # TCU -> HSU
+        out.append([0.0, 0.5, 3.15, patron])           # vano nulo
+    return out
+
+
 def casos_peor():
     """EL PEOR DE VARIOS ESTADOS, que es lo que decide el color del enlace.
 
@@ -437,7 +470,7 @@ def casos_peor():
 CASOS = {
     "paneles": casos_paneles(), "regimen": casos_regimen(),
     "bullington": casos_bullington(), "estado": casos_estado(),
-    "peor": casos_peor(),
+    "peor": casos_peor(), "patron_enlace": casos_patron_enlace(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
     "antena": casos_antena(),
 }
@@ -482,6 +515,10 @@ out.bullington = casos.bullington.map(([D, zA, zB, cantos, f]) => {
 });
 out.estado = casos.estado.map(v => R.estadoDeNu(v));
 out.peor = casos.peor.map(es => R.peorEstado(es));
+out.patron_enlace = casos.patron_enlace.map(([D, zA, zB, pat]) => {
+  const g = R.gananciaPatronEnlace(D, zA, zB, pat);
+  return [g.elevRad, g.porExtremoDb, g.totalDb];
+});
 out.antena = casos.antena.map(c => {
   switch (c[0]) {
     case 'ancla':   { const a = R.anclaAntena(c[1], c[2]); return [a.dz, a.lateral]; }
@@ -548,6 +585,10 @@ def corre_python(mod, casos):
                                   mod.estado_de_nu(r["v"])])
     out["estado"] = [mod.estado_de_nu(v) for v in casos["estado"]]
     out["peor"] = [mod.peor_estado(es) for es in casos["peor"]]
+    out["patron_enlace"] = []
+    for D, zA, zB, pat in casos["patron_enlace"]:
+        g = mod.ganancia_patron_enlace(D, zA, zB, pat)
+        out["patron_enlace"].append([g["elevRad"], g["porExtremoDb"], g["totalDb"]])
     out["antena"] = []
     for c in casos["antena"]:
         if c[0] == "ancla":

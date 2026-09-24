@@ -297,7 +297,8 @@ jobs:
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
                                               relieveCallado relieveCortoCero dosRayosSinLisa \
                                               mezclaSigue mezclaSiempre \
-                                              sinUmbralCorto umbralApaga
+                                              sinUmbralCorto umbralApaga \
+                                              patronFuera patronUnExtremo patronMudo
 
           # EL CENSO DE MOTIVOS TIENE QUE SALIR PUBLICADO, no en un log. Existe
           # porque 568 enlaces llevaban un mes con motivo `no cubre el vano` y
@@ -403,7 +404,8 @@ jobs:
                                                    py_eje_medida js_eje_cero py_tapa_cero \
                                                    js_parte_eje py_sin_senphi py_tierra_muda \
                                                    py_numax_nivel0 js_estado_borde py_peor_estado \
-                                                   py_bullington_v
+                                                   py_bullington_v \
+                                                   py_patron_elev js_patron_uno py_patron_vano0
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.

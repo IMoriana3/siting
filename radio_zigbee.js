@@ -248,7 +248,33 @@
     if (variante.canal == null || variante.canal.valor == null) {
       motivos.push("canal_desconocido_ptx_es_cota_superior");
     }
-    salida.prxDbm = variante.ptx_dbm + variante.gtx_dbi + variante.grx_dbi - perdida;
+    /* ══ A2: LA GANANCIA DE PATRÓN, QUE ESTABA DEFINIDA Y NO SE USABA ═══════
+     *
+     * `gananciaPatronDb` existía en el motor, exportada y con su caso en la
+     * paridad desde la fase 2 — y el balance NUNCA la llamaba: sumaba
+     * `gtx + grx` planos. O sea una absorción del inventario (A2) a medias:
+     * escrita, probada, y sin efecto en ningún número.
+     *
+     * `gtx_dbi`/`grx_dbi` son la ganancia de PICO de la antena. El patrón es el
+     * factor RELATIVO a ese pico en la dirección del enlace, así que se suma:
+     * `gtx + patrón` es la ganancia real hacia donde apunta el enlace.
+     *
+     * CON ALTURAS IGUALES ES 0,000 dB EXACTO, que es por lo que entre dos TCU
+     * no cambia nada. Donde cambia es en TCU→NCU, donde 0,505 m contra 3,15 m
+     * sí es una elevación.
+     *
+     * Y ES PREREQUISITO DE SUB-GHz: a 868 MHz la antena es otra, con otro
+     * patrón, y una ganancia plana es optimista de una forma que no se traslada.
+     * Lo dice el propio inventario al declarar A2.
+     *
+     * SIN PATRÓN DECLARADO NO SE PONE 0 EN SILENCIO: se trata como isótropa y
+     * se anota el motivo, que es lo que hace el resto del motor con todo lo que
+     * no sabe. */
+    var pat = RPV.gananciaPatronEnlace(D, zA, zB, enlace.patron || null);
+    if (enlace.patron == null) motivos.push("patron_de_antena_no_declarado");
+    salida.patron = { nombre: enlace.patron || null, elevDeg: pat.elevRad * 180 / Math.PI,
+                      porExtremoDb: pat.porExtremoDb, totalDb: pat.totalDb };
+    salida.prxDbm = variante.ptx_dbm + variante.gtx_dbi + variante.grx_dbi + pat.totalDb - perdida;
 
     /* SIN SENSIBILIDAD NO HAY MARGEN. Es el caso de la variante estándar hoy, y
        devolver aquí un número supuesto sería exactamente el fallo que el

@@ -784,6 +784,25 @@ def ganancia_patron_db(elev_rad, patron=None):
     return 20.0 * math.log10(max(abs(f), 1e-3))
 
 
+def ganancia_patron_enlace(D, zA, zB, patron=None):
+    """Espejo de `gananciaPatronEnlace()`: el patrón aplicado a un enlace.
+
+    EL PATRON ES PAR EN LA ELEVACION. El dipolo vertical da
+    `cos((pi/2)*sen t)/cos t`, y sustituir t por -t deja la expresion identica:
+    `sen` cambia de signo pero `cos` es par y se lo come, y el `cos t` del
+    denominador tambien. El extremo alto y el bajo ven EL MISMO factor, y el
+    total del enlace es 2x el de un extremo. No es una aproximacion: es una
+    simetria de la formula, y el banco la comprueba.
+
+    Con alturas IGUALES sale 0,000 dB exacto (elevacion 0, el broadside), que
+    es por lo que entre dos TCU no se nota; donde si se nota es en TCU->NCU."""
+    if not (D > 0):
+        return {"elevRad": 0.0, "porExtremoDb": 0.0, "totalDb": 0.0}
+    elev = math.atan2(zB - zA, D)
+    g = ganancia_patron_db(elev, patron)
+    return {"elevRad": elev, "porExtremoDb": g, "totalDb": 2 * g}
+
+
 def campo_cercano(d1, d2, f_hz, umbral_lambdas=None):
     """Espejo de `campoCercano()`. P.526 supone el obstáculo lejos de los dos
     extremos en longitudes de onda; cerca no hay «filo», hay una antena metida

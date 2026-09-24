@@ -165,6 +165,50 @@ rf-fv sobre lo que NO modela — *«el látigo cuelga de la viga y bascula con l
 mesa, así que su eje no es exactamente la vertical. Se toma vertical»* — que es
 un supuesto declarado, no una omisión.
 
+### Estado el 2026-09-24: HECHO A MEDIAS, y aquí está qué mitad
+
+**Hecho: el RAYO DIRECTO.** `gananciaPatronEnlace(D, zA, zB, patrón)` saca la
+elevación del enlace y cobra el patrón por los DOS extremos —es par en la
+elevación, así que el extremo alto y el bajo ven el mismo factor—, y
+`presupuesto` lo suma a `gtx + grx`. Existe en los dos motores y la paridad lo
+carea (familia `patron_enlace`). Sin patrón declarado no se pone 0 en silencio:
+sale `patron_de_antena_no_declarado`.
+
+Hasta hoy `gananciaPatronDb` estaba **definida, exportada y careada desde la
+fase 2, y el balance no la llamaba**: sumaba ganancias planas. Una absorción
+escrita, probada, y sin efecto en ningún número.
+
+Cuánto mueve, medido sobre los 52 enlaces REALES de El Burgo:
+
+| tipo | enlaces | elevación p50 | patrón p50 | patrón máx |
+|---|---|---|---|---|
+| TCU–TCU | 49 | 0,00° | **0,0000 dB** | 0,0000 |
+| TCU–NCU | 3 | 4,09° | −0,0649 dB | **−0,1170** |
+
+O sea: cero exacto en 49 de 52 —alturas iguales, broadside— y de −0,04 a −0,12
+dB en los tres TCU→NCU. Contra márgenes de 44,8 a 58,0 dB no cambia ningún
+veredicto. **Su valor no es el dB de hoy: es que sin esto no hay forma de
+llevar el balance a sub-GHz**, que es lo que este veredicto decía desde el
+principio.
+
+**NO hecho: el patrón POR RAYO.** El reflejado sale con otra elevación —baja al
+suelo y vuelve a subir— y hoy entra en `dosRayosDb` sin pesar. Medido lo que
+queda fuera:
+
+| caso | D | elev. directo | elev. reflejado | patrón dir. | patrón refl. | se aparta |
+|---|---|---|---|---|---|---|
+| TCU–TCU | 12 m | 0,00° | −7,64° | 0,0000 | −0,2268 | **−0,2268** |
+| TCU–TCU | 24 m | 0,00° | −3,84° | 0,0000 | −0,0572 | −0,0572 |
+| TCU–TCU | 158 m | 0,00° | −0,58° | 0,0000 | −0,0013 | −0,0013 |
+| TCU–NCU | 27,5 m | 5,49° | −7,57° | −0,1172 | −0,2226 | −0,1054 |
+| TCU–HSU | 30 m | 11,30° | −13,14° | −0,4962 | −0,6714 | −0,1752 |
+
+No es un desplazamiento común a los dos rayos: es un peso RELATIVO entre ellos,
+así que mueve dónde caen los nulos de la interferencia y no sólo el nivel. Es
+pequeño —como mucho 0,23 dB de diferencia— pero exige entrar en `dosRayosDb`,
+cambia todos los números del término de dos rayos y necesita su propia medida y
+su propio banco. Queda declarado, no olvidado.
+
 ---
 
 ## 3. Altura de antena

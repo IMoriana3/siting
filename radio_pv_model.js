@@ -1180,6 +1180,37 @@
     return 20 * Math.log10(Math.max(Math.abs(f), 1e-3));
   }
 
+  /* ── LA GANANCIA DE PATRÓN DE UN ENLACE, POR SUS DOS EXTREMOS ────────────
+   *
+   * `gananciaPatronDb` da el factor del patrón a UNA elevación. Esto lo aplica
+   * a un enlace concreto, que es lo que el balance necesita, y existe como
+   * función propia por dos razones:
+   *
+   *   · para que el gemelo de Python tenga la MISMA cuenta y la paridad pueda
+   *     vigilarla — hacerla a mano dentro de `presupuesto`, que sólo existe en
+   *     JS, la dejaría fuera de todo careo;
+   *   · porque la parte que se equivoca no es el patrón, es la ELEVACIÓN.
+   *
+   * EL PATRÓN ES PAR EN LA ELEVACIÓN. El dipolo vertical da
+   * `cos((π/2)·sen θ)/cos θ`, y sustituir θ por −θ deja la expresión idéntica:
+   * `sen` cambia de signo, pero `cos` es par y se lo come, y el `cos θ` del
+   * denominador también. O sea que el extremo alto y el bajo ven EL MISMO
+   * factor, y el total del enlace es 2× el de un extremo. No es una
+   * aproximación: es una simetría de la fórmula, y el banco la comprueba.
+   *
+   * CON ALTURAS IGUALES SALE 0,000 dB EXACTO —elevación 0, que es el
+   * broadside—, y por eso a 2,4 GHz entre dos TCU no se nota. Donde sí se nota
+   * es en TCU→NCU: 0,505 m contra 3,15 m es una elevación real.
+   *
+   * `patron` nulo NO es 0 dB en silencio: quien llama recibe `patron: "iso"` y
+   * se le anota el motivo. Un cero callado es la forma más barata de mentir. */
+  function gananciaPatronEnlace(D, zA, zB, patron) {
+    if (!(D > 0)) return { elevRad: 0, porExtremoDb: 0, totalDb: 0 };
+    var elev = Math.atan2(zB - zA, D);
+    var g = gananciaPatronDb(elev, patron);
+    return { elevRad: elev, porExtremoDb: g, totalDb: 2 * g };
+  }
+
   /* ── EL CAMPO CERCANO, QUE ES DONDE EL FILO DE CUCHILLO DEJA DE VALER ─────
    * P.526 supone que el obstáculo está lejos de los dos extremos en longitudes
    * de onda. Cerca no hay «filo»: hay una antena metida debajo de una placa.
@@ -1239,6 +1270,7 @@
     holguraBajoModulo: holguraBajoModulo,
     campoCercano: campoCercano,
     gananciaPatronDb: gananciaPatronDb,
+    gananciaPatronEnlace: gananciaPatronEnlace,
     // tecnología
     C_LUZ: C_LUZ,
     longitudOnda: longitudOnda,

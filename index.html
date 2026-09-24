@@ -2655,8 +2655,13 @@ function rfEnlace(n,m,rows){
      da es invento, medido hasta 9,89 dB a 30-50 m. */
   const vMin=(S.terreno&&S.terreno.ok&&typeof TerrenoProyecto.vanoMinUtil==="function")
     ? TerrenoProyecto.vanoMinUtil(S.terreno) : 0;
+  /* EL PATRÓN DE ANTENA VIAJA CON EL ENLACE, del JSON de parámetros y no
+     escrito aquí: `geometria.patron_antena` («ficha de la Jinchang
+     JCW435700RA, 3 dBi, dipolo ~lambda/2»). Es la absorción A2 del inventario,
+     que llevaba desde la fase 2 definida en el motor y sin usar por nadie. */
+  const _pat=(_pg&&_pg.geometria&&_pg.geometria.patron_antena)?_pg.geometria.patron_antena.valor:null;
   const pr=RadioZigbee.presupuesto({D:D, zA:zA, zB:zB, cruces:cruces, perfil:perfil,
-                                    vanoMinUtil:vMin}, V, P, S._radioCalib||null);
+                                    vanoMinUtil:vMin, patron:_pat}, V, P, S._radioCalib||null);
   /* el DETALLE de Deygout sale de la MISMA llamada que el total: `presupuesto`
      usa `difraccionPanelesDb`, que es la envoltura de `difraccionPanelesDetalle`.
      Pedirlo aparte no recalcula nada distinto, es la misma función. */
