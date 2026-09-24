@@ -667,7 +667,7 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "VACÍA. Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_estado": "CUATRO CANDIDATOS LEIDOS DE SU HOJA el 2026-09-24. Ninguno elegido: la eleccion es del cliente. OJO AL COMPARAR: las sensibilidades NO son homogeneas entre fabricantes ni dentro de la misma tabla de TI. Por eso cada fila lleva `criterio` y `modo_declarado_por_el_fabricante`, y son OBLIGATORIOS.",
         "_la_red_2026_09_24": [
           "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
           "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
@@ -680,7 +680,531 @@
           "sin decir cuándo se probó es lo mismo que no decir nada."
         ],
         "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
-        "lista": []
+        "lista": [
+          {
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              863000000.0,
+              876000000.0
+            ],
+            "ptx_dbm": {
+              "typ": 14.6,
+              "min": 13.2,
+              "max": 15.9,
+              "condicion": "Tabla 4.16 «868 MHz Band +14 dBm»: VREGVDD=AVDD=PAVDD=3,3 V, dispositivos de 16 dBm, red de adaptacion 868/915/920, RF 868,3 MHz. FRANGE 863-870 MHz.",
+              "nota_de_la_hoja": "Nota 2: la potencia para 863-870 MHz esta NORMALMENTE LIMITADA a +14 dBm (25 mW).",
+              "_cita": {
+                "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                "version": "Rev. 1.2",
+                "pagina": 47,
+                "leido_el": "2026-09-24"
+              }
+            },
+            "rx_sens_por_modo": [
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #1a = (0, 1, 36), mi = 0,5, sin FEC",
+                "tasa_bps": 50000,
+                "fec": false,
+                "sens_dbm": -110.8,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 92,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
+                "tasa_bps": 100000,
+                "fec": false,
+                "sens_dbm": -108.0,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 92,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #1a = (1, 1, 36), mi = 0,5, con FEC",
+                "tasa_bps": 50000,
+                "fec": true,
+                "sens_dbm": -114.1,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 92,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (1, 3, 37), mi = 0,5, con FEC",
+                "tasa_bps": 100000,
+                "fec": true,
+                "sens_dbm": -110.2,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 92,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #3 = (1, 5, 37), mi = 0,5, con FEC",
+                "tasa_bps": 150000,
+                "fec": true,
+                "sens_dbm": -108.8,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 92,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "SUN OFDM Opt4 MCS0, cabecera MCS0, PL = 20 octetos",
+                "tasa_bps": null,
+                "fec": null,
+                "sens_dbm": -115.6,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 101,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "SUN OFDM Opt4 MCS2",
+                "tasa_bps": null,
+                "fec": null,
+                "sens_dbm": -113.2,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 101,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "SUN OFDM Opt4 MCS4",
+                "tasa_bps": null,
+                "fec": null,
+                "sens_dbm": -110.1,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 101,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "SUN OFDM Opt4 MCS5",
+                "tasa_bps": null,
+                "fec": null,
+                "sens_dbm": -107.4,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 101,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "SUN OFDM Opt4 MCS6",
+                "tasa_bps": null,
+                "fec": null,
+                "sens_dbm": -103.8,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.2",
+                  "pagina": 101,
+                  "leido_el": "2026-09-24"
+                }
+              }
+            ],
+            "consumo": {
+              "_estado": "NO LEIDO. La hoja lo trae (seccion 4.6, corriente de radio) pero no se ha extraido en esta sesion."
+            },
+            "plan_de_canal": null,
+            "certificacion_eu": null,
+            "_que_falta": {
+              "plan_de_canal": "NO sale de esta hoja: sale de ETSI/CEPT, pendiente. La hoja solo da rangos de frecuencia de ENSAYO, no el plan.",
+              "certificacion_eu": "La hoja cita EN 300 220-1 v3.1.1 para limites de emisiones espurias (p.47), pero eso NO es una declaracion de conformidad del modulo.",
+              "consumo": "por extraer de la seccion 4.6"
+            }
+          },
+          {
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              863000000.0,
+              876000000.0
+            ],
+            "ptx_dbm": {
+              "_ojo": "DOS VARIANTES QUE NO SON INTERCAMBIABLES, y la de 20 dBm NO cubre la banda general.",
+              "variante_14dbm": {
+                "typ": 14.3,
+                "min": 13.1,
+                "max": 15.2,
+                "frange_hz": [
+                  863000000.0,
+                  869200000.0
+                ],
+                "condicion": "Tabla 4.18 «868 MHz Band +14 dBm»: PAVDD conectado a la salida del DC-DC. POUT = +14 dBm a 868,3 MHz.",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 49,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              "variante_20dbm": {
+                "typ": 20.5,
+                "min": 18.6,
+                "max": 21.6,
+                "frange_hz": [
+                  869400000.0,
+                  869650000.0
+                ],
+                "condicion": "Tabla 4.17 «868 MHz Band +20 dBm»: PAVDD = 3,3 V, dispositivos de 20 dBm. POUT = +20 dBm a 869,5 MHz.",
+                "_ojo": "EL RANGO DECLARADO SON 869,4-869,65 MHz, la sub-banda estrecha de alta potencia. NO son 863-870. Aplicar estos 20 dBm a un balance en la banda general se regala ~6 dB que la hoja no da.",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 48,
+                  "leido_el": "2026-09-24"
+                }
+              }
+            },
+            "rx_sens_por_modo": [
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #1a = (0, 1, 36), mi = 0,5, sin FEC",
+                "tasa_bps": 50000,
+                "fec": false,
+                "sens_dbm": -110.4,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 81,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
+                "tasa_bps": 100000,
+                "fec": false,
+                "sens_dbm": -108.0,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 81,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #1a = (1, 1, 36), mi = 0,5, con FEC",
+                "tasa_bps": 50000,
+                "fec": true,
+                "sens_dbm": -113.7,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 81,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (1, 3, 37), mi = 0,5, con FEC",
+                "tasa_bps": 100000,
+                "fec": true,
+                "sens_dbm": -110.1,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 81,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "Wi-SUN FSK #3 = (1, 5, 37), mi = 0,5, con FEC",
+                "tasa_bps": 150000,
+                "fec": true,
+                "sens_dbm": -108.4,
+                "criterio": "10% PER, sin interferente",
+                "_cita": {
+                  "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+                  "version": "Rev. 1.1",
+                  "pagina": 81,
+                  "leido_el": "2026-09-24"
+                }
+              }
+            ],
+            "consumo": {
+              "_estado": "NO LEIDO. La hoja lo trae (seccion 4.6) pero no se ha extraido en esta sesion."
+            },
+            "plan_de_canal": null,
+            "certificacion_eu": null,
+            "_que_falta": {
+              "plan_de_canal": "de ETSI/CEPT, pendiente.",
+              "certificacion_eu": "no leida.",
+              "consumo": "por extraer de la seccion 4.6"
+            }
+          },
+          {
+            "fabricante": "Texas Instruments",
+            "modelo": "CC1312R7",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              861000000.0,
+              1054000000.0
+            ],
+            "_ojo_modo": "ESTA HOJA NO DICE «Wi-SUN» EN NINGUNA DE SUS TABLAS DE RF. Declara modos 802.15.4 2-GFSK por tasa y desviacion. Se parecen a los PHY de Wi-SUN FAN, pero NO estan etiquetados como tales por el fabricante, y eso va en el campo modo_declarado_por_el_fabricante de cada fila.",
+            "ptx_dbm": {
+              "typ": 13,
+              "condicion": "«Max output power», 868 MHz y 915 MHz. Seccion 7.11.",
+              "boost_dbm": 14,
+              "boost_condicion": "«Max output power, boost mode».",
+              "rango_programable_db": 34,
+              "_cita": {
+                "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                "pagina": 16,
+                "leido_el": "2026-09-24"
+              }
+            },
+            "rx_sens_por_modo": [
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-25 kHz de desviacion, 100 kHz de ancho de banda de Rx",
+                "tasa_bps": 50000,
+                "fec": null,
+                "sens_dbm": -110,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                  "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-25 kHz de desviacion, 137 kHz de ancho de banda de Rx",
+                "tasa_bps": 100000,
+                "fec": null,
+                "sens_dbm": -103,
+                "criterio": "1% PER, carga util de 127 octetos",
+                "_cita": {
+                  "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                  "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-50 kHz de desviacion, 311 kHz de ancho de banda de Rx",
+                "tasa_bps": 200000,
+                "fec": null,
+                "sens_dbm": -103,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                  "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "2-GFSK, 2,5 kbps",
+                "tasa_bps": 2500,
+                "fec": null,
+                "sens_dbm": -121,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                  "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "2-GFSK, 5 kbps",
+                "tasa_bps": 5000,
+                "fec": null,
+                "sens_dbm": -119,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                  "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              }
+            ],
+            "consumo": {
+              "rx_ma": 5.4,
+              "rx_condicion": "Radio receive current, 868 MHz",
+              "tx_ma_por_potencia": {
+                "0_dbm": 8.0,
+                "10_dbm": 14.3,
+                "14_dbm": 24.9
+              },
+              "tx_condicion": "868 MHz, disenyo de referencia CC1312-R7EM-XD7793, Tc = 25 C, VDDS = 3,6 V con DC/DC activo.",
+              "sleep": "NO LEIDO con su unidad: la fila de shutdown de la p.10 no se extrajo limpia.",
+              "_cita": {
+                "documento": "CC1312R7 SimpleLink High-Performance Sub-1 GHz Wireless MCU",
+                "version": "SWRS254A (MAY 2021, rev. NOV 2021)",
+                "pagina": 11,
+                "leido_el": "2026-09-24"
+              }
+            },
+            "plan_de_canal": null,
+            "certificacion_eu": null,
+            "_que_falta": {
+              "plan_de_canal": "de ETSI/CEPT, pendiente.",
+              "certificacion_eu": "la hoja cita ETSI EN 300 220 para medir emisiones conducidas (p.13); eso NO es una declaracion de conformidad.",
+              "sleep": "por releer la p.10 con su unidad.",
+              "modos_wisun": "el fabricante NO publica sensibilidad por modo PHY de Wi-SUN FAN en esta hoja."
+            }
+          },
+          {
+            "fabricante": "Texas Instruments",
+            "modelo": "CC1352P7",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              861000000.0,
+              1054000000.0
+            ],
+            "_ojo_modo": "Igual que el CC1312R7: la hoja NO etiqueta sus modos como Wi-SUN.",
+            "ptx_dbm": {
+              "typ": 13,
+              "condicion": "«Max output power, Sub-1 GHz PA», 868 MHz y 915 MHz. Seccion 7.11.",
+              "boost_dbm": 14,
+              "boost_condicion": "«Max output power, boost mode Sub-1 GHz PA».",
+              "pa_alta_potencia_dbm": 20,
+              "pa_alta_potencia_ojo": "La fila «Max output power, High power PA» NO declara banda en la tabla. NO se da por buena en 868 MHz sin comprobarlo: en esta misma hoja las filas del PA de sub-1 GHz si dicen «868 MHz and 915 MHz» y esta no.",
+              "rango_programable_db": 34,
+              "_cita": {
+                "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                "pagina": 16,
+                "leido_el": "2026-09-24"
+              }
+            },
+            "rx_sens_por_modo": [
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-25 kHz de desviacion, 100 kHz de ancho de banda de Rx",
+                "tasa_bps": 50000,
+                "fec": null,
+                "sens_dbm": -110,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                  "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-25 kHz de desviacion, 137 kHz de ancho de banda de Rx",
+                "tasa_bps": 100000,
+                "fec": null,
+                "sens_dbm": -103,
+                "criterio": "1% PER, carga util de 127 octetos",
+                "_cita": {
+                  "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                  "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "802.15.4 2-GFSK, +/-50 kHz de desviacion, 311 kHz de ancho de banda de Rx",
+                "tasa_bps": 200000,
+                "fec": null,
+                "sens_dbm": -103,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                  "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "2-GFSK, 2,5 kbps",
+                "tasa_bps": 2500,
+                "fec": null,
+                "sens_dbm": -121,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                  "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              },
+              {
+                "modo_declarado_por_el_fabricante": "2-GFSK, 5 kbps",
+                "tasa_bps": 5000,
+                "fec": null,
+                "sens_dbm": -119,
+                "criterio": "BER = 1e-2",
+                "_cita": {
+                  "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                  "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                  "pagina": 13,
+                  "leido_el": "2026-09-24"
+                }
+              }
+            ],
+            "consumo": {
+              "rx_ma": 5.4,
+              "rx_condicion": "Radio receive current, 868 MHz",
+              "tx": "NO LEIDO limpio: la tabla trae varias filas (868 MHz, +14 dBm, +5 dBm, +20 dBm) y no se extrajeron con su valor asociado sin ambiguedad.",
+              "sleep": "NO LEIDO con su unidad.",
+              "_cita": {
+                "documento": "CC1352P7 SimpleLink High-Performance Multi-Band Wireless MCU With Integrated Power Amplifier",
+                "version": "SWRS251A (MAY 2021, rev. NOV 2021)",
+                "pagina": 11,
+                "leido_el": "2026-09-24"
+              }
+            },
+            "plan_de_canal": null,
+            "certificacion_eu": null,
+            "_que_falta": {
+              "plan_de_canal": "de ETSI/CEPT, pendiente.",
+              "certificacion_eu": "no leida.",
+              "consumo_tx": "por releer la p.11 fila a fila.",
+              "modos_wisun": "el fabricante NO publica sensibilidad por modo PHY de Wi-SUN FAN en esta hoja."
+            }
+          }
+        ],
+        "_por_que_criterio_y_modo": [
+          "CRITERIO. Una sensibilidad a BER = 1e-2 y otra a 10% PER con 127 octetos NO son comparables:",
+          "la segunda suele ser 2-3 dB mas exigente. Un balance de enlace que las mezcle sale SESGADO sin",
+          "que se note, porque los dos numeros tienen el mismo aspecto. En la tabla de TI conviven los dos",
+          "criterios EN LA MISMA PAGINA: 50 kbps va a BER y 100 kbps a 1% PER.",
+          "",
+          "MODO DECLARADO. «802.15.4 2-GFSK 50 kbps +/-25 kHz» NO es «Wi-SUN FAN #1a» aunque los parametros",
+          "coincidan. Silicon Labs etiqueta sus modos FAN con su numero; TI no menciona Wi-SUN en sus tablas",
+          "de RF. La ficha tiene que decir CUAL se leyo, no cual se parece."
+        ]
       },
       "_que_falta": {
         "modulo_de_referencia": "Ninguno elegido.",
