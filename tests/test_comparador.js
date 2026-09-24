@@ -255,8 +255,55 @@ for (const t of ['lora_eu868', 'wisun_fan_863']) {
         c && Array.isArray(c.lista) && typeof c._estado === 'string', JSON.stringify(!!c));
 }
 
+/* ── LAS DOS TASAS, Y QUIÉN MANDA ────────────────────────────────────────
+   `tasa_bps` es la capacidad de la RADIO —lo único comparable entre
+   tecnologías— y `tasa_serie_bps` el puerto Modbus de la TCU, un límite del
+   sistema. Lo que este criterio tiene que aportar no es el porcentaje: es
+   DECIR CUÁL MANDA, porque si manda el serie, comparar radios aquí no decide
+   nada. Se prueba el veredicto contra casos hechos a mano para poder verlo en
+   los dos sentidos hoy, sin depender de qué traiga el fichero. */
+{
+  const cel = (p, manda, ef) => ({ valor: p, min: p, max: p, manda, tasa_efectiva_bps: ef });
+  console.log('\nlas dos tasas, y quién manda');
+
+  check('el criterio EXIGE las dos tasas, no sólo la de la radio',
+        RT.EXIGE.telemetria.includes('tasa_bps') && RT.EXIGE.telemetria.includes('tasa_serie_bps'),
+        RT.EXIGE.telemetria);
+
+  const todasSerie = RT.veredicto('telemetria',
+    { a: cel(0.0611, 'serie', 19200), b: cel(0.0611, 'serie', 19200) });
+  check('si manda el serie en TODAS, no dice «empate» a secas: dice por qué',
+        todasSerie.mandaElSerie === true && /PUERTO SERIE/.test(todasSerie.texto), todasSerie.texto);
+  check('y nombra la tasa que manda, para que se pueda comprobar',
+        /19200/.test(todasSerie.texto), todasSerie.texto);
+
+  // el control que impide que lo de arriba sea un «siempre dice lo mismo»
+  const mixto = RT.veredicto('telemetria', { a: cel(0.05, 'radio', 9600), b: cel(0.0611, 'serie', 19200) });
+  check('si NO manda el serie en todas, vuelve a comparar de verdad',
+        mixto.estado === 'gana' && !mixto.mandaElSerie, mixto.estado);
+
+  // y que no se aplique a un criterio que no es éste
+  const otro = RT.veredicto('saltos_max', { a: cel(3, 'serie', 19200), b: cel(3, 'serie', 19200) });
+  check('el atajo del serie NO se cuela en otros criterios',
+        !otro.mandaElSerie && otro.estado === 'no_distinguible', otro.estado);
+
+  // el fichero: las cuatro variantes traen el protocolo de la TCU, que no
+  // cambia con la radio
+  for (const t of ['zigbee_pro_24', 'zigbee_std_24', 'lora_eu868', 'wisun_fan_863']) {
+    check(t + ' trae el puerto serie de la TCU, que no depende de la radio',
+          TEC[t].tasa_serie_bps === 19200, TEC[t].tasa_serie_bps);
+  }
+  check('las dos de Zigbee traen la capacidad RF y es la misma',
+        TEC.zigbee_pro_24.tasa_bps === 250000 && TEC.zigbee_std_24.tasa_bps === 250000);
+  check('las dos de sub-giga NO se la inventan: va por SF y por modo PHY',
+        TEC.lora_eu868.tasa_bps === null && TEC.wisun_fan_863.tasa_bps === null);
+  check('y el 250 kbps va como `declarado`, NO como `norma`: nadie ha citado el IEEE',
+        TEC.zigbee_pro_24._citas.tasa_bps.clase === 'declarado',
+        TEC.zigbee_pro_24._citas.tasa_bps.clase);
+}
+
 /* ── EL ALCANCE ─────────────────────────────────────────────────────────── */
-const PISO = 48, PISO_MUT = 7;
+const PISO = 60, PISO_MUT = 7;
 console.log('\nalcance: ' + tabla.filas.length + ' criterios · ' + tabla.tecnologias.length +
             ' tecnologías · ' + HORAS.length + ' horas · ' +
             Object.keys(MUTACIONES).length + ' mutaciones (piso ' + PISO_MUT + ')');
