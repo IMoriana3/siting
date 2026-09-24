@@ -120,7 +120,7 @@ export function uneNodos(real, motors, ncu) {
       /* el COORD con posición declarada entra como un nodo más, con su cota de
          antena propia; sin ella se queda fuera y SE DICE por qué */
       nodos.set(p.id, ncu
-        ? { coord: true, props: p, pos: { x: ncu.x, y: ncu.n }, antenaM: ANTENA_NCU_M, ncu }
+        ? { coord: true, props: p, pos: { x: ncu.x, y: ncu.n }, antenaM: ANTENA_NCU_M, esEquipo: true, ncu }
         : { coord: true, props: p, sinPos: 'el layout no declara la posición de su NCU' });
       continue;
     }

@@ -185,7 +185,7 @@ for (const par of pares) {
   const A = nodos.get(par.a), B = nodos.get(par.b);
   if (FUERA_POS[par.a] || FUERA_POS[par.b]) { clases.excluido.push(par); continue; }
   const pt = z => z && (z.i != null ? { ...ctx.S.motors[z.i], i: z.i }
-                      : (z.pos ? { ...z.pos, i: -1, az: 0, antenaM: z.antenaM } : null));
+                      : (z.pos ? { ...z.pos, i: -1, az: 0, antenaM: z.antenaM, esEquipo: true } : null));
   const n = pt(A), m = pt(B);
   if (!n || !m) {
     clases.sinNodo.push({ ...par,
@@ -268,6 +268,31 @@ if (clases.coord.length) {
     console.log('    ' + et.padEnd(24) + String((x.D || 0).toFixed(0)).padStart(5) + '  '
       + (x.mg == null ? '   null' : x.mg.toFixed(2).padStart(7)) + '   '
       + (x.mg == null ? 'no evaluado' : x.mg >= 0 ? 'ACIERTO' : 'lo mata'));
+  }
+  /* ¿CUÁNTO MUEVE EL MARGEN ESE ±1 m? La posición de la NCU se conoce a ~1 m
+     —0,78 entre layout y censo en la NCU 1, y 5,0 en la NCU 2— frente a los
+     0,16 de un seguidor. Sobre enlaces de 28–47 m eso no es despreciable, y
+     decirlo sin medirlo no vale. Se recalculan los tres desplazando la NCU 1 m
+     en las cuatro direcciones. */
+  console.log('');
+  console.log('    LA INCERTIDUMBRE DE ESA POSICIÓN, MEDIDA — ±1 m en las cuatro direcciones:');
+  console.log('    enlace                    margen    mín     máx    rango');
+  for (const x of clases.coord) {
+    if (x.mg == null) continue;
+    const A = nodos.get(x.a), B = nodos.get(x.b);
+    const cual = A.coord ? 'a' : 'b';
+    const ms = [];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const mk = z => z.i != null ? { ...ctx.S.motors[z.i], i: z.i }
+        : { x: z.pos.x + dx, y: z.pos.y + dy, i: -1, az: 0, antenaM: z.antenaM, esEquipo: true };
+      const pr2 = ctx.rfEnlace(mk(A), mk(B), rows);
+      if (pr2 && pr2.margenDb != null) ms.push(pr2.margenDb);
+    }
+    if (!ms.length) continue;
+    const lo = Math.min(...ms), hi = Math.max(...ms);
+    console.log('    ' + ((nodos.get(x.a).props.etiqueta || 'NCU') + ' → ' + (nodos.get(x.b).props.etiqueta || 'NCU')).padEnd(24)
+      + x.mg.toFixed(2).padStart(7) + lo.toFixed(2).padStart(8) + hi.toFixed(2).padStart(8)
+      + ('±' + ((hi - lo) / 2).toFixed(2) + ' dB').padStart(10));
   }
   console.log('');
   console.log('    ' + clases.coord.filter(x => x.mg != null && x.mg >= 0).length + ' de ' + clases.coord.length

@@ -208,6 +208,22 @@ if (typeof ctx.rfEnlace === 'function' && typeof ctx.rfRows === 'function') {
         Math.abs(pNcu.zB - 3.15) < 1e-9 && Math.abs(pNcu.zA - pTcu.zA) < 1e-9, [pNcu.zA, pNcu.zB]);
   check('y eso cambia el presupuesto: 3,15 m no es lo mismo que 0,5',
         pNcu.margenDb !== pTcu.margenDb, [pTcu.margenDb, pNcu.margenDb]);
+
+  /* LA PUERTA: un nodo que NO es un seguidor y NO declara antena sale SIN
+     veredicto y con motivo, no con una altura por defecto. Sin esto vuelve
+     exactamente el fallo de los tres enlaces TCU→NCU evaluados a 0,505 m. */
+  const pSin = ctx.rfEnlace(a0, { x: 40, y: 0, i: -1, az: 0, esEquipo: true }, rows);
+  check('un EQUIPO que no declara su antena NO se evalúa',
+        pSin.margenDb === null, pSin.margenDb);
+  check('y dice por qué, con motivo',
+        (pSin.motivos || []).includes('altura_de_antena_no_declarada'), pSin.motivos);
+  /* Y EL RASTER NO SE TOCA: pasa {x,y} pelados a propósito —receptores
+     hipotéticos, no equipos— y tiene que seguir evaluándose. La primera
+     versión de esta puerta los mataba y con ellos el mapa entero: 0 de 500
+     enlaces con margen. Lo cazó `test_rf_panel.js`. */
+  const pRaster = ctx.rfEnlace(a0, { x: 40, y: 0 }, rows);
+  check('un punto pelado del raster SÍ se evalúa, como siempre',
+        pRaster.margenDb != null, pRaster.margenDb);
 }
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'

@@ -2599,6 +2599,23 @@ function rfEnlace(n,m,rows){
      cota de un TCU: 0,505 m. Los tres enlaces TCU->NCU de El Burgo se estaban
      evaluando con la fisica equivocada y el careo los daba por buenos igual.
      Con `antenaM` declarado se usa ese, y si no, el del seguidor como siempre. */
+  /* UN NODO QUE NO ES UN SEGUIDOR TIENE QUE DECLARAR SU ANTENA. Si no la
+     declara NO se le pone una por defecto: sale sin veredicto y con motivo.
+     Esto existe porque ya pasó: al meter el COORD en el careo, `rfEnlace` le
+     puso la cota de un TCU —0,505 m en vez de los 3,15 de la NCU— y los tres
+     enlaces TCU->NCU salieron «acierto» calculados mal. A 28-47 m sobra margen
+     de las dos maneras, asi que el careo los habria dado por buenos igual.
+     Caer a la altura del indice EN SILENCIO es justo lo que no puede volver. */
+  /* LA REGLA NO ES «no es un seguidor»: EL RASTER PASA {x,y} PELADOS a
+     proposito —son receptores hipoteticos del mapa, no equipos— y con esa
+     regla el mapa de cobertura entero se quedaba sin margen. Lo cazo
+     `test_rf_panel.js`: 0 de 500 enlaces con margen en las cuatro plantas.
+     La regla buena es: un nodo que se declara EQUIPO (`esEquipo`) y no dice a
+     que altura tiene la antena no se evalua. Un punto del raster no declara
+     nada y sigue con la altura de seguidor, como siempre. */
+  const sinAnt=[n,m].filter(z=>z&&z.esEquipo&&z.antenaM==null);
+  if(sinAnt.length) return {margenDb:null, motivos:["altura_de_antena_no_declarada"],
+                            cruces:[], D:D, zA:null, zB:null};
   let zA=(n&&n.antenaM!=null)?n.antenaM:rfAlturaAntena(rfAngulo(n.i));
   let zB=(m&&m.antenaM!=null)?m.antenaM:rfAlturaAntena(rfAngulo(m.i));
   /* EL TERRENO, SI LO HAY. `rfAlturaAntena` da la altura SOBRE EL SUELO; el
