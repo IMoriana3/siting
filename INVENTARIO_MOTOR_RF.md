@@ -80,6 +80,51 @@ viejo de rf-fv y un espejo JS del congelado de Siting — y un banco que los
 carea. Migrarlo no es cambiar un sha: es sustituir su núcleo. Eso hay que
 decírselo antes, no después.
 
+### Paso 3 HECHO en `cobertura-rf-fv` (2026-09-24)
+
+Los dos puertos de rf-fv —`web/zigbee_pv_model.js` y `python/zigbee_pv_model.py`—
+**ya no escriben las primitivas**: las toman de una copia fijada del canon
+(`lib/radio_pv_model.js` y `python/radio_pv_model.py`, candado `lib/canon.lock.json`).
+Conservan lo suyo: la geometría de la mesa (`TableBand`/`band_clearance`), el
+Deygout sobre ella, el balance y la malla.
+
+**Copia fijada y no import** porque el visor de rf-fv es un HTML servido desde
+Pages: no puede leer un repo hermano en tiempo de ejecución. Lo que convierte la
+copia en algo verificable es el careo: `tests/test_canon_pin.py` la compara BYTE
+A BYTE contra el original —clon al lado, o `--depth 1` que `siting` es público—
+y **sin original sale con rc = 2, no con verde**.
+
+**El antes/después, medido antes de subirlo** (2.882 casos de primitiva + 28
+enlaces de El Burgo, careando el módulo de git contra el de ahora):
+
+| función | casos | máx \|Δ\| |
+|---|---|---|
+| longitud de onda · espacio libre · filo de cuchillo | 361 | **0,000e+00** |
+| radio de Fresnel · distancia de ruptura | 850 | **0,000e+00** |
+| patrón de dipolo · nu | 647 | **0,000e+00** |
+| coeficiente de reflexión \|Γ\| | 474 | 1,525e-15 |
+| dos rayos | 550 | 1,990e-13 dB |
+| **el balance entero (prx, margen, pérdida)** | **28 enlaces** | **0,000e+00 dB** |
+
+Las dos que se mueven lo hacen por el ORDEN DE REDONDEO, no por la física: el
+canon lleva su propia aritmética compleja en tuplas `(re, im)` para ser bit a bit
+igual que el JS, y rf-fv usaba `cmath`. De los 550 casos de dos rayos, **233
+(42,4 %) son idénticos bit a bit**; de los que se mueven, la mediana es 1,42e-14
+dB. Un RSSI medido tiene resolución de 1 dB: esto es 2e-13 veces menor. Y lo que
+ve la página —el balance— no se mueve ni un bit.
+
+Las 9 vistas de referencia del banco de imagen salen a **0,00 % de bloques y
+0,00 % de píxeles**.
+
+**Lo que cambia de comportamiento, y es a mejor.** El canon exige la frecuencia y
+lanza con un `eps_r` que no sea positivo o `inf`; rf-fv devolvía conductor
+perfecto para cualquier `eps_r` no finito, **NaN incluido**, y se lo tragaba. Los
+valores por defecto de rf-fv (2,45 GHz, eps_r 15, `inf` para suelo perfecto)
+siguen en sus envolturas, así que ninguna llamada de fuera cambia.
+
+**Lo que queda del paso 3:** SolarGPTfull, que es el caso difícil descrito
+arriba, y `Cobertura-Zigbee`.
+
 ---
 
 ## 1. Sesgo
