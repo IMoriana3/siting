@@ -48,6 +48,32 @@ se quedó por el camino:
 
 Y el sesgo no está en él: vive aparte, en `factiun_core/rf/calibration.py:15`.
 
+### Paso 3, primera medida (2026-09-24): las primitivas YA son la misma física
+
+Antes de migrar nada, `tools/careo_rffv.py` carea las primitivas de
+`cobertura-rf-fv/python/zigbee_pv_model.py` contra este canon. **2.408 casos:**
+
+| función | casos | máx \|Δ\| |
+|---|---|---|
+| longitud de onda · espacio libre · filo de cuchillo | 361 | **0,000e+00** |
+| radio de Fresnel · distancia de ruptura | 850 | **0,000e+00** |
+| patrón de dipolo · nu | 647 | **0,000e+00** |
+| dos rayos | 550 | 1,990e-13 |
+
+Lo que **no** se carea, y no por pereza: la geometría del obstáculo son ideas
+distintas A PROPÓSITO —rf-fv usa `TableBand`/`band_clearance`, el canon corta
+contra el plano inclinado—, y la del canon es la que se midió (RF-01, 27 dB).
+La de rf-fv es la idea detrás de A4, cerrado como «no se implementa».
+
+**Y lo que sí se separa no es física, es disciplina.** Los defectos de
+`LinkParams` de rf-fv traen `sigma_db = 6,0`, que es justo el valor que este
+repo se niega a heredar, y con él `predict_link` publica un `p_link`. El canon,
+ante lo mismo, devuelve `pEnlace: null` con `sin_sigma_no_hay_probabilidad`.
+
+Así que **migrar rf-fv al canon no es reconciliar ecuaciones: es que deje de
+publicar una probabilidad que no tiene con qué calcular.** Eso cambia el tamaño
+del paso 3 y también su naturaleza — y conviene saberlo antes de empezarlo.
+
 **Consecuencia para el paso 3:** SolarGPTfull no es «un repo que consume el
 canon». Es un repo con **dos modelos suyos y distintos** — un núcleo Python
 viejo de rf-fv y un espejo JS del congelado de Siting — y un banco que los
