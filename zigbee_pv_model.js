@@ -145,6 +145,19 @@
       distanceM: +d.toFixed(2), prxDbm: +prx.toFixed(2), marginDb: +margin.toFixed(2),
       pLink: +_phi(margin / p.sigmaDb).toFixed(4),
       pl2rayDb: +pl2.toFixed(2), plDiffDb: +plDiff.toFixed(2),
+      /* EL MARGEN SIN REDONDEAR, Y PARA QUÉ HACE FALTA.
+         Lo publicado va a `toFixed(2)`, que está bien para enseñarlo y es
+         VENENO para un careo: dos valores redondeados a 2 decimales no pueden
+         diferir menos de 0,01, así que un careo sobre `marginDb` es CIEGO por
+         debajo del escalón. Su tolerancia no habla de la física, habla del
+         tamaño del escalón.
+         Se vio el 2026-09-24 porque el careo JS↔Python daba 0,000e+00 EXACTO
+         donde con un solo lado redondeando tocarían ~0,005: un resultado
+         demasiado bueno, que es lo que hizo mirar.
+         Y hay una asimetría real debajo: `toFixed` redondea MEDIO HACIA ARRIBA
+         y el `round()` de Python es BANCARIO — 0,125 da 0,13 aquí y 0,12 allí.
+         Esto NO cambia ningún número publicado: añade el crudo al lado. */
+      marginDbRaw: margin, prxDbmRaw: prx,
     };
   }
 
