@@ -22,13 +22,20 @@
 > versión anterior de este documento **queda retirado**, y la lectura de 0,0667
 > °/s queda descartada como velocidad de giro en stow.
 >
-> **Y APARECIÓ UN TÉRMINO QUE ESTE DOCUMENTO NO ESTABA MIDIENDO** (§2.4 bis). En
-> ese stow, entre la primera TCU que arrancó y la última pasaron **30 minutos**,
-> y **la radio no explica ni uno**: las órdenes salieron en 46 s y todas llegaron
-> antes del sondeo siguiente. Los 30 minutos son la secuencia **manual** de paso
-> a AUTO (1.168 s) y nueve órdenes que fracasaron sin reintento rápido — una de
-> ellas tardó **70 minutos** en llegar. Es el aviso más fuerte de todo el
-> documento contra decidir la tecnología de radio por latencia.
+> **Y UN AVISO SOBRE LA LATENCIA, QUE ES LO QUE ESTE DOCUMENTO VENÍA A MEDIR.**
+> Los ficheros de ese stow llegaron **sin contexto del estado de la
+> instalación**, y esa NCU tiene **incidencias declaradas por el propietario**:
+> su primer gateway funciona mal. Una versión anterior de este documento publicó
+> el reparto de tiempos, el p100 y la tasa de fallo como si fueran el
+> comportamiento normal. **No lo son, y están retirados**: lo que queda de ellos
+> vive en el §2.4 ter, acotado y sin salir de ahí.
+>
+> **Un CSV no dice si el equipo del que sale estaba averiado. Hay que
+> preguntarlo antes de publicar el número.**
+>
+> Lo que **sí** sobrevive, porque no depende del estado de la NCU: la velocidad
+> de giro (§2.4), la **cota** de la radio sobre el bloque sano (§2.3) y el
+> **mecanismo** —una TCU en MANUAL no gira aunque acuse `sec = 5`— del §2.4 bis.
 
 Cada cifra lleva su estado, y no se mezclan:
 
@@ -153,9 +160,22 @@ ha buscado: ningún `.ps1` de campo, ningún útil y ningún banco de esta carte
 instrumenta un round-trip. `zigbee_logger.ps1` registra RSSI y rutas, no
 tiempos.
 
-**MEDIDO — pero SÍ hay una COTA SUPERIOR del camino entero, y es estrecha.**
-Del stow del 2026-09-24 (§2.4). El log de la NCU escribe, **por TCU y con
-segundo exacto**, cuándo emitió la orden:
+**COTA SUPERIOR del camino entero — medida, pero SÓLO sobre el bloque sano y
+SIN publicar como cifra de la planta.**
+
+> **Alcance, y va delante.** Lo que sigue se mide sobre las **75 TCU del bloque
+> A** del stow del 2026-09-24 (§2.4 ter): el bloque con sondeo normal y **cero
+> órdenes fallidas**. El fichero trae un segundo bloque, las TCU 1–38, que se
+> lleva **los 13 fallos** y no aporta ninguna medida; y esa NCU tiene
+> **incidencias declaradas por el propietario**. Mientras no exista el reparto
+> TCU → gateway (§2.4 ter), **esto no es la latencia de la planta**: es la cota
+> sobre el bloque que funcionaba.
+>
+> Lo que sí sostiene, y por eso está aquí: **una instalación con problemas no
+> adelanta las órdenes**. La cota es conservadora por el lado que importa.
+
+El log de la NCU escribe, **por TCU y con segundo exacto**, cuándo emitió la
+orden:
 
 ```
 2026-09-24 14:44:38;Requesting safe position 5, wind_from_east: 0, for TCU 39. Reason: Request from group
@@ -181,13 +201,25 @@ hueco previo al primer sec=5      mediana 39 s   (periodo nominal 30 s)
 
 O sea: **el sondeo inmediatamente posterior a la orden ya la trae**, en 75 de
 75. El número 39 es el tiempo hasta el siguiente sondeo, y nada más. Lo que se
-puede afirmar es la cota: **la orden llegó a las 75 TCU en menos de un periodo
+puede afirmar es la cota: **la orden llegó a esas 75 TCU en menos de un periodo
 de sondeo**, y por debajo de eso **estos datos no resuelven**. Para partirlo en
 saltos sigue haciendo falta el cronómetro del §5.
 
-**El otro lado de la cota, que no se puede callar:** esas son las 75 que
-llegaron. El **p100 de la planta entera no son 45 s**, porque hubo órdenes que
-fracasaron y se cuentan en el §2.4 bis.
+Dicho de otra forma, y es la lectura que se sostiene: **las 75 acusaron la orden
+dentro de una ventana de 41 segundos** (14:45:01 → 14:45:42), habiendo salido
+las órdenes a lo largo de 46 s. La radio no alarga ese reparto de forma
+perceptible con esta resolución.
+
+**Los dos lados que no se pueden callar:**
+
+1. **Esas son las 75 del bloque A.** El bloque B (TCU 1–38) alcanzó `sec = 5`
+   entre las 14:42:54 y las **16:30:39**, con 13 órdenes fallidas por medio.
+   **El p100 de la planta entera no son 45 s**, y tampoco es el de ese bloque:
+   es una avería sin diagnosticar (§2.4 ter).
+2. **Es un evento, una planta, una NCU con incidencia declarada.** Para
+   sostener «la radio no está en el camino crítico» como conclusión de la fase
+   hace falta **otro stow de una instalación sana**. El útil ya existe
+   (`tools/stow_desde_scada.mjs`); falta el fichero.
 
 ### 2.4 Giro — **MEDIDO**, 75 stows de un stow real
 
@@ -196,6 +228,17 @@ fracasaron y se cuentan en el §2.4 bis.
 > **RETIRADO**: no era una horquilla física, era la distancia entre lecturas que
 > no declaraban cómo estaban definidas. Ahora hay 75 giros ajustados uno a uno
 > sobre el mismo evento, con su R² publicado.
+>
+> **Y POR QUÉ ESTA CIFRA SÍ SOBREVIVE A LA INCIDENCIA DE LA NCU** (§2.4 ter).
+> La velocidad de giro **no se mide contra el reloj de la NCU ni contra el
+> instante de la orden**: se mide **dentro de cada TCU**, como la pendiente de
+> su propio ángulo contra su propio sondeo. Una NCU con problemas hace que la
+> orden llegue tarde o no llegue; **no hace que el motor gire más despacio**, y
+> si lo hiciera saldría en el R² como una rampa rota, no como una pendiente
+> limpia. Las 75 dan R² ≥ 0,99.
+>
+> Las 75 salen además, todas, del **bloque A** (§2.4 ter): las TCU con sondeo
+> normal y sin ninguna orden fallida.
 
 **La medida.** Exportación del SCADA del **2026-09-24**: 122 ficheros
 `TCU_<nnn>_2026-09-24.csv`, uno por TCU, más `NCU_2026-09-24.csv` y
@@ -349,52 +392,192 @@ capacidad vale 90, y la resolución de pulso (`41080`) es 4. Comparar eso con el
 **exige la escala**, y hasta tenerla no hay comparación que hacer. La escala
 sale del Toolbox o de un registro que este mapa no trae. **No se toca el core.**
 
-### 2.4 bis · El stow completo, repartido — **MEDIDO**
+### 2.4 bis · El MECANISMO del stow — **MEDIDO y vigente**
 
-El mismo evento del §2.4, mirado como secuencia. **Y el hallazgo es que el
-término dominante no es ninguno de los que este documento venía midiendo.**
+> **PROCEDENCIA, y va antes que los números.** Estos CSV llegaron **sin
+> contexto del estado de la instalación**. Un fichero exportado no dice si el
+> equipo del que sale estaba averiado, y la primera versión de este apartado
+> publicó el reparto de tiempos como si fuera el comportamiento normal de un
+> stow. El propietario avisó después de que **esa NCU tiene incidencias
+> conocidas y su primer gateway funciona mal**.
+>
+> **La lección, escrita para la próxima vez: el estado del equipo se pregunta
+> ANTES de publicar el número, no después.** Un CSV no trae esa columna.
+>
+> Lo que sigue está separado en tres, por lo que cada cosa depende:
+>
+> | apartado | qué contiene | depende del estado de la instalación |
+> |---|---|---|
+> | **§2.4** | velocidad de giro | **no** — es mecánica de cada TCU |
+> | **§2.4 bis** (aquí) | cómo funciona la secuencia | **no** — es orden, no duración |
+> | **§2.4 ter** | latencia, dispersión, fallos | **sí** — y por eso no se publica |
 
-**Los tres anclajes, y no son intercambiables:**
+**Los tres anclajes, y no son intercambiables.** Esto es estructura, no
+duración: quién emite qué y en qué orden.
 
 ```
-14:44:18 … 14:44:43   el OPERADOR habilita la posicion 5 en diez grupos
-                      desde la interfaz web                          span   25 s
-14:44:22 … 14:45:08   la NCU emite la orden TCU a TCU                span   46 s
-14:44:59 … 15:04:27   el OPERADOR manda los grupos a AUTO            span 1168 s
+1. el OPERADOR habilita la posicion 5 por GRUPO, desde la interfaz web
+     «Position 5 enabled for group N»
+2. la NCU emite la orden TCU a TCU
+     «Requesting safe position 5, ... for TCU N. Reason: Request from group»
+3. el OPERADOR manda los grupos a AUTO
+     «Group N sent to AUTO», y en el CSV de cada TCU, `main_state`
 ```
 
-**UNA TCU CON `sec = 5` Y EN MANUAL NO GIRA.** Se queda en el ángulo de
-seguimiento con el motor a OFF. Medido, TCU 39: acepta la posición a las
-14:45:23 y sigue a −53,50° con `motor_state = OFF` seis minutos después. Lo que
-la mueve es el paso a AUTO.
+El 2 es el único que está escrito **por TCU**; los otros dos son por grupo, y
+**el log no contiene la pertenencia a grupo de ninguna TCU**, así que emparejar
+una TCU con «su» clic exigiría inventarla. Por eso el anclaje por TCU es el 2.
+
+#### **UNA TCU CON `sec = 5` Y EN MANUAL NO GIRA**
+
+Es el hallazgo de mecanismo, y **es independiente del estado de la NCU**: la
+TCU acepta la posición de seguridad, la publica en `active_security_position`,
+y se queda en el ángulo de seguimiento con `motor_state = OFF`.
+
+```
+TCU 39, 2026-09-24
+  14:45:23  sec=5  ang=-53.50  obj=10.00  MANUAL  mot=OFF
+  14:48:53  sec=5  ang=-53.50  obj=10.00  MANUAL  mot=OFF   ← seis minutos
+  14:51:23  sec=5  ang=-53.50  obj=10.00  MANUAL  mot=OFF
+```
+
+**Lo que la mueve es el paso a AUTO.** Y el arranque del giro **coincide con
+ese paso**: sobre los 75 stows medidos, el tiempo entre la primera muestra en
+AUTO y el arranque reconstruido por el cruce de rectas tiene **mediana −2,7 s**
+(p05 −16,1 · p95 +13,0), o sea que cae dentro del hueco de sondeo de 30 s que
+precede a esa muestra. El signo negativo es lo esperable: el cruce cae **antes**
+del primer sondeo que ve el giro.
+
+**Ese −2,7 s se publica** aunque el resto del reparto no, y el motivo es que
+mide una **coincidencia**, no una duración: dice que entre «pasa a AUTO» y
+«empieza a girar» no hay nada, y eso no cambia porque la instalación vaya lenta.
+Es la diferencia entre *cómo* funciona y *cuánto tardó ese día*.
+
+**Consecuencia de diseño, y ésta sí es general:** poner a `sec = 5` una flota
+que está en MANUAL **no la lleva a bandera**. La orden se acusa, el registro lo
+confirma, y ningún panel se mueve. Cualquier medida de «tiempo hasta bandera»
+que se apoye en `active_security_position` sin mirar `main_state` está midiendo
+el acuse, no el stow.
+
+### 2.4 ter · Las dos poblaciones del fichero, y lo que NO se puede publicar
+
+**La exportación no es homogénea. Se parte en dos bloques disjuntos, y el corte
+es exacto:**
+
+| | TCU | filas/día (mín–mediana–máx) | stows medibles | fallos de orden |
+|---|---|---|---|---|
+| **bloque A** | **39 – 122** (84) | 1.049 – **3.381** – 3.384 | **75 de 84** | **0** |
+| **bloque B** | **1 – 38** (38) | 21 – **64** – 175 | **0 de 38** | **13 de 13** |
+
+Ni una sola excepción en ninguna de las cuatro columnas: **cero TCU del bloque A
+por debajo de 1.000 filas, cero del B por encima**, las 75 medidas en A y los 13
+fallos en B. Y el bloque B **no existe en el fichero antes de las 13:47:44**:
+sus primeras filas aparecen 23 a las 13 h, 13 a las 14 h y 2 a las 15 h.
+
+#### Lo que sí se confirma, y lo que NO
+
+**SE CONFIRMA que hay una parte mala y otra sana**, y que la mala se lleva
+**todos** los fallos: 13 eventos `Failed to set the security position` sobre 11
+TCU, las 11 en el bloque B, ninguna en A.
+
+**SE CONFIRMA que el gateway 1 está averiado**, y con medida directa, no por
+indicio — `NCU_2026-09-24.csv`, 71.625 filas:
+
+```
+  gw1_online false   6.202 de 71.625  =  8,66 %
+  gw2_online false      20 de 71.625  =  0,03 %      ← factor 310
+  «Restarting gateway thread for gateway 1»   228 veces
+  «... para el gateway 2»                       0 veces
+```
+
+**PERO NO SE CONFIRMA QUE ESO EXPLIQUE EL STOW, y hay dos hechos en contra:**
+
+1. **La avería del gateway 1 termina cinco horas antes.** Está confinada a
+   00 h – 09 h; el último reinicio de hilo es a las **09:48:58**, y de las 10 h
+   en adelante `gw1_online` está **al 100 %**.
+2. **Durante todo el stow los dos gateways estaban arriba.** En la ventana
+   14:40–15:20, de 2.401 filas de la NCU, `gw1_online` sale `false` **cero
+   veces**, y `gw2_online` también cero. Y en cada uno de los 13 fallos —de
+   14:42:54 a 16:13:25— el gateway 1 figura **en línea**.
+
+Así que el bloque B tiene un problema real, pero **no es la caída del gateway 1
+tal como la registra la NCU**. Puede ser radio del gateway 1 sin que el enlace
+con la NCU se caiga —`gw1_online` mide que el gateway responde, no que alcance
+a sus nodos—, y eso es compatible con todo lo anterior; pero **de este fichero
+no sale**.
+
+#### Y el reparto por gateway NO SE PUEDE HACER: falta el mapa
+
+**No hay ningún fichero en esta cartera que diga qué TCU cuelga de qué
+gateway.** Se ha buscado:
+
+* el **log de eventos** nombra gateways (`gateway 1`, IP `10.21.236.87` y
+  `.88`) pero **nunca liga una TCU a uno**;
+* el **`NCU_*.csv`** da `gw1_online` / `gw2_online`, que es estado del gateway,
+  no reparto de nodos;
+* el **único inventario con campo `gw`**, `Cobertura-Zigbee/elburgo_real.geojson`,
+  dice **`NCU1-GW2` en sus 52 nodos TCU, sin excepción**, con etiquetas **57 a
+  108**: cubre parte del bloque A y **cero del bloque B**.
+
+Identificar el bloque B con el gateway 1 **por ser los índices bajos** sería
+adivinarlo por el número, que es exactamente lo que este documento no hace.
+**Queda pendiente y se pide: el reparto TCU → gateway de esa NCU.** Con él, el
+§2.4 ter se recalcula en una tarde.
+
+#### El cruce con RSSI y saltos tampoco se puede hacer
+
+`elburgo_real.geojson` **sí** trae `rssi_med_dbm`, `hop_tipico` y
+`ack_failures` por nodo. No se cruza, por dos motivos, y los dos son de
+identidad del dato:
+
+1. **Cubre etiquetas 57–108**, o sea **ninguna del bloque B** — justo el bloque
+   cuyo retraso habría que explicar.
+2. **La exportación del stow no declara su planta**, y la NCU de la que sale
+   tiene **122 TCU**, mientras este documento registra las NCU de El Burgo a
+   ~108. Cruzarlos por número de TCU sería unir dos conjuntos por una identidad
+   **no verificada**, y el resultado tendría pinta de medido sin serlo.
+
+#### Qué queda, entonces, sin publicar
+
+**La latencia de reparto, la dispersión entre TCU y la tasa de fallo NO se
+publican** hasta tener el mapa de gateways. Lo que se midió, para que no haya
+que volver a derivarlo, con la advertencia puesta:
 
 | tramo | n | mediana | p05 | p95 |
 |---|---:|---:|---:|---:|
-| **A**· petición → arranque del giro | 75 | **1.231 s** | 108 s | 1.816 s |
+| **A**· petición → arranque del giro | 75 | 1.231 s | 108 s | 1.816 s |
 | **B**· petición → `sec = 5` visto | 75 | 39 s | 35 s | 44 s |
-| **C**· primera muestra en AUTO → arranque | 75 | **−2,7 s** | −16,1 s | +13,0 s |
-
-**La C es la que lo explica todo.** Está centrada en cero: la TCU arranca
-**en el mismo instante en que pasa a AUTO**, dentro del hueco de sondeo (el
-signo negativo es esperable — el cruce de rectas cae antes del primer sondeo
-que ve el giro). O sea que la A de 1.231 s **no mide la cadena técnica**: mide
-cuánto tardó el operador en mandar ese grupo a AUTO.
-
-**Y la dispersión entre TCU, que era la pregunta original:**
+| **C**· primera muestra en AUTO → arranque | 75 | −2,7 s | −16,1 s | +13,0 s |
 
 ```
-primer arranque   14:45:46
-ultimo arranque   15:15:48
-ULTIMA - PRIMERA  1802,6 s  (30 min)   con sigma mediana 2,66 s por arranque
+spans del evento, TODOS del bloque A
+  ordenes de la NCU, TCU a TCU        46 s   (14:44:22 → 14:45:08)
+  ACUSE sec=5 de las 75               41 s   (14:45:01 → 14:45:42)
+  paso a AUTO de esas mismas 75    1.790 s   (14:45:54 → 15:15:44)
+  primer arranque - ultimo         1.802,6 s (14:45:46 → 15:15:48)
 ```
 
-Treinta minutos. **Pero de esos 30 minutos, la radio no explica ni uno**: las
-órdenes salieron en 46 s y todas llegaron antes del sondeo siguiente (§2.3).
-Los 30 minutos son los 1.168 s de la secuencia de AUTO más los reintentos que
-el propio log registra (`Sent 9 out of 14 trackers to AUTO mode`, y nueve
-líneas más como ésa, entre 14:45:21 y 14:47:31).
+**Un dato de esa tabla merece leerse aunque el resto espere**, porque va en
+contra de lo que la primera versión de este documento concluyó: **los 30
+minutos de dispersión no están en el reparto de la orden, están en el paso a
+AUTO**. La orden se acusó en las 75 TCU en **41 segundos**; el paso a AUTO de
+esas mismas 75 se estiró **1.790 s**. Los dos números salen del **mismo bloque
+A**, el que no tiene ni un fallo, así que la diferencia entre 41 s y 1.790 s no
+la explica ningún gateway: la explica que el paso a AUTO lo hace **una persona,
+grupo por grupo**.
 
-#### Las órdenes que fracasaron — **MEDIDO**
+Eso **no** se publica todavía como «el reparto típico» —es un evento, una
+planta, una NCU con incidencia declarada—, pero sí marca dónde habrá que mirar
+cuando llegue un fichero de una instalación sana.
+#### Las órdenes que fracasaron — **TODAS del bloque B, NO es una tasa de fallo**
+
+> Lo que sigue **no se puede leer como «13 de 122 fallaron»**, y ése fue el
+> error de la primera versión. Los 13 eventos caen **sin excepción en el bloque
+> B**, que es también el que no aporta ni una sola medida. Sobre el bloque A —
+> las 84 TCU con sondeo normal y las 75 medidas— los fallos son **cero**.
+>
+> Un denominador de 122 mezcla dos poblaciones que el propio fichero separa. La
+> tabla queda como **descripción del bloque B**, no como tasa del producto.
 
 `Failed to set the security position for TCU N`: **13 en el día, sobre 11 TCU
 distintas** (la 13 y la 10 fallan dos veces). De ellas:
@@ -422,30 +605,38 @@ la última lo hizo **70 minutos** después de su primer fallo, y **sólo dos de 
 once tienen un reintento escrito en el log**: las demás llegaron sin que nada
 registre por qué.
 
-**Ése es el p100 de verdad**, y no los 45 s del §2.3: si la métrica del encargo
-es «hasta que la ÚLTIMA TCU la recibe», la última fue la TCU 10 a las 16:28:28.
-El camino crítico de este stow **no es la profundidad de la malla: es el
-reintento de una orden que falló y que nadie reintentó deprisa.**
+**Y las 38 del bloque B acabaron todas en `sec = 5`**, repartidas entre las
+14:42:54 y las 16:30:39. Contra eso, las 75 del bloque A acusaron la orden en
+una ventana de **41 segundos**. Son dos poblaciones, no una cola.
+
+> **Lo que ESTO NO ES: el p100 del encargo.** La primera versión de este
+> apartado decía que «el p100 de verdad» eran los 70 minutos de la TCU 10. Es
+> falso como característica del sistema: es el p100 **de un bloque cuya avería
+> no está diagnosticada**, medido el día en que ese bloque apareció en el
+> fichero a las 13:47. El p100 de una instalación sana **no está medido**, y
+> este documento no lo da.
 
 #### El denominador, al lado del número y no en una nota
 
 ```
 122   ficheros TCU en la exportacion
- -9   sin NINGUNA fila en la ventana 14:40-15:20   (TCU 1,4,5,16,17,18,19,31,35)
--34   con filas pero sin giro ajustable: 20 con muestras insuficientes DENTRO
-      del giro, 14 con menos de 6 filas en la ventana entera, 3 que no mueven
-      el angulo en ninguna muestra
- -1   con giro ajustable que NO es un stow (TCU 84, ver abajo)
- -3   con giro fuera de racha o R^2 < 0,98
+ -38  BLOQUE B entero (TCU 1-38): 21 a 175 filas en TODO el dia, y ninguna
+      antes de las 13:47. Sin muestras no hay giro que ajustar.
  ---
-  75  STOWS MEDIDOS
+  84  bloque A
+  -1  con giro ajustable que NO es un stow (TCU 84, ver abajo)
+  -8  con filas pero sin giro ajustable, o R^2 < 0,98
+ ---
+  75  STOWS MEDIDOS,  75 de 84 del bloque A  =  89 %
 ```
 
-Las 34 no medibles no son un fallo del método: son TCU que **el SCADA apenas
-sondea**. 40 de los 122 ficheros tienen una cadencia mediana de 26 a 75 s y
-entre 24 y 106 filas en TODO el día, frente a las ~3.380 de una TCU sana. Sobre
-30 filas al día no hay giro que ajustar, y decir que «no se midieron» es más
-barato que inventarlas.
+**El denominador honesto es 84, no 122**, y decirlo así importa: sobre las TCU
+que el SCADA sondea de verdad, el método mide el **89 %**. El bloque B no se
+«perdió» por el método — no hay nada que medir en 64 filas al día.
+
+**Y sigue siendo un solo evento, de una sola planta, en una NCU con incidencia
+declarada.** El 89 % es el rendimiento del método sobre este fichero, no una
+cobertura esperable en general.
 
 **TCU 84, nombrada.** Es el único caso del día entero que **nunca alcanza
 `active_security_position = 5`**, y no aparece **ni una sola vez** en el log de
@@ -483,16 +674,19 @@ buscaba.
 ```
   deteccion      1 - 60 s     DECLARADO (defectos de fabrica)
   decision NCU      ?         NO MEDIDO
-  radio         < 30 s        MEDIDO como COTA: la orden llego a las 75 TCU
-                              antes del sondeo siguiente. Por debajo de un
-                              periodo de sondeo, estos datos no resuelven.
-  giro            310 s       MEDIDO, mediana de 75 stows (55 grados a
+  radio          < 30 s       COTA, y solo sobre el BLOQUE SANO de un unico
+                              evento: las 75 TCU acusaron la orden antes del
+                              sondeo siguiente, en una ventana de 41 s. Por
+                              debajo de un periodo de sondeo no se resuelve.
+                              NO es la latencia de la planta: ver el §2.4 ter.
+  giro             310 s      MEDIDO, mediana de 75 stows (55 grados a
                               0,1774 deg/s). Rango p05-p95: 291-330 s.
-  ---- y los dos que de verdad mandaron el 2026-09-24 ----
-  secuencia
-  de AUTO       1.168 s       MEDIDO: el operador mandando diez grupos a AUTO
-  reintento
-  de un fallo   hasta 4.232 s MEDIDO: TCU 10, de su primer fallo a su sec=5
+                              Es el unico termino que no depende del estado
+                              de la instalacion.
+  ---- LO QUE SIGUE SIN MEDIR, y no por falta de fichero ----
+  latencia de reparto real     pendiente del mapa TCU -> gateway (§2.4 ter)
+  p100 hasta la ultima TCU     idem
+  tasa de fallo de orden       idem
 ```
 
 **El rango 275–825 s del giro queda RETIRADO** (§2.4). No era una horquilla
@@ -500,13 +694,13 @@ física: era la distancia entre dos lecturas que no declaraban su definición.
 Con 75 ajustes sobre el mismo evento, el término vale 310 s y su dispersión
 real es de ±6 %.
 
-**Y la conclusión que el §6 necesita ha cambiado de sitio.** No es sólo que la
-radio se mueva en segundos dentro de una cadena de centenares: es que en el
-único stow completo que hay medido, **la radio no explicó ni uno de los 30
-minutos** que separaron a la primera TCU de la última. Los explicaron la
-secuencia manual de paso a AUTO y un puñado de órdenes que fracasaron sin
-reintento rápido. Un ranking por tecnología de radio optimiza un término que en
-este evento no decidió nada.
+**Y lo que este apartado NO puede decir todavía.** Una versión anterior
+concluía aquí que «la radio no explicó ni uno de los 30 minutos» del reparto.
+Eso se apoyaba en un evento de una NCU con **incidencias declaradas**, y con
+las dos poblaciones del fichero mezcladas. Separadas (§2.4 ter), lo que queda
+es un indicio fuerte —en el bloque sano, 41 s de acuse contra 1.790 s de paso a
+AUTO— y **no una conclusión de fase**. Para eso hace falta **otro stow, de una
+instalación sin incidencia**, y el útil para medirlo ya está escrito.
 
 ---
 
@@ -643,10 +837,16 @@ Ordenadas por lo que se puede decir de ellas hoy.
 > sigue sin resolverse es el **reparto por saltos** dentro de esa cota, que es
 > lo único para lo que el D.2 sigue haciendo falta.
 >
-> **Y una cosa que cambió de prioridad.** El §2.4 bis midió dos términos que
-> valen dos órdenes de magnitud más que la radio y que no necesitan cronómetro
-> ninguno: la secuencia manual de paso a AUTO y el reintento de una orden
-> fallida. Si hay un turno de campo disponible, rinde más instrumentar eso.
+> **Y lo que de verdad falta no es un cronómetro: es un fichero limpio.** El
+> stow del 2026-09-24 sale de una NCU con incidencias declaradas y con dos
+> poblaciones de TCU dentro (§2.4 ter). **Un segundo stow, de una instalación
+> sana, vale hoy más que el D.2**: el útil que lo analiza ya está escrito y
+> probado (`tools/stow_desde_scada.mjs`), y con él se cierran de golpe el
+> reparto, el p100 y la tasa de fallo. El D.2 sigue haciendo falta sólo para
+> partir la cota de radio en saltos.
+>
+> **Y una cosa que se pide con él:** el **reparto TCU → gateway** de la NCU de
+> la que salga, porque sin él no se puede separar lo que falla de lo que no.
 
 **Es el árbitro para el tramo de radio, y hoy no existe.** Sin él, el §6 sería
 un ranking de valores de catálogo.
@@ -692,17 +892,18 @@ centenares:
 |---|---|---|
 | **detección** | **1 – 60 s** según cuál de los tres caminos dispare | DECLARADO (defectos de fábrica) |
 | **decisión de la NCU** | ? | NO MEDIDO |
-| **radio hasta la última TCU** | **< 30 s** (cota), sin resolver por debajo | MEDIDO como cota, §2.3 |
-| **giro** | **310 s** (p05–p95: 291–330) | **MEDIDO**, 75 stows, §2.4 |
-| **secuencia manual de paso a AUTO** | **1.168 s** | **MEDIDO**, §2.4 bis |
-| **reintento de una orden fallida** | **hasta 4.232 s** | **MEDIDO**, §2.4 bis |
+| **radio hasta la última TCU** | **< 30 s**, y sólo sobre el bloque sano de **un** evento | COTA, §2.3 — **no es la cifra de la planta** |
+| **giro** | **310 s** (p05–p95: 291–330) | **MEDIDO**, 75 stows, §2.4 — no depende del estado de la instalación |
+| **latencia de reparto real** | ? | **NO MEDIDO** — falta el mapa TCU → gateway, §2.4 ter |
+| **p100 hasta la última TCU** | ? | **NO MEDIDO** — ídem |
+| **tasa de fallo de orden** | ? | **NO MEDIDO** — ídem |
 | *(stow autónomo, si actúa)* | **600 s** por defecto (`40022`) | DECLARADO |
 
 Un ranking que diga «LoRa sale 3 s peor» sin esto delante se lee como si
-decidiera algo. Y ahora hay algo más fuerte que decir: en el único stow
-completo medido, **los dos términos mayores no son de radio y ni siquiera son
-técnicos** — son un operador pulsando diez grupos y una orden que falló y nadie
-reintentó. La detección puede costar 60 s ella sola.
+decidiera algo. Y las tres filas «NO MEDIDO» de en medio **estuvieron
+rellenadas durante unas horas**, con números sacados de un stow de una NCU con
+incidencias declaradas. Se retiraron en cuanto se supo. La detección, mientras
+tanto, puede costar 60 s ella sola.
 
 ### Y el veredicto
 
@@ -726,13 +927,24 @@ hoy, y es lo que este documento aporta:
   debajo del mínimo de las 75. El catálogo Sunner (0,17) resulta estar
   prácticamente en el suelo de lo medido, y el techo sin carga de la TCU (0,200,
   `41067`) justo por encima del máximo —con el reparo del §2.4 sobre ese máximo.
-* **Y el hallazgo que reordena el encargo** (§2.4 bis): en ese stow, de la
-  primera TCU a la última pasaron **30 minutos**, y **la radio no explica ni
-  uno**. Los explican la secuencia manual de paso a AUTO (1.168 s) y nueve
-  órdenes que fracasaron, una de las cuales tardó **70 minutos** en llegar. Una
-  TCU con `sec = 5` y en MANUAL **no gira**. Antes de elegir tecnología de radio
-  por latencia, estos dos términos valen dos órdenes de magnitud más y se
-  arreglan sin cambiar de radio.
+* **El MECANISMO del stow, que no depende del estado de la instalación**
+  (§2.4 bis): una TCU con `sec = 5` y en **MANUAL no gira** —acusa la orden, el
+  registro lo confirma, y el motor sigue a OFF—, y el arranque del giro
+  **coincide** con el paso a AUTO (mediana −2,7 s sobre las 75). Consecuencia
+  directa: cualquier «tiempo hasta bandera» que se apoye en
+  `active_security_position` **sin mirar `main_state`** mide el acuse, no el
+  stow.
+* **Lo que NO se puede firmar, y estuvo firmado unas horas** (§2.4 ter): la
+  latencia de reparto, el p100 y la tasa de fallo. El fichero tiene **dos
+  poblaciones** —TCU 39–122 con sondeo normal y cero fallos; TCU 1–38 con 21 a
+  175 filas al día y **los 13 fallos, todos**— y la NCU tiene incidencias
+  declaradas. **El mapa TCU → gateway no existe en ningún repositorio**, así que
+  no se puede separar por gateway sin adivinarlo por el número de TCU. Hasta que
+  exista, esos tres números no se publican.
+* **Un indicio que queda apuntado, no concluido**: dentro del bloque sano, las
+  75 acusaron la orden en **41 s** y su paso a AUTO se estiró **1.790 s**. Si
+  eso se repite en una instalación sin incidencia, el camino crítico del stow
+  **no es la radio, es la secuencia manual**. Un evento no lo sostiene.
 * **La palanca que más quita del camino crítico no es de radio, ya existe, y
   está configurada en 10 minutos**: el stow autónomo de la TCU por pérdida de
   comunicación con la NCU (`40022`). 600 s dominan la cadena entera. Bajarlo es

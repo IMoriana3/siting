@@ -7,6 +7,24 @@
  * las trampas, porque los tres candidatos a «cuándo se dio la orden» dan
  * respuestas que se diferencian en media hora.
  *
+ * ═══ EL FICHERO NO TRAE EL ESTADO DE LA INSTALACIÓN. PREGÚNTALO ═══
+ *
+ * Las cifras de abajo están medidas sobre la exportación del 2026-09-24, que
+ * resultó venir de una NCU **con incidencias declaradas** — se supo DESPUÉS de
+ * publicar el reparto de tiempos como si fuera el comportamiento normal.
+ *
+ * Un CSV no tiene columna para «este equipo estaba averiado». Antes de publicar
+ * una LATENCIA, una DISPERSIÓN o una TASA DE FALLO sacadas de aquí, hay que
+ * preguntar por el estado de la instalación y de sus gateways. La VELOCIDAD DE
+ * GIRO no lo necesita: se mide dentro de cada TCU, contra su propio sondeo, y
+ * una NCU lenta no frena un motor.
+ *
+ * Y este útil ayuda a verlo, porque separa por TCU y publica el motivo de cada
+ * descarte: en aquel fichero había DOS POBLACIONES —84 TCU con ~3.380 filas al
+ * día y 38 con 21 a 175— y los 13 fallos de orden caían, los 13, en la segunda.
+ * Mirar el reparto de `n_filas` antes de promediar nada es medio diagnóstico.
+ * El reparto TCU → gateway, que sería el otro medio, NO está en la exportación.
+ *
  * ═══ LOS TRES ANCLAJES, Y POR QUÉ NO SON INTERCAMBIABLES ═══
  *
  *   1. El CLIC DEL OPERADOR   `Position 5 enabled for group N …`
