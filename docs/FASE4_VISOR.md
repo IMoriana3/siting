@@ -359,3 +359,35 @@ Nada de esto lo puede desbloquear el código:
 | los **CSV de 30 s del SCADA** (`30506`) | el giro real de la fase 3 |
 | el **replanteo** de las dos NCU y del seguidor 108 | el residuo de 18,30 m y los 5,0 m de la NCU 2 |
 | el **levantamiento de Fayón** | esa planta, antes que ninguna otra |
+
+### Estado del punto 8 · 2026-09-24: HECHO
+
+`radio_informe.js` redacta y **no calcula** —si calculara habría dos motores— y
+`tools/informe.mjs` lo alimenta con una planta real.
+
+**Las cinco secciones, exigidas por lista**, no por costumbre: escenario y
+procedencia · resultado por criterio · alcance · lo no medido · qué haría falta
+para cerrarlo.
+
+**Un informe que no lista todos sus huecos NO SE PUBLICA.** Es una excepción, no
+un aviso. Y la puerta comprueba que la sección **liste cada hueco**, no que la
+sección exista: la primera versión sólo miraba que el texto no estuviera vacío,
+y eso era **código muerto** —`secNoMedido` nunca devuelve vacío— así que la
+excepción no podía saltar nunca. **Lo cazó su propia mutación al salir verde.**
+
+**Reproducible, y medido:** dos corridas del mismo escenario dan ficheros
+**idénticos byte a byte**. Eso obliga a que no haya ningún reloj dentro —la fecha
+sale del escenario— y a ordenar lo que se recorre.
+
+**El informe real de El Burgo** declara **27 huecos** con su motivo, y los cuatro
+pasos para cerrarlos salen de esos huecos, no escritos a mano.
+
+**Tres defectos que encontró leer el informe de verdad**, ninguno de los cuales
+habría visto un banco de texto: `alturaEje()` devuelve `{valor, medida, motivo}`
+y se le hacía `Number()`, así que salía **`NaN` impreso como si fuera un dato**;
+la vegetación sin modelo salía como `{"modelo":null}` en vez de «no modelada»;
+y un terreno con `ok: null` se convertía en `false`, o sea «se intentó y NO se
+pudo» cuando la verdad era «no se intentó».
+
+Bancos: `test_informe.js` 34 comprobaciones y 8 mutaciones ·
+`test_escenario.js` 57 y 9. **25 bancos en verde.**

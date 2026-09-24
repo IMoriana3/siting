@@ -408,8 +408,14 @@ jobs:
           # el escenario guardable: un sha que falta NO compara igual, y nada
           # se guarda en el navegador
           rojo node tests/test_escenario.js huecoEsIgual sinRecalcular sinFormato textoInestable \
-                                            shaOpcional urlSiempreCabe paginaRellenaSha \
+                                            shaOpcional urlSiempreCabe nanPasa paginaRellenaSha \
                                             paginaGuardaEnNavegador
+
+          # el informe: sin la sección de lo que falta NO SE PUBLICA, y el mismo
+          # escenario da el mismo texto byte a byte
+          rojo node tests/test_informe.js relojDentro faltaOpcional huecosMudos huecosSinOrden \
+                                          huecoComoGuion nanComoDato huecosTruncados \
+                                          sinCuentaDeHuecos
 
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
                                                    py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \

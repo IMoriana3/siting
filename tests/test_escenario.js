@@ -47,6 +47,9 @@ const MUTACIONES = {
   // cosa, que es el peor de los fallos posibles aquí
   paginaRellenaSha: ['index.html', 'if(!(globalThis.crypto && globalThis.crypto.subtle)) return null;',
                      'if(!(globalThis.crypto && globalThis.crypto.subtle)) return "0".repeat(64);'],
+  // el guardia del NaN se cae y un objeto acaba impreso como número
+  nanPasa: ['radio_escenario.js', 'function num(x) { var n = Number(x); return Number.isFinite(n) ? n : null; }',
+            'function num(x) { return x == null ? null : Number(x); }'],
   // y la página se pone a guardar en el navegador
   paginaGuardaEnNavegador: ['index.html', '  out.innerHTML = h; out.appendChild(a);',
                             '  localStorage.setItem("esc", esc_); out.innerHTML = h; out.appendChild(a);'],
@@ -125,6 +128,22 @@ check('el terreno va CON SU CALIDAD, no sólo su nombre',
 check('las NCU van con posición', esc.ncus.length === 2 && esc.ncus[0].x === 10);
 check('el commit del motor va a null CON SU MOTIVO, no inventado',
       esc.motor_commit === null && /no conoce su propio commit/.test(esc._motor_commit_motivo || ''));
+
+/* UN NÚMERO QUE NO ES UN NÚMERO ES UN HUECO. `alturaEje()` devuelve
+   {valor, medida, motivo} y a esto se le hacía `Number()`: el `NaN` viajaba por
+   el escenario y acababa IMPRESO en el informe como «NaN», que se lee como un
+   dato. Cazado leyendo el informe de verdad, no por un banco. */
+const conNaN = E.captura(Object.assign({}, base, { ejeM: { valor: 1.2, medida: false } }));
+check('un objeto donde iba un número NO se guarda como NaN', conNaN.eje_m === null,
+      JSON.stringify(conNaN.eje_m));
+check('  ni un Infinity', E.captura(Object.assign({}, base, { cuerdaM: Infinity })).cuerda_m === null);
+check('  ni en las coordenadas de una NCU',
+      E.captura(Object.assign({}, base, { ncus: [{ id: 'X', x: 'hola', y: 1 }] })).ncus[0].x === null);
+check('la cota del eje guarda si es MEDIDA o declarada, y su motivo',
+      E.captura(Object.assign({}, base, { ejeM: 1.2, ejeMedida: false, ejeMotivo: 'estándar de casa' }))
+        .eje_medida === false);
+check('y un terreno con `ok: null` NO se convierte en `false`',
+      E.captura(Object.assign({}, base, { terreno: { id: 'x', ok: null } })).terreno.ok === null);
 
 /* ── 1 · UN SHA QUE FALTA NO COMPARA IGUAL ─────────────────────────────────── */
 const sinSha = E.captura(Object.assign({}, base, { paramsSha: null,
@@ -206,7 +225,7 @@ check('el terreno se guarda con su calidad y con el caso «no se intentó» apar
       /calidad:/.test(B) && /no se ha cargado terreno/.test(B));
 
 /* ── EL ALCANCE ─────────────────────────────────────────────────────────────── */
-const PISO = 44, PISO_MUT = 8;
+const PISO = 49, PISO_MUT = 9;
 console.log('\nalcance: ' + E.CAMPOS.length + ' campos declarados · ' +
             Object.keys(MUTACIONES).length + ' mutaciones (piso ' + PISO_MUT + ')');
 console.log('');

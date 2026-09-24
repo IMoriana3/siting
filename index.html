@@ -3047,6 +3047,7 @@ async function escCaptura(){
      que nada estuviera mal. Cazado probándolo en un navegador de verdad. */
   let P = null;
   try{ P = pb.texto ? JSON.parse(pb.texto) : rfParamsNuevo(); }catch(e){ P = rfParamsNuevo(); }
+  const _eje = (P && P.geometria) ? RadioPV.alturaEje((S.p&&S.p.montaje)||null, P.geometria.eje_tubo_m.valor) : null;
   const ter = S.terreno;
   return RadioEsc.captura({
     ahora: new Date().toISOString(),
@@ -3055,7 +3056,9 @@ async function escCaptura(){
     variante: S.rf && S.rf.variante,
     horaUTC: (S.rf && S.rf.sol && S.rf.sol.horaUTC) || null,
     solOn: !!(S.rf && S.rf.sol && S.rf.sol.on),
-    ejeM: (P && P.geometria) ? RadioPV.alturaEje((S.p&&S.p.montaje)||null, P.geometria.eje_tubo_m.valor) : null,
+    /* `alturaEje` devuelve {valor, medida, motivo}, no un número. */
+    ejeM: _eje ? _eje.valor : null, ejeMedida: _eje ? _eje.medida : null,
+    ejeMotivo: _eje ? _eje.motivo : null,
     cuerdaM: (S.bifila && S.bifila.cuerda) || null,
     vegetacion: (P && P.vegetacion) ? {modelo: P.vegetacion.modelo.valor} : null,
     /* EL TERRENO CON SU CALIDAD, y el caso «se intentó y no se pudo» distinto
