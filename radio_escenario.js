@@ -64,6 +64,12 @@
      echar en falta y seguir: éstos no. */
   var IMPRESCINDIBLES = ["planta", "variante", "params_sha256"];
 
+  /* UN NÚMERO QUE NO ES UN NÚMERO ES UN HUECO, NO UN NÚMERO. `Number(x)` de un
+     objeto da `NaN`, y un `NaN` viaja por el escenario y acaba impreso en el
+     informe como «NaN» — que se lee como un dato. Pasó de verdad: `alturaEje()`
+     devuelve `{valor, medida, motivo}` y aquí se le hacía `Number()`. */
+  function num(x) { var n = Number(x); return Number.isFinite(n) ? n : null; }
+
   function captura(f) {
     f = f || {};
     var e = {
@@ -75,22 +81,27 @@
       /* LA HORA VA EN UTC Y EN MILISEGUNDOS, no «12:00». Un «12:00» no dice de
          qué planta ni de qué día, y el ángulo del seguidor depende de los dos:
          el mediodía SOLAR de San José no es el de El Burgo. */
-      hora_utc: f.horaUTC == null ? null : Number(f.horaUTC),
+      hora_utc: num(f.horaUTC),
       sol_on: !!f.solOn,
-      eje_m: f.ejeM == null ? null : Number(f.ejeM),
-      cuerda_m: f.cuerdaM == null ? null : Number(f.cuerdaM),
+      eje_m: num(f.ejeM),
+      /* La cota del eje viene DECLARADA, no medida, en casi todas las plantas.
+         El escenario guarda las dos cosas para que el informe no la presente
+         como una medida de campo. */
+      eje_medida: f.ejeMedida === undefined ? null : !!f.ejeMedida,
+      eje_motivo: f.ejeMotivo == null ? null : String(f.ejeMotivo),
+      cuerda_m: num(f.cuerdaM),
       vegetacion: f.vegetacion == null ? null : f.vegetacion,
       /* EL TERRENO CON SU CALIDAD, no sólo su nombre: un escenario que diga
          «con terreno» sin decir CUÁL ni si se pudo cargar no reproduce nada. */
       terreno: f.terreno == null ? null : {
         id: f.terreno.id == null ? null : String(f.terreno.id),
-        ok: f.terreno.ok === undefined ? null : !!f.terreno.ok,
+        ok: (f.terreno.ok === undefined || f.terreno.ok === null) ? null : !!f.terreno.ok,
         calidad: f.terreno.calidad == null ? null : String(f.terreno.calidad),
         sha256: f.terreno.sha256 == null ? null : String(f.terreno.sha256),
         motivo: f.terreno.motivo == null ? null : String(f.terreno.motivo)
       },
       ncus: (f.ncus || []).map(function (n) {
-        return { id: String(n.id), x: Number(n.x), y: Number(n.y) };
+        return { id: String(n.id), x: num(n.x), y: num(n.y) };
       }),
       params_version: f.paramsVersion == null ? null : String(f.paramsVersion),
       params_sha256: f.paramsSha == null ? null : String(f.paramsSha),
