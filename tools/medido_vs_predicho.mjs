@@ -39,12 +39,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { cargaApp, uneNodos, ic } from './_motor_app.mjs';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 
 const HERMANO = [path.join(RAIZ, '..', 'Cobertura-Zigbee'), path.join(RAIZ, '..', 'cobertura-zigbee')]
@@ -62,44 +60,17 @@ for (const f of [fReal, fLay]) if (!fs.existsSync(f)) {
   process.exit(2);
 }
 
-/* ── 1 · EL MOTOR DE LA APP, EXTRAÍDO DEL index.html DE VERDAD ────────────
-   No se reimplementa `rfCruces`/`rfEnlace`: se ejecuta el bloque RF del HTML
-   real en un contexto `vm`, igual que hace `tests/test_rf_cobertura.js`. Una
-   segunda implementación mediría otra cosa que la app, que es justo lo que
-   `test_una_holgura.js` existe para impedir. */
-const html = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
-const bloque = html.match(/const RF_PITCH_M[\s\S]*?\n}\n(?=function rfColor)/);
-if (!bloque) {
-  console.log('SIN CAREO: no localizo el bloque RF en index.html (¿se ha renombrado `rfColor`?).');
-  process.exit(2);
-}
+/* ── 1-2 · EL MOTOR DE LA APP Y LA PLANTA ────────────────────────────────
+   El arranque vive en `_motor_app.mjs` y NO aquí: `robustez_medida.mjs`
+   necesita exactamente el mismo, y dos copias divergirían en silencio —una
+   cargaría los parámetros de radio y la otra no, y sus números dejarían de ser
+   comparables sin que nada lo dijera—. */
 const L = JSON.parse(fs.readFileSync(fLay, 'utf8'));
 const REAL = JSON.parse(fs.readFileSync(fReal, 'utf8'));
-
-const ctx = {
-  console, require, Math, JSON, Object, Array, Number, String, isFinite, parseFloat,
-  RadioPV: require(path.join(RAIZ, 'radio_pv_model.js')),
-  RadioZigbee: require(path.join(RAIZ, 'radio_zigbee.js')),
-  ZigbeePV: require(path.join(RAIZ, 'zigbee_pv_model.js')),
-  document: { getElementById: () => null },
-  fetch: undefined,
-  S: { motors: [], p: { twid: 12, tlen: 64 }, bifila: null, _rfRows: null, rf: {} },
-};
-ctx.window = ctx;
-vm.createContext(ctx);
-try { vm.runInContext(bloque[0], ctx); }
-catch (e) { console.log('SIN CAREO: el bloque RF no compila fuera del navegador: ' + e.message); process.exit(2); }
-
-/* ── 2 · LA PLANTA, EN EL ESTADO DE LA APP ───────────────────────────────── */
-/* Los parámetros de radio: la app los pide por `fetch` y aquí se cargan del
-   fichero. Sin ellos `rfVariante()` da null y TODOS los enlaces salen «no
-   evaluado» — que fue exactamente lo que pasó en la primera corrida: 49 de 49
-   sin veredicto, y el informe lo publicó como si fuera un resultado. */
-ctx.S._radioParams = JSON.parse(fs.readFileSync(path.join(RAIZ, 'radio_params.json'), 'utf8'));
-
-ctx.S.motors = L.trackers.map(t => ({ x: t.x, y: t.n, az: t.rot || 0, id: String(t.id),
-                                      ncu: t.ncu, gw: t.gw, desig: t.desig }));
-ctx.S._rfRows = null;
+let APP;
+try { APP = cargaApp(L); }
+catch (e) { console.log('SIN CAREO: ' + e.message); process.exit(2); }
+const ctx = APP.ctx;
 
 /* ── 3 · LA UNIÓN DE NODOS, DECLARADA Y NO POR CERCANÍA ──────────────────
    `elburgo_layout.json` → `numeracion.identificador`: «el id de cada seguidor
@@ -117,19 +88,7 @@ ctx.S._rfRows = null;
    MI distancia contra la `distancia_m` del fichero: ratios de 1,00 en los que
    acertaban y de hasta 33,8 en los que no. Un factor uniforme habría sido un
    problema de sistema de coordenadas; factores dispares son identidad. */
-const clave = (ncu, esclavo) => String(Number(ncu)) + ':' + String(Number(esclavo));
-const porId = new Map(ctx.S.motors.map((m, i) => [clave(m.ncu, m.id), i]));
-const nodos = new Map(), sinCruzar = [], desigDiscrepa = [];
-for (const f of REAL.features) {
-  if (f.geometry.type !== 'Point') continue;
-  const p = f.properties, m = /TCU_SUNNER_ID_(\d+)/.exec(p.id || '');
-  if (!m) { if (p.role !== 'COORD') sinCruzar.push(p.id); nodos.set(p.id, { coord: true, props: p }); continue; }
-  const i = porId.get(clave(p.ncu, m[1]));
-  if (i == null) { sinCruzar.push(p.id); continue; }
-  if (p.desig && ctx.S.motors[i].desig && p.desig !== ctx.S.motors[i].desig)
-    desigDiscrepa.push(p.id + ': real ' + p.desig + ' ≠ layout ' + ctx.S.motors[i].desig);
-  nodos.set(p.id, { i, props: p });
-}
+const { nodos, sinCruzar, desigDiscrepa } = uneNodos(REAL, ctx.S.motors);
 
 /* ── 4 · LOS PARES A EVALUAR ─────────────────────────────────────────────
    Dos fuentes, y se dice cuál se ha usado. Sin `--pares`, los 52 del árbol. */
@@ -208,18 +167,6 @@ const FUERA_POS = { 'TCU_SUNNER_ID_108': 'posición discrepante entre layout y c
 }
 
 /* ── 5 · EVALUAR CON EL rfEnlace DE LA APP ──────────────────────────────── */
-/* ── WILSON AL 95 % ────────────────────────────────────────────────────
-   Un porcentaje sobre 48 casos sin su intervalo no distingue un modelo bueno
-   de uno mediocre: 1 de 48 es 2,1 % con un intervalo que va del 0,4 % al
-   10,9 %. Se publica SIEMPRE al lado, no cuando el resultado incomoda. */
-function wilson(k, n, z = 1.96) {
-  if (!n) return null;
-  const d = n + z * z, c = (k + z * z / 2) / d;
-  const h = (z / d) * Math.sqrt(k * (n - k) / n + z * z / 4);
-  return [Math.max(0, c - h), Math.min(1, c + h)];
-}
-const ic = (k, n) => { const w = wilson(k, n); return w ? '[' + (100 * w[0]).toFixed(1) + '–' + (100 * w[1]).toFixed(1) + ' %]' : ''; };
-
 /* MOTIVOS QUE SIGNIFICAN «A ESTE ENLACE LE FALTAN TÉRMINOS», no «el modelo se
    equivoca». Un enlace que el modelo tapa por −0,32 dB llevando encima
    «relieve no evaluado» y «vegetación no modelada» no es un fallo del modelo:
