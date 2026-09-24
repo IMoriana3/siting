@@ -131,6 +131,13 @@ if [ "$hay_tools" != "0" ]; then
   exit 1
 fi
 echo ""
+# ── Y UN AVISO: ESTO NO CORRE LAS MUTACIONES ────────────────────────────
+# Un cambio en el motor puede dejar el ANCLA de una mutación apuntando a
+# código que ya no existe: los bancos siguen verdes aquí y la CI se cae. Pasó
+# el 24-09 con `terrenoDeygout`. El corredor de mutaciones es el MISMO paso de
+# la CI, extraído y ejecutado: `bash tools/correr_mutaciones.sh`.
+echo "(las mutaciones NO se corren aquí: bash tools/correr_mutaciones.sh)"
+echo ""
 
 rojo=0; verde=0
 printf '%-30s %8s %8s %s\n' banco cuenta piso estado
