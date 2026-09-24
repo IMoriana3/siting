@@ -53,6 +53,7 @@ declare -A PISO=(
   [test_radio_geom.js]=79
   [test_radio_malla.js]=82
   [test_rf_cobertura.js]=31
+  [test_rf_estado.js]=58
   [test_rf_indice.js]=16
   [test_rf_panel.js]=47
   [test_scada_vivo.js]=36
@@ -64,7 +65,7 @@ declare -A PISO=(
   [test_utiles_rf.js]=23
   [test_vis_importadores.js]=42
   # el careo de los dos motores, que es Python
-  [test_paridad_radio.py]=26
+  [test_paridad_radio.py]=29
 )
 
 # ── LO QUE NO CORRE AQUÍ, CON DUEÑO Y MOTIVO ─────────────────────────────

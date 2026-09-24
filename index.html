@@ -2679,7 +2679,24 @@ function rfEnlace(n,m,rows){
 /* Se arranca el censo antes de pintar y se lee despues. Se REINICIA en cada
    pintado: un contador que acumula entre pintados cuenta el mismo enlace
    muchas veces y el porcentaje deja de significar nada. */
-function censoArranca(){ S._censo={n:0,sinMargen:0,motivos:{}}; }
+function censoArranca(){ S._censo={n:0,sinMargen:0,motivos:{}};
+  S._censoEst={n:0,libre:0,rozando:0,tapado:0,sinVeredicto:0,completos:0,sinMirar:{}}; }
+/* LA LINEA DE ESTADOS PARA LA LEYENDA, con su DENOMINADOR y con cuántos de esos
+   enlaces se han podido mirar ENTEROS. «He mirado» y «está bien» son dos
+   afirmaciones: un 100 % de libres sobre enlaces a los que nadie ha mirado el
+   terreno ni la vegetación no es un 100 % de nada. */
+function censoEstadoTexto(){
+  const c=S._censoEst; if(!c||!c.n) return null;
+  const pc=v=>(100*v/c.n).toFixed(0)+" %";
+  const p=[];
+  if(c.libre)   p.push("libre "+c.libre+" ("+pc(c.libre)+")");
+  if(c.rozando) p.push("rozando "+c.rozando+" ("+pc(c.rozando)+")");
+  if(c.tapado)  p.push("tapado "+c.tapado+" ("+pc(c.tapado)+")");
+  if(c.sinVeredicto) p.push("sin veredicto "+c.sinVeredicto+" ("+pc(c.sinVeredicto)+")");
+  const faltan=Object.keys(c.sinMirar).map(k=>k+" "+c.sinMirar[k]).join(", ");
+  return {linea:p.join(" · ")+"   [de "+c.n+" enlaces]",
+          alcance:"completos "+c.completos+" de "+c.n+(faltan?"  ·  sin mirar: "+faltan:"")};
+}
 function censoTexto(){
   const c=S._censo; if(!c||!c.n) return null;
   const pares=Object.entries(c.motivos).filter(([k])=>k.startsWith("relieve"));
@@ -2769,6 +2786,78 @@ function rfMargin(n,m,rows){
   return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m,rows)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
+
+/* ══ EL VEREDICTO DE UN ENLACE, Y POR QUÉ POR DEFECTO NO ES UN dB ═══════════
+   (fase 4, punto 5)
+
+   Los parámetros de este repo son HEREDADOS del modelo congelado —lo dice su
+   propio `radio_params.json`—, `sigma_db` está a `null` y el canal es
+   desconocido, lo que deja la potencia declarada como COTA SUPERIOR con hasta
+   16 dB de recorrido. Pintar cinco bandas de color de un margen así presenta
+   como predicción algo que no lo es.
+
+   EL ESTADO SI SE SOSTIENE SIN CALIBRAR, y por una razón concreta: sale de ν,
+   que es geometría y longitud de onda. No depende de la potencia, ni de la
+   sensibilidad, ni de sigma, ni de las correcciones de campaña — o sea, de nada
+   de lo que aquí falta. Un enlace con el primer Fresnel despejado lo está con
+   +19 dBm y con +3.
+
+   LO QUE EL ESTADO NO CONTESTA, Y POR ESO LA CAPA DE COBERTURA NO CAMBIA: el
+   estado dice «¿hay algo en medio?», no «¿llega?». A 300 m en campo abierto el
+   estado es LIBRE y el enlace está muerto por espacio libre. Son dos preguntas
+   distintas; el mapa de calor sigue contestando la suya en dB, rotulado.
+
+   EL MOTOR ANTIGUO SIGUE PINTANDO SU dB. Está congelado, se elige a mano y la
+   leyenda ya dice que lleva el sesgo de El Burgo de −33,6 dB dentro: existe
+   justamente para carearlo contra el nuevo, y quitarle el número lo dejaría
+   inservible para eso. */
+/* LA PALETA NO ES LA DE SALUD, Y ESO ESTÁ MEDIDO.
+   «Tapado» NO quiere decir «sin enlace»: quiere decir que el rayo directo está
+   cortado y el enlace vive de la difracción. En una planta fotovoltaica eso es
+   lo NORMAL, porque las antenas de las TCU van bajo los módulos. Medido en El
+   Burgo sobre los 215 enlaces TCU→NCU:
+
+       tapados                       190 de 215
+       de ésos, con >= 8 dB           77  (41 %)
+       NCU → 50, 35,9 m, ν = 0,43   TAPADO y 48,16 dB de margen
+
+   Con la paleta roja de `rfColor` eso pinta de rojo oscuro el 88 % de la planta
+   y se lee como catástrofe. Así que el tapado va en OCRE —«hay material
+   delante»— y no en rojo: el color dice CUÁNTO estorba, no si el enlace vale. */
+const RF_EST_COLOR={libre:"#2f9e54", rozando:"#e0a72c", tapado:"#8c5a1e"};
+const RF_EST_GRIS="#9aa6b2";
+function rfCalibrado(){ return !!(S._radioCalib); }
+
+/* EL VEREDICTO COMPLETO, POR LA PUERTA UNICA.
+   OJO: el pintado de los puntos TCU llamaba a `rfMargin` DIRECTAMENTE —el motor
+   ANTIGUO— saltándose `rfMargenDe`, así que los puntos del mapa y el panel de
+   perfil podían estar mostrando dos motores distintos con 33,6 dB entre ellos.
+   Es la misma avería que el comentario de `rfMargenDe` dice venir a impedir, y
+   había vuelto por el sitio donde nadie miraba: el bucle de dibujado. */
+function rfVeredicto(n,m,rows){
+  if(rfMotor()==="antiguo") return {margenDb:rfMargin(n,m,rows), estado:null,
+                                    motivos:["motor_antiguo_sin_estado"]};
+  return rfEnlace(n,m,rows);
+}
+function rfColorVeredicto(v){
+  if(!v) return RF_EST_GRIS;
+  /* con campaña calibrada, el dB vuelve a mandar: es lo que el punto 5 pide */
+  if(rfCalibrado()||rfMotor()==="antiguo") return rfColor(v.margenDb);
+  if(v.estado&&v.estado.estado) return RF_EST_COLOR[v.estado.estado]||RF_EST_GRIS;
+  return RF_EST_GRIS;
+}
+/* LA ANILLA DE «SIN ENLACE» ES UNA AFIRMACION EN dB, Y SIN CALIBRAR NO SE HACE.
+   La primera versión la ponía por TAPADO, y eso habría anillado 190 de los 215
+   enlaces de El Burgo — entre ellos uno de 48,16 dB de margen. El estado
+   contesta «¿hay algo en medio?»; «¿llega?» sólo lo contesta el margen, y un
+   margen sin campaña ni canal conocido no es una predicción. Así que sin
+   calibrar NO se anilla nada y la leyenda dice que esa pregunta se queda sin
+   contestar, con lo que falta para contestarla. */
+function rfVeredictoMalo(v){
+  if(!v) return false;
+  if(rfCalibrado()||rfMotor()==="antiguo") return v.margenDb!=null&&v.margenDb<8;
+  return false;
+}
 
 /* ── MAPA DE CALOR DEL MARGEN, desde un Tx que se coloca con un clic ──────────
    Rescatado de `demo-siting.html` (SolarGPTfull, 21-08). La capa RF de arriba ya contesta «¿llega
@@ -3285,6 +3374,64 @@ function updatePanel(){
   renderLegend();
 }
 function warnHtml(cls,ic,msg){ return `<div class="warnbox ${cls}"><span>${ic}</span><span>${msg}</span></div>`; }
+/* ══ LA LEYENDA DE LA CAPA RF ══════════════════════════════════════════════
+   (fase 4, punto 5)
+
+   LA CAPA RF NO TENIA LEYENDA. Pintaba los seguidores de rojo a verde y no
+   decía ni con qué motor, ni con qué parámetros, ni qué significaba el color.
+   El mapa de calor sí tiene la suya —dice «TEÓRICO, sin campaña» desde la fase
+   2—, así que la misma información existía en una capa y faltaba en la otra.
+
+   TRES COSAS, SIEMPRE, Y EN ESTE ORDEN:
+     · CON QUÉ está pintado — el rótulo de procedencia, del dato y no de una
+       opinión: sale de `procedencia` del JSON de parámetros;
+     · QUÉ significa el color;
+     · CUÁNTO se ha mirado — el censo de estados CON SU DENOMINADOR, y cuántos
+       de esos enlaces se han podido mirar ENTEROS. Un 100 % de libres sobre
+       enlaces a los que nadie ha mirado el terreno no es un 100 % de nada. */
+function leyendaRF(){
+  if(!S.v.rf) return "";
+  const P=rfParamsNuevo(), V=rfVariante();
+  let h=`<div class="li tit">Capa RF · enlace de cada seguidor con su NCU</div>`;
+  if(rfMotor()==="antiguo"){
+    h+=`<div class="li"><b style="color:var(--warn,#e0a72c)">modelo antiguo (A)</b> `
+     + `<span class="sub">congelado · con el sesgo de El Burgo −33,6 dB dentro · el color es su dB</span></div>`;
+    return h;
+  }
+  /* EL ROTULO DE PROCEDENCIA, SIEMPRE. Hasta hoy el motor sabía con qué estaba
+     calculando —`modo` viaja en cada salida desde la fase 2— y la pantalla no
+     lo enseñaba en ningún sitio de esta capa. */
+  const pr = (typeof RadioZigbee!=="undefined"&&RadioZigbee.procedencia)
+    ? RadioZigbee.procedencia(P, V, S._radioCalib||null) : null;
+  if(pr){
+    const rojo = (pr.rotulo!=="MEDIDO"&&pr.rotulo!=="CALIBRADO") ? ` style="color:var(--warn,#e0a72c)"` : "";
+    const camp = pr.campana ? " · campaña "+pr.campana : "";
+    h+=`<div class="li"><b${rojo}>${pr.rotulo}</b>${camp}`
+     + (pr.peor.length?` <span class="sub">manda el más débil: ${pr.peor[0].ruta}${pr.peor.length>1?" y "+(pr.peor.length-1)+" más":""}</span>`:"")
+     + `</div>`;
+    for(const a of pr.avisos) h+=`<div class="li"><span class="sub"${rojo}>${a}</span></div>`;
+  }
+  /* QUÉ SIGNIFICA EL COLOR — y con parámetros calibrados vuelve a ser el dB. */
+  if(rfCalibrado()){
+    h+=`<div class="li"><span class="sub">el color es el MARGEN en dB (hay campaña calibrada)</span></div>`;
+  } else {
+    h+=`<div class="li"><span class="sub">el color es el ESTADO, no un dB: sin campaña, el margen no es una predicción</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.libre}"></span>libre <span class="sub">ν ≤ −0,78 · primer Fresnel despejado (P.526)</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.rozando}"></span>rozando <span class="sub">−0,78 &lt; ν ≤ 0 · el rayo pasa e invade Fresnel</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.tapado}"></span>tapado <span class="sub">ν &gt; 0 · el canto corta el rayo directo</span></div>`
+     + `<div class="li"><span class="sub">tapado NO es «sin enlace»: el enlace vive de la difracción y con margen de sobra funciona. En una planta FV es lo normal — las antenas de las TCU van bajo los módulos. En El Burgo, 190 de 215 tapados y 77 de ésos con 8 dB o más.</span></div>`
+     + `<div class="li"><span class="sub" style="color:var(--warn,#e0a72c)">«¿llega?» NO lo contesta esta capa sin campaña calibrada: eso es el margen, y hace falta el canal (inventario) y sigma (campaña).</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_GRIS}"></span>sin veredicto <span class="sub">no se ha podido evaluar</span></div>`;
+  }
+  /* EL ALCANCE DE LA CAPA: cuántos, y de cuántos. */
+  const ce=censoEstadoTexto();
+  if(ce){
+    h+=`<div class="li"><span class="sub">${ce.linea}</span></div>`
+     + `<div class="li"><span class="sub" style="color:var(--warn,#e0a72c)">${ce.alcance}</span></div>`;
+  }
+  return h;
+}
+
 function renderLegend(){
   const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
   /* Con el mapa de calor puesto los seguidores van en gris y los power blocks no se pintan, así
@@ -3292,6 +3439,7 @@ function renderLegend(){
      peor que no tener leyenda. La fila de los seguidores la pone abajo el bloque de la capa. */
   let h = S.cov.on ? "" :
     `<div class="li"><span class="sw" style="border-radius:50%;background:${hueColor(0,false)}"></span>Motor (color = NCU)</div>`;
+  h+=leyendaRF();
   h+=`<div class="li"><span class="sw" style="background:var(--navy);transform:rotate(45deg)"></span>NCU</div>
     <div class="li"><span class="sw" style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid var(--amber)"></span>HSU (meteo)</div>`;
   if(S.reps && S.reps.length) h+=`<div class="li"><span class="sw" style="border-radius:50%;background:#8e44ad"></span>Repetidor</div>`;
@@ -3592,8 +3740,20 @@ function draw(){
   for(const m of S.motors){
     const s=w2s(tcuPt(m)); const dim=S.sel && m.ncu!==S.sel;   // la marca va donde está la TCU (su viga), no en el eje
     let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
-    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m),_rfRows) : null; col = rfColor(m._rfMargin); }
-    else { m._rfMargin = null; }
+    if(S.v.rf && !dim){ m._rfVer = (m.ncu!=null && _rfById[m.ncu]) ? rfVeredicto(_rfById[m.ncu],tcuPt(m),_rfRows) : null;
+                        m._rfMargin = m._rfVer ? m._rfVer.margenDb : null; col = rfColorVeredicto(m._rfVer); }
+    else { m._rfMargin = null; m._rfVer = null; }
+    /* EL CENSO DE ESTADOS SE CUENTA AQUI, SOBRE LOS ENLACES REALES, y no dentro
+       de `rfEnlace`: por ahí pasan también los miles de puntos del ráster, y un
+       recuento que los mezclara sería un número correcto sobre la población
+       equivocada — el mismo defecto que el p50 de 0,00 m del DEM. La pregunta
+       de la leyenda es «de los enlaces de esta planta, ¿cuántos están tapados?»,
+       no «de los píxeles que he pintado». */
+    if(S._censoEst&&m._rfVer){ const e=m._rfVer.estado;
+      if(!e||!e.estado) S._censoEst.sinVeredicto++;
+      else { S._censoEst[e.estado]++; if(e.completo) S._censoEst.completos++;
+             for(const q of (e.sinMirar||[])) S._censoEst.sinMirar[q]=(S._censoEst.sinMirar[q]||0)+1; }
+      S._censoEst.n++; }
     /* CON EL MAPA DE CALOR PUESTO, EL LAYOUT VA EN GRIS. El fondo ya habla en rojo/verde; si
        además los seguidores van en rojo/verde —por NCU o, peor, por la capa RF, que usa la misma
        escala— hay dos escalas del mismo color en el mismo dibujo y no se lee ninguna. Ése era el
@@ -3666,7 +3826,7 @@ function draw(){
   }
   // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
   if(S.v.rf){
-    for(const m of S.motors){ if(m._rfMargin==null||m._rfMargin>=8)continue; const s=w2s(tcuPt(m));
+    for(const m of S.motors){ if(!rfVeredictoMalo(m._rfVer))continue; const s=w2s(tcuPt(m));
       ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.strokeStyle="#e0322c"; ctx.lineWidth=1.8; ctx.stroke(); }
   }
   // cobertura: TCU fuera del radio de su NCU; violeta si la cubre un repetidor, rojo si no

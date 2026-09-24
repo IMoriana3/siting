@@ -424,10 +424,44 @@
    * inclinado por dentro; éste toma los cantos ya resueltos -`{s, z}` con `z`
    * ABSOLUTA- y hace la misma recursión. Es el que necesita el terreno, donde
    * el «canto» es un punto del perfil y no tiene cuerda ni alfa. */
+  /* ══ EL ν QUE DECIDE, PUBLICADO COMO CAMPO ════════════════════════════════
+   *
+   * `nuMax` es el ν del canto DOMINANTE —el criterio del propio Deygout— y sale
+   * al objeto porque de él sale el ESTADO del enlace (libre / rozando / tapado),
+   * que es lo que el mapa pinta mientras no haya parámetros calibrados.
+   *
+   * HASTA HOY ESE NUMERO SOLO EXISTIA DENTRO DE UNA CADENA DE TEXTO: cuando el
+   * dominante despeja, la función vuelve con `dominante: null` y el ν se va en
+   * el motivo, «el dominante despeja (nu = -1,234 <= -0,78)». Sacarlo de ahí con
+   * una expresión regular sería una segunda implementación del criterio, escrita
+   * en el sitio donde menos se mira. Así que es un campo.
+   *
+   * SE TOMA EL MAXIMO DE TODA LA RECURSION y no sólo el del nivel 0: en Deygout
+   * los subtramos se evalúan contra un rayo AUXILIAR —de la antena al canto
+   * dominante—, no contra el directo, así que sus ν no son comparables término a
+   * término con el de arriba. Con el máximo, `nuMax` no puede quedarse corto por
+   * construcción.
+   *
+   * MEDIDO sobre el corpus de paneles del banco de paridad (300 casos, 281 con
+   * ν): la recursión sube el ν en 78 de 281 —el 27,8 %—, hasta +0,7255. O sea que
+   * quedarse con el del nivel 0 declararía más despejados de lo que están a más de
+   * uno de cada cuatro. Y el ESTADO no cambia en ninguno: la elección es
+   * conservadora y, sobre este corpus, no mueve un solo color.
+   *
+   * `null` NO significa que despeje: significa que no hay canto que evaluar —el
+   * enlace no cruza nada, o ninguno cae dentro del tramo—. Quien llama decide, y
+   * eso es distinto de «despeja», que sí es un veredicto. */
+  function maxNu(v, izq, der) {
+    var m = v;
+    if (izq && izq.nuMax != null && izq.nuMax > m) m = izq.nuMax;
+    if (der && der.nuMax != null && der.nuMax > m) m = der.nuMax;
+    return m;
+  }
+
   function difraccionCantosDetalle(D, zA, zB, cantos, fHz, prof, maxProf) {
     var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
     var vacio = { totalDb: 0.0, dominante: null, izquierda: null, derecha: null,
-                  profundidad: p, motivo: null };
+                  profundidad: p, motivo: null, nuMax: null };
     if (!cantos || !cantos.length) { vacio.motivo = "sin cantos"; return vacio; }
     if (p >= tope) { vacio.motivo = "tope de recursion (" + tope + ")"; return vacio; }
     if (D <= 0) { vacio.motivo = "tramo de longitud nula"; return vacio; }
@@ -441,6 +475,7 @@
     if (mejor < 0) { vacio.motivo = "ningun canto cae dentro del tramo"; return vacio; }
     if (mejorV <= -0.78) {
       vacio.motivo = "el dominante despeja (nu = " + mejorV.toFixed(3) + " <= -0,78)";
+      vacio.nuMax = mejorV;
       return vacio;
     }
     var sDom = cantos[mejor].s, zDom = cantos[mejor].z;
@@ -456,8 +491,67 @@
     return {
       totalDb: perdidaDom + dIzq.totalDb + dDer.totalDb,
       dominante: { indice: mejor, s: sDom, z: zDom, nu: mejorV, perdidaDb: perdidaDom },
-      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null
+      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null,
+      nuMax: maxNu(mejorV, dIzq, dDer)
     };
+  }
+
+  /* ══ EL ESTADO DE UN ENLACE: LIBRE / ROZANDO / TAPADO ════════════════════
+   *
+   * EL MAPA NO PUEDE SEGUIR PINTANDO dB. Los parámetros de radio de este repo
+   * son HEREDADOS del modelo congelado, no leídos de un datasheet; `sigma_db`
+   * está a `null`; y el canal es desconocido, lo que deja la potencia declarada
+   * como cota superior con DIECISEIS dB de recorrido posible. Cinco bandas de
+   * color de un margen así presentan como predicción algo que no lo es.
+   *
+   * El ESTADO sí se sostiene, y por una razón concreta: sale de ν, y ν es
+   * GEOMETRIA Y LONGITUD DE ONDA. No depende de la potencia, ni de la
+   * sensibilidad, ni de sigma, ni de las correcciones de campaña — que es
+   * justamente todo lo que aquí no está calibrado. Un enlace con el primer
+   * Fresnel despejado lo está con +19 dBm y con +3.
+   *
+   * LOS UMBRALES NO SON NUESTROS y no se eligen aquí:
+   *
+   *   ν <= -0,78   LIBRE     J(ν) = 0 en ITU-R P.526: el filo no cobra nada.
+   *                          Es EL MISMO umbral con el que Deygout corta la
+   *                          recursión veinte líneas más arriba; poner otro
+   *                          número sería tener dos criterios de despeje.
+   *                          Equivale a un despeje de 0,55·F1 (c/F1 = -ν/√2).
+   *   -0,78 < ν <= 0  ROZANDO   el rayo directo pasa, pero invade la primera
+   *                          zona de Fresnel: entre 0 y 6,02 dB de filo.
+   *   ν > 0        TAPADO    el canto corta el rayo directo. J(0) = 6,02 dB y
+   *                          de ahí para arriba.
+   *
+   * La regla clásica de ingeniería es 0,6·F1, que en ν es -0,85. NO se usa esa:
+   * se usa -0,78 porque es la que el motor ya aplica. La diferencia entre las
+   * dos —0,55·F1 contra 0,60·F1— es real pero pequeña, y tener DOS umbrales de
+   * despeje en el mismo programa es peor que la diferencia entre ellos.
+   *
+   * `nuMax == null` es LIBRE de verdad, no «no mirado»: significa que no hay
+   * canto que evaluar, o sea que el enlace no cruza nada. Quien no haya podido
+   * mirar no llama a esta función: dice que no ha mirado. */
+  var NU_DESPEJA = -0.78, NU_ROZA = 0;
+
+  function estadoDeNu(nuMax) {
+    if (nuMax == null) return "libre";
+    if (nuMax <= NU_DESPEJA) return "libre";
+    if (nuMax <= NU_ROZA) return "rozando";
+    return "tapado";
+  }
+
+  /* El PEOR de varios estados. Un enlace con los paneles despejados y el
+     terreno delante está TAPADO: el mecanismo que manda es el que más estorba,
+     no la media de los dos. Orden explícito y no alfabético. */
+  var ORDEN_ESTADO = { libre: 0, rozando: 1, tapado: 2 };
+  function peorEstado(estados) {
+    var peor = null, n = -1;
+    for (var i = 0; i < estados.length; i++) {
+      var e = estados[i];
+      if (e == null) continue;
+      if (ORDEN_ESTADO[e] == null) throw new Error("estado desconocido: " + e);
+      if (ORDEN_ESTADO[e] > n) { n = ORDEN_ESTADO[e]; peor = e; }
+    }
+    return peor;
   }
 
   /* BULLINGTON: UN SOLO FILO EQUIVALENTE, y por que el terreno va con este y
@@ -777,11 +871,24 @@
        aqui tiraria el mapa de la planta entera por un enlace mal pasado. */
     if (!(htE > 0) || !(hrE > 0)) {
       return { db: null, motivo: "antena_bajo_la_tierra_lisa", bruto: null,
-               real: null, liso: null,
+               real: null, liso: null, nuReal: null, modoReal: null,
                hst: L.hst, hsr: L.hsr, hstd: L.hstd, hsrd: L.hsrd,
                hobs: L.hobs, htE: htE, hrE: hrE };
     }
-    var a = bullingtonDb(D, zA, zB, real, fHz);
+    /* EL DETALLE DEL PERFIL REAL, no sólo su dB: de su ν sale el ESTADO del
+       enlace frente al terreno, y es el mismo número con el que ya se cobra.
+       `bullingtonDb` es una envoltura de `bullingtonDetalle`, así que esto NO
+       cambia ni un bit del relieve: cambia lo que se devuelve, no lo que se
+       calcula. Se comprueba en `tests/test_terreno_planta.js`.
+
+       OJO A LA DIFERENCIA ENTRE `db` Y `nuReal`: el relieve es la RESTA contra
+       la tierra lisa y se recorta en cero, así que un cerro que estorba igual
+       que la referencia sale 0,0 dB. El ν no se resta ni se recorta: dice si el
+       terreno CORTA EL RAYO, que es otra pregunta y la que el estado contesta.
+       Un enlace con el rayo cortado por una loma y relieve 0,0 dB existe, y hoy
+       se leía como si no pasara nada. */
+    var dRe = bullingtonDetalle(D, zA, zB, real, fHz);
+    var a = dRe.db;
     var b = bullingtonDb(D, zA, zB, liso, fHz);
     /* Y SE RECORTA EN CERO. Donde el terreno va POR DEBAJO de la referencia
        -una vaguada- la diferencia sale negativa: el terreno estorba MENOS que
@@ -790,6 +897,7 @@
        delante. P.1812 recorta igual: `Ld50 = Lbulla + max(Ldsph − Lbulls, 0)`. */
     var d = a - b;
     return { db: d > 0 ? d : 0.0, motivo: null, bruto: d, real: a, liso: b,
+             nuReal: dRe.v, modoReal: dRe.modo,
              hst: L.hst, hsr: L.hsr, hstd: L.hstd, hsrd: L.hsrd,
              hobs: L.hobs, htE: htE, hrE: hrE };
   }
@@ -972,7 +1080,7 @@
   function difraccionPanelesDetalle(D, zA, zB, cruces, fHz, prof, maxProf) {
     var p = prof || 0, tope = maxProf == null ? 3 : maxProf;
     var vacio = { totalDb: 0.0, dominante: null, izquierda: null, derecha: null,
-                  profundidad: p, motivo: null };
+                  profundidad: p, motivo: null, nuMax: null };
     if (!cruces || !cruces.length) { vacio.motivo = "sin cruces"; return vacio; }
     if (p >= tope) { vacio.motivo = "tope de recursion (" + tope + ")"; return vacio; }
     if (D <= 0) { vacio.motivo = "tramo de longitud nula"; return vacio; }
@@ -990,6 +1098,7 @@
     if (mejor < 0) { vacio.motivo = "ningun canto cae dentro del tramo"; return vacio; }
     if (mejorV <= -0.78) {
       vacio.motivo = "el dominante despeja (nu = " + mejorV.toFixed(3) + " <= -0,78)";
+      vacio.nuMax = mejorV;
       return vacio;
     }
     var bordeDom = mejorC.borde;
@@ -1009,7 +1118,8 @@
       dominante: { indice: mejor, s: mejorS, sEje: cruces[mejor].s, nu: mejorV,
                    perdidaDb: perdidaDom, estado: mejorC.estado,
                    despeje: mejorC.despeje, borde: bordeDom, wBorde: mejorC.wBorde },
-      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null
+      izquierda: dIzq, derecha: dDer, profundidad: p, motivo: null,
+      nuMax: maxNu(mejorV, dIzq, dDer)
     };
   }
 
@@ -1118,6 +1228,8 @@
     regimen: regimen,
     tierraLisa: tierraLisa,
     difraccionCantosDetalle: difraccionCantosDetalle,
+    estadoDeNu: estadoDeNu, peorEstado: peorEstado,
+    NU_DESPEJA: NU_DESPEJA, NU_ROZA: NU_ROZA,
     bullingtonDb: bullingtonDb,
     bullingtonDetalle: bullingtonDetalle,
     recortaPerfil: recortaPerfil,

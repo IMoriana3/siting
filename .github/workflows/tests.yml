@@ -385,8 +385,15 @@ jobs:
           # vez no lo puede producir una mutacion de un solo lado, y lo cubre la
           # comprobacion de clases: probado rompiendo los dos, `relieve` sale OK y
           # la de clases saca 22 cruces.
-          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \ \
-                                                   py_sin_tolerancia js_sin_tolerancia py_punto_duplicado
+          # fase 4, punto 5: el estado del enlace, la procedencia y su llegada a
+          # la pantalla. `relievePorNu` es la que vigila el doble conteo del
+          # suelo plano, que es lo que casi se cuela.
+          rojo node tests/test_rf_estado.js bordeDespeje relievePorNu peorNoManda completoRegalado \
+                                            sinRotularSeCuela procedenciaOptimista corteTecleado \
+                                            demCuelaComoVisto anillaPorTapado tapadoEnRojo
+
+          rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+                                                   py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \
                                                    py_csqrt_rama \
                                                    js_tol_regimen js_fase_signo \
@@ -394,7 +401,9 @@ jobs:
                                                    js_cerca_fija py_conductor \
                                                    js_panel_eje py_panel_huella \
                                                    py_eje_medida js_eje_cero py_tapa_cero \
-                                                   js_parte_eje py_sin_senphi py_tierra_muda
+                                                   js_parte_eje py_sin_senphi py_tierra_muda \
+                                                   py_numax_nivel0 js_estado_borde py_peor_estado \
+                                                   py_bullington_v
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.

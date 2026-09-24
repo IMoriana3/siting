@@ -17,6 +17,27 @@
     "convivir (−33,6 en el canon de Siting y −16,58 en cobertura-rf-fv) y por qué",
     "ninguna de las dos es una calibración de propagación."
   ],
+  "_procedencias": {
+    "_que_es": "LA CLASE DE CADA VALOR, LEGIBLE POR MÁQUINA. No es información nueva: es lo que el `_fuente` de cada valor YA dice, escrito en un vocabulario CERRADO para que el motor pueda rotular la salida sin leer prosa. Sacar la clase de una expresión regular sobre el `_fuente` sería poner el criterio en el sitio donde menos se mira, y además rompería el día que alguien reescriba una cita.",
+
+    "_por_que": "El mapa tiene que decir SIEMPRE con qué se ha pintado. Un margen en dB salido de valores que nadie ha verificado no es una predicción, y hasta hoy la pantalla no distinguía un caso del otro: pintaba las mismas cinco bandas de color con parámetros calibrados y sin ellos.",
+
+    "vocabulario": {
+      "medido":    "medido en campo sobre este equipo o esta planta",
+      "calibrado": "ajustado contra una campaña de medidas; la campaña viaja con el valor",
+      "plano":     "de un plano o documento de fabricante (DWG, DR, FTR)",
+      "datasheet": "leído del datasheet o la ficha del modelo EXACTO",
+      "norma":     "de una norma o recomendación citada (ITU-R, IEC)",
+      "declarado": "alguien lo ha declarado; ni plano, ni datasheet, ni medida",
+      "heredado":  "copiado del código de estos repos. NADIE lo ha verificado contra un datasheet ni contra una medida: es el valor que ya se usaba",
+      "pendiente": "no hay valor todavía (`null`)"
+    },
+
+    "_rotulo": "Para la pantalla se agrupan en cuatro: medido → MEDIDO · calibrado → CALIBRADO · plano/datasheet/norma → TEÓRICO · declarado/heredado → SIN VERIFICAR · pendiente → NO DISPONIBLE. Manda SIEMPRE el MÁS DÉBIL de los valores que entran en ese número, no la media ni el más fuerte.",
+
+    "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
+  },
+
   "version": "1.0.0",
   "generado": "2026-09-20",
 
@@ -24,6 +45,7 @@
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
     "ant_h_m": {
       "valor": 1.5,
+      "procedencia": "heredado",
       "_fuente": "código: Siting/index.html `RF_ANT_H=1.5` (modelo antiguo)",
       "_ojo": [
         "OBSOLETO como altura de antena: se conserva porque el MOTOR ANTIGUO (A) lo usa, y",
@@ -37,6 +59,7 @@
 
     "eje_tubo_m": {
       "valor": 1.20,
+      "procedencia": "declarado",
       "_es_defecto_declarado": true,
       "_rotulo": "eje estándar 1,20 m, no específico de la planta",
       "_fuente": "ESTÁNDAR FACTIUN, indicado por Iñaki (2026-09-21). No sale de un plano ni de una medida de campo: es la altura de tubo que la casa monta por defecto.",
@@ -102,11 +125,13 @@
       ],
       "radio_ancla_m": {
         "valor": 0.225,
+        "procedencia": "heredado",
         "_fuente": "código: Cobertura-Zigbee/seguidor.js — `m: mT(THREE, D.tcuX-0.16, -0.225, 0)`. La X local es EL EJE DEL TUBO (`tcuX: 1.4`, «TCU desplazada a lo largo del tubo, junto al motor»), así que el radio en el plano perpendicular al giro son los 0,225 m bajo el eje.",
         "_ojo": "el giro es `makeRotationX(−alfa)` en el marco canónico — Cobertura-Zigbee/terreno.html:1907."
       },
       "coax_caida_m": {
         "valor": 0.50,
+        "procedencia": "heredado",
         "_fuente": "código: Cobertura-Zigbee/seguidor.js — `antHang: 0.50`, «la antena CUELGA 50 cm vertical desde el conector».",
         "_ojo": "el 3D ya lo dibuja así: `aTip = [ax, ay − hang, az]` con (ax,ay,az) el conector YA rotado — terreno.html:1925. El motor usa la misma cuenta a propósito."
       },
@@ -122,12 +147,14 @@
 
     "antena_ncu_m": {
       "valor": 3.15,
+      "procedencia": "plano",
       "_fuente": "código: Cobertura-Zigbee/equipos.js `ncuAntY: 3.15` — «CENTRO del látigo, en la cabeza del poste». Plano DR_NCU_v0 / «Montaje NCU», poste C 100×60 de 2,95 m (`ncuMastH` de equipos.js).",
       "_ojo": "coincide con `ANTENNAS.ncu.h` de cobertura-rf-fv. Dos módulos independientes dicen lo mismo, que es la mejor señal que hay aquí."
     },
 
     "antena_hsu_m": {
       "valor": 6.50,
+      "procedencia": "plano",
       "_fuente": "código: Cobertura-Zigbee/equipos.js `hsuAntY: 6.50` — «CENTRO de los látigos, en su brazo». Plano FTR.24.00145_5_C / «Montaje HSU», torre de celosía autoportante de 8 m.",
       "_ojo": [
         "Los dos látigos van en su propio brazo a MEDIA TORRE, no en la cabeza junto al",
@@ -142,6 +169,7 @@
 
     "campo_cercano_lambdas": {
       "valor": 2,
+      "procedencia": "norma",
       "_fuente": "criterio, no medida: ITU-R P.526 supone el obstáculo lejos de los dos extremos en longitudes de onda. Por debajo no hay «filo de cuchillo», hay una antena metida debajo de una placa.",
       "_ojo": [
         "SUSTITUYE AL CORTE POR `t > 0,001` de `rfObstacles`, que no era físico: el 0,1 % del",
@@ -164,6 +192,7 @@
 
     "patron_antena": {
       "valor": "dipolo",
+      "procedencia": "datasheet",
       "_fuente": "ficha de la Jinchang JCW435700RA, 3 dBi, dipolo ~lambda/2, citada en cobertura-rf-fv python/zigbee_pv_model.py:270.",
       "_ojo": [
         "F(e) = cos((pi/2)·sen e)/cos e, normalizado a F(0) = 1: SOLO RESTA, nunca suma.",
@@ -180,16 +209,19 @@
     },
     "cuerda_m_defecto": {
       "valor": 2.38,
+      "procedencia": "heredado",
       "_fuente": "código: Siting/index.html `RF_CHORD_M=2.38`",
       "_ojo": "solo se usa si el layout de la planta no declara `bifila.cuerda`, que manda sobre esto."
     },
     "pitch_m_defecto": {
       "valor": 12.0,
+      "procedencia": "heredado",
       "_fuente": "código: Siting/index.html `RF_PITCH_M=12.0`",
       "_ojo": "ídem: el layout manda."
     },
     "tracker_slew_deg_s": {
       "valor": 0.17,
+      "procedencia": "declarado",
       "_fuente": "código: Cobertura-Zigbee/backtracking.html:3134 `const TRACKER_SLEW=0.17` — «spec del actuador», Sunner. Corroborado aparte en SCADA/tools/tcu-toolbox/README.md:2374 (`tol/velocidad = 2/0,17 = 12 s`).",
       "_para_que": "tiempo de giro en la latencia de stow (fase 3). Con límite ±55°: 55/0,17 = 323 s hasta el plano; 110/0,17 = 647 s de extremo a extremo."
     },
@@ -210,6 +242,8 @@
     "_que_es": "Lo que SÍ depende de la radio: balance, banda, protocolo y regulación.",
 
     "zigbee_pro_24": {
+
+      "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee-PRO",
       "f_hz": 2.45e9,
       "ptx_dbm": 19.0,
@@ -220,6 +254,7 @@
       "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada.",
       "canal": {
         "valor": null,
+        "procedencia": "pendiente",
         "_ojo": [
           "ESTE `null` PUEDE TUMBAR LA VARIANTE ENTERA, y por eso está aquí y no en un comentario.",
           "",
@@ -241,6 +276,8 @@
     },
 
     "zigbee_std_24": {
+
+      "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee estándar (no PRO)",
       "f_hz": 2.45e9,
       "ptx_dbm": 8.0,
@@ -256,18 +293,22 @@
     "_que_es": "Parámetros del medio. Pocos, y con significado físico.",
     "eps_r_suelo": {
       "valor": 15.0,
+      "procedencia": "heredado",
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `epsR: 15.0`"
     },
     "sigma_suelo_s_m": {
       "valor": 5e-3,
+      "procedencia": "heredado",
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `sigmaGround: 5e-3`"
     },
     "polarizacion": {
       "valor": "v",
+      "procedencia": "heredado",
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `pol: \"v\"`"
     },
     "sigma_db": {
       "valor": null,
+      "procedencia": "pendiente",
       "_fuente": "PENDIENTE — sale del JSON que publique `calibra_barrido.py` (fase 2), con su campaña de origen.",
       "_ojo": "Sin campaña calibrada, el motor va en modo TEÓRICO y lo rotula. NO se hereda el sigma del modelo antiguo: el 6,0 de `defaultParams()` es un valor de partida, no una medida, y el 10,99 de cobertura-rf-fv sale de un ajuste cuya correlación con la distancia es r = +0,16."
     }
@@ -277,6 +318,7 @@
     "_que_es": "Follaje atravesado por el enlace. Depende de la frecuencia, así que NO es geometría.",
     "modelo": {
       "valor": null,
+      "procedencia": "pendiente",
       "_fuente": "PENDIENTE — el encargo pide «modelo de follaje estándar citado y dependiente de la frecuencia». Candidato: ITU-R P.833. No se escribe el coeficiente hasta tener la recomendación delante y la versión que se cita.",
       "_ojo": "Con `null`, el motor trata la vegetación como NO MODELADA y lo dice en la salida, en vez de dar 0 dB callando."
     }

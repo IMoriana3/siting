@@ -254,12 +254,36 @@ def tierra_lisa(perfil):
             "v1": v1, "v2": v2, "D": D}
 
 
+def _max_nu(v, izq, der):
+    """El maximo ν de toda la recursion de Deygout. Espejo de `maxNu()` del JS.
+
+    `nuMax` es el ν del canto DOMINANTE, que es el criterio del propio Deygout, y
+    sale al diccionario porque de el sale el ESTADO del enlace (libre / rozando /
+    tapado). Hasta hoy solo existia dentro de la CADENA del motivo cuando el
+    dominante despejaba; leerlo de ahi con una expresion regular seria una
+    segunda implementacion del criterio, escrita donde menos se mira.
+
+    Se toma el maximo de TODA la recursion y no el del nivel 0: los subtramos van
+    contra un rayo auxiliar distinto del directo y sus ν no son comparables
+    termino a termino. `None` es «no hay canto que evaluar», NO «despeja».
+
+    MEDIDO sobre el corpus de paneles del banco de paridad (300 casos, 281 con
+    ν): la recursion sube el ν en 78 de 281 -el 27,8 %-, hasta +0,7255, y el
+    ESTADO no cambia en ninguno."""
+    m = v
+    if izq and izq.get("nuMax") is not None and izq["nuMax"] > m:
+        m = izq["nuMax"]
+    if der and der.get("nuMax") is not None and der["nuMax"] > m:
+        m = der["nuMax"]
+    return m
+
+
 def difraccion_cantos_detalle(D, zA, zB, cantos, f_hz, prof=0, max_prof=None):
     """Espejo de `difraccionCantosDetalle()`: Deygout sobre cantos sueltos."""
     p = prof or 0
     tope = 3 if max_prof is None else max_prof
     vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
-             "derecha": None, "profundidad": p, "motivo": None}
+             "derecha": None, "profundidad": p, "motivo": None, "nuMax": None}
     if not cantos:
         vacio["motivo"] = "sin cantos"
         return vacio
@@ -282,6 +306,7 @@ def difraccion_cantos_detalle(D, zA, zB, cantos, f_hz, prof=0, max_prof=None):
         return vacio
     if mejor_v <= -0.78:
         vacio["motivo"] = "el dominante despeja (nu = %s <= -0,78)" % _fix3(mejor_v)
+        vacio["nuMax"] = mejor_v
         return vacio
     s_dom, z_dom = cantos[mejor]["s"], cantos[mejor]["z"]
     perdida_dom = perdida_filo_db(mejor_v)
@@ -298,7 +323,60 @@ def difraccion_cantos_detalle(D, zA, zB, cantos, f_hz, prof=0, max_prof=None):
     return {"totalDb": perdida_dom + d_izq["totalDb"] + d_der["totalDb"],
             "dominante": {"indice": mejor, "s": s_dom, "z": z_dom,
                           "nu": mejor_v, "perdidaDb": perdida_dom},
-            "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None}
+            "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
+            "nuMax": _max_nu(mejor_v, d_izq, d_der)}
+
+
+# ══ EL ESTADO DE UN ENLACE: LIBRE / ROZANDO / TAPADO ═══════════════════════
+#
+# Espejo de `estadoDeNu()` / `peorEstado()` del JS. El mapa deja de pintar dB
+# mientras los parametros no esten calibrados —son heredados del modelo
+# congelado, `sigma_db` es None y el canal es desconocido, que deja la potencia
+# como cota superior con DIECISEIS dB de recorrido— y pinta el ESTADO.
+#
+# El estado si se sostiene sin calibrar porque sale de ν, que es GEOMETRIA Y
+# LONGITUD DE ONDA: no depende de la potencia, ni de la sensibilidad, ni de
+# sigma, ni de las correcciones de campana. Un enlace con el primer Fresnel
+# despejado lo esta con +19 dBm y con +3.
+#
+# LOS UMBRALES NO SON NUESTROS:
+#   ν <= -0,78      LIBRE    J(ν) = 0 en ITU-R P.526, y es EL MISMO umbral con
+#                            el que Deygout corta la recursion aqui arriba.
+#                            Equivale a un despeje de 0,55·F1 (c/F1 = -ν/√2).
+#   -0,78 < ν <= 0  ROZANDO  el rayo directo pasa e invade el primer Fresnel.
+#   ν > 0           TAPADO   el canto corta el rayo directo; J(0) = 6,02 dB.
+#
+# La regla clasica de 0,6·F1 es ν = -0,85. No se usa: tener dos umbrales de
+# despeje en el mismo programa es peor que la diferencia entre ellos.
+NU_DESPEJA, NU_ROZA = -0.78, 0
+
+
+def estado_de_nu(nu_max):
+    """`None` es LIBRE de verdad —no hay canto que evaluar—, no «no mirado»."""
+    if nu_max is None:
+        return "libre"
+    if nu_max <= NU_DESPEJA:
+        return "libre"
+    if nu_max <= NU_ROZA:
+        return "rozando"
+    return "tapado"
+
+
+_ORDEN_ESTADO = {"libre": 0, "rozando": 1, "tapado": 2}
+
+
+def peor_estado(estados):
+    """El PEOR de varios. Paneles despejados y terreno delante es TAPADO: manda
+    el mecanismo que mas estorba, no la media."""
+    peor, n = None, -1
+    for e in estados:
+        if e is None:
+            continue
+        if e not in _ORDEN_ESTADO:
+            raise ValueError("estado desconocido: %s" % e)
+        if _ORDEN_ESTADO[e] > n:
+            n, peor = _ORDEN_ESTADO[e], e
+    return peor
 
 
 def bullington_db(D, zA, zB, cantos, f_hz):
@@ -306,9 +384,32 @@ def bullington_db(D, zA, zB, cantos, f_hz):
 
     El terreno va con esto y no con Deygout porque Deygout sobre perfil denso
     da un numero que depende del muestreo (1,10 dB con 2 puntos, 22,74 con 80)
-    y del tope de recursion (1,10 con tope 1, 42,81 con tope 6). Medido."""
+    y del tope de recursion (1,10 con tope 1, 42,81 con tope 6). Medido.
+
+    Es UNA ENVOLTURA de `bullington_detalle`, igual que en JS, para que no haya
+    dos construcciones de Bullington que puedan separarse."""
+    return bullington_detalle(D, zA, zB, cantos, f_hz)["db"]
+
+
+def bullington_detalle(D, zA, zB, cantos, f_hz):
+    """Espejo de `bullingtonDetalle()`: lo mismo, diciendo ademas DONDE cayo el
+    filo equivalente y CON QUE ν se cobro.
+
+    HASTA HOY ESTO NO EXISTIA EN PYTHON: el JS tenia `bullingtonDetalle` desde
+    que la medida del repecho local necesito `sB` y `zBull`, y este lado se
+    quedo solo con el dB. Una funcion que existe en un motor y no en el otro es
+    un trozo de fisica que la paridad NO PUEDE VIGILAR: no es que estuviera mal,
+    es que nadie podia saberlo. Va aqui con sus casos en el banco.
+
+        modo   'sin_cantos' | 'ninguno_dentro' | 'directo' | 'obstruido'
+               | 'denominador_cero' | 'punto_fuera'
+        sB     distancia desde A al filo equivalente, o None
+        zBull  cota ABSOLUTA del filo equivalente, o None
+        v      el ν con el que se cobro, o None
+    """
+    nada = {"db": 0.0, "modo": "sin_cantos", "sB": None, "zBull": None, "v": None}
     if not cantos or not (D > 0):
-        return 0.0
+        return nada
     s_tim = -math.inf
     s_tr = (zB - zA) / D
     for c in cantos:
@@ -318,9 +419,13 @@ def bullington_db(D, zA, zB, cantos, f_hz):
         pend = (c["z"] - zA) / s
         if pend > s_tim:
             s_tim = pend
-    if s_tim == -math.inf:
-        return 0.0
+    if s_tim == -math.inf:                      # ningun canto dentro del vano
+        nada["modo"] = "ninguno_dentro"
+        return nada
+    s_b = None
+    z_bull = None
     if s_tim < s_tr:
+        # VISION DIRECTA: el filo equivalente es el canto de mayor ν.
         v_max = -math.inf
         for c in cantos:
             s = c["s"]
@@ -328,9 +433,12 @@ def bullington_db(D, zA, zB, cantos, f_hz):
                 continue
             w = nu(c["z"] - altura_rayo(zA, zB, D, s), s, D - s, f_hz)
             if w > v_max:
-                v_max = w
+                v_max, s_b, z_bull = w, s, c["z"]
         v = v_max
+        modo = "directo"
     else:
+        # OBSTRUIDO: el punto de Bullington es donde se cortan las dos rectas de
+        # maxima pendiente, una desde cada extremo.
         s_rim = -math.inf
         for c in cantos:
             s = c["s"]
@@ -341,13 +449,16 @@ def bullington_db(D, zA, zB, cantos, f_hz):
                 s_rim = q
         den = s_tim + s_rim
         if not (abs(den) > 1e-12):
-            return 0.0
+            nada["modo"] = "denominador_cero"
+            return nada
         s_b = (zB - zA + s_rim * D) / den
         if not (s_b > 0) or not (s_b < D):
-            return 0.0
-        z_bull = zA + s_tim * s_b
+            return {"db": 0.0, "modo": "punto_fuera", "sB": None, "zBull": None, "v": None}
+        z_bull = zA + s_tim * s_b               # cota del filo equivalente
         v = nu(z_bull - altura_rayo(zA, zB, D, s_b), s_b, D - s_b, f_hz)
-    return perdida_filo_db(v) if v > -0.78 else 0.0
+        modo = "obstruido"
+    return {"db": perdida_filo_db(v) if v > -0.78 else 0.0,
+            "modo": modo, "sB": s_b, "zBull": z_bull, "v": v}
 
 
 def recorta_perfil(perfil, D):
@@ -434,13 +545,22 @@ def relieve_delta_db(D, zA, zB, perfil, f_hz):
     # JS. Ver el comentario largo en `radio_pv_model.js`.
     if not (ht_e > 0) or not (hr_e > 0):
         return {"db": None, "motivo": "antena_bajo_la_tierra_lisa", "bruto": None,
-                "real": None, "liso": None,
+                "real": None, "liso": None, "nuReal": None, "modoReal": None,
                 "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
                 "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
-    a = bullington_db(D, zA, zB, real, f_hz)
+    # El DETALLE del perfil real, no solo su dB: de su ν sale el ESTADO del
+    # enlace frente al terreno, y es el mismo numero con el que ya se cobra.
+    # `bullington_db` envuelve a `bullington_detalle`, asi que esto NO cambia ni
+    # un bit del relieve. OJO a la diferencia entre `db` y `nuReal`: el relieve
+    # es la RESTA contra la tierra lisa y se recorta en cero, asi que un cerro
+    # que estorba igual que la referencia sale 0,0 dB; el ν no se resta ni se
+    # recorta y dice si el terreno CORTA EL RAYO, que es otra pregunta.
+    d_re = bullington_detalle(D, zA, zB, real, f_hz)
+    a = d_re["db"]
     b = bullington_db(D, zA, zB, liso, f_hz)
     d = a - b
     return {"db": d if d > 0 else 0.0, "motivo": None, "bruto": d, "real": a, "liso": b,
+            "nuReal": d_re["v"], "modoReal": d_re["modo"],
             "hst": L["hst"], "hsr": L["hsr"], "hstd": L["hstd"], "hsrd": L["hsrd"],
             "hobs": L["hobs"], "htE": ht_e, "hrE": hr_e}
 
@@ -582,7 +702,7 @@ def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
     p = prof or 0
     tope = 3 if max_prof is None else max_prof
     vacio = {"totalDb": 0.0, "dominante": None, "izquierda": None,
-             "derecha": None, "profundidad": p, "motivo": None}
+             "derecha": None, "profundidad": p, "motivo": None, "nuMax": None}
     if not cruces:
         vacio["motivo"] = "sin cruces"; return vacio
     if p >= tope:
@@ -608,6 +728,7 @@ def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
         vacio["motivo"] = "ningun canto cae dentro del tramo"; return vacio
     if mejor_v <= -0.78:
         vacio["motivo"] = "el dominante despeja (nu = %.3f <= -0,78)" % mejor_v
+        vacio["nuMax"] = mejor_v
         return vacio
     borde_dom = mejor_c["borde"]
     perdida_dom = perdida_filo_db(mejor_v)
@@ -630,6 +751,7 @@ def difraccion_paneles_detalle(D, zA, zB, cruces, f_hz, prof=0, max_prof=None):
                       "estado": mejor_c["estado"], "despeje": mejor_c["despeje"],
                       "borde": borde_dom, "wBorde": mejor_c["wBorde"]},
         "izquierda": d_izq, "derecha": d_der, "profundidad": p, "motivo": None,
+        "nuMax": _max_nu(mejor_v, d_izq, d_der),
     }
 
 

@@ -138,13 +138,40 @@ function troceaPy(texto) {
   return out;
 }
 
+/* Y LOS COMENTARIOS TAMPOCO CUENTAN, que es lo que esta puerta acaba de
+   enseñar poniéndose roja por una frase.
+
+   Escribiendo en `radio_pv_model.js` el comentario «`null` NO significa que
+   despeje: significa que no hay canto que evaluar», esta puerta dio
+   `tierraLisa` como SEGUNDA función de despeje. Y la puerta no estaba mal:
+   estaba leyendo texto, y ese texto casa. El mal arreglo es aflojar el patrón
+   o meter una excepción por nombre; el bueno es que un COMENTARIO no pueda
+   contar, porque un comentario no implementa nada.
+
+   SE QUITAN SOLO LOS COMENTARIOS DE BLOQUE Y LAS LINEAS QUE EMPIEZAN POR `//`
+   O POR `*`. No se toca ninguna línea de código, así que una expresión regular
+   o una cadena con `//` dentro —que las hay— siguen enteras. Quitar comentarios
+   NO afloja la puerta: se comprueba con las mutaciones, que plantan código de
+   verdad y tienen que seguir saliendo rojas las siete.
+
+   LAS TRES MUTACIONES DE ABAJO SON LA PRUEBA de que esto no la afloja:
+   `segundaHolgura`, `segundaLisa` y `bandaDeVuelta` plantan funciones REALES
+   y siguen cazándose después del recorte. Comprobado, no razonado. */
+function sinComentarios(cuerpo) {
+  return cuerpo
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')       // bloque /* ... */
+    .split('\n')
+    .filter(l => !/^\s*(\/\/|\*)/.test(l))    // línea de comentario, o su continuación
+    .join('\n');
+}
+
 /* PRODUCIR vs REENVIAR. `difraccionPanelesDetalle` devuelve un `despeje:` en su
    resultado, pero no lo CALCULA: lo copia del que le dio `cortaPanel`. Esa
    forma —`despeje: <algo>.despeje`— se quita antes de contar, porque si no la
    puerta cazaría al mensajero y habría que aflojarla con una excepción por
    nombre, que es como mueren estas puertas. */
 function produceDespeje(cuerpo) {
-  const limpio = cuerpo
+  const limpio = sinComentarios(cuerpo)
     .replace(/["']?despeje["']?\s*:\s*[A-Za-z_$][\w$.\[\]"']*\.despeje/g, '')
     .replace(/["']despeje["']\s*:\s*[A-Za-z_$][\w$]*\[["']despeje["']\]/g, '');
   return /["']?despeje["']?\s*:/.test(limpio);
@@ -220,8 +247,9 @@ check('y las dos salen exportadas',
 function produceLisa(cuerpo) {
   /* PRODUCIR vs REENVIAR, igual que con el despeje: `relieveDeltaDb` devuelve
      `hst`/`hsr` en su salida pero no los CALCULA, los copia de `tierraLisa`.
-     Esa forma -`hst: <algo>.hst`- se quita antes de contar. */
-  const limpio = cuerpo
+     Esa forma -`hst: <algo>.hst`- se quita antes de contar.
+     Y los comentarios tampoco cuentan, por lo mismo que en `produceDespeje`. */
+  const limpio = sinComentarios(cuerpo)
     .replace(/["']?hs[tr]["']?\s*:\s*[A-Za-z_$][\w$.\[\]"']*\.hs[tr]/g, '')
     .replace(/["']hs[tr]["']\s*:\s*[A-Za-z_$][\w$]*\[["']hs[tr]["']\]/g, '');
   return /["']?hst["']?\s*:/.test(limpio) && /["']?hsr["']?\s*:/.test(limpio);

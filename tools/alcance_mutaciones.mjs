@@ -28,6 +28,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,7 +59,7 @@ const bancos = fs.existsSync(dirTests)
    El piso se MIDE y sólo se BAJA a propósito: hoy 13 de 19 bancos tienen
    tabla, y los 6 sin ella no son un defecto —no todo banco necesita
    mutaciones—, pero perder una SÍ lo es. */
-const PISO_BANCOS = 13;   // MEDIDO el 2026-09-23
+const PISO_BANCOS = 14;   // MEDIDO el 2026-09-24 (sube con test_rf_estado.js)
 
 /* Y los de `tools/`, que este útil no barre. Hoy no hay ninguno con tabla;
    si aparece, se dice en vez de ignorarlo. */
@@ -79,6 +81,61 @@ function clavesDe(src) {
   return [...new Set([...js, ...py])];
 }
 
+/* ══ QUÉ MUTACIONES CORRE LA CI DE VERDAD ═════════════════════════════════
+   No se busca el nombre en el YAML: se EXTRAE el script del paso, se sustituye
+   `rojo` por un registrador que no ejecuta nada, y se corre con `bash -e`. Lo
+   que salga por ahí son los pares (banco, mutación) que la CI pasa de verdad.
+
+   Si el script no parsea —una continuación rota, un paréntesis— esto se entera
+   AQUÍ, que es lo que no pasaba antes. Y si no se puede mirar, rc = 2. */
+function mutacionesQueCorreLaCI(yml) {
+  const paso = yml.match(/- name: y las mutaciones, en rojo\n\s*run: \|\n([\s\S]*?)(?=\n {6}- name:|\n {2}[a-z_]+:|$)/);
+  if (!paso) return { error: 'no localizo el paso «y las mutaciones, en rojo» en tests.yml' };
+  const script = paso[1].replace(/^ {10}/gm, '');
+  const conRegistro = script.replace(/rojo \(\) \{[\s\S]*?\n\}/,
+    'rojo () {\n  corredor="$1"; banco="$2"; shift 2\n' +
+    '  for m in "$@"; do echo "CORRE|$banco|$m"; done\n}');
+  if (conRegistro === script) return { error: 'no localizo la definicion de `rojo` para sustituirla' };
+  const tmp = path.join(os.tmpdir(), 'alcance-mut-' + process.pid + '.sh');
+  fs.writeFileSync(tmp, conRegistro);
+  const r = spawnSync('bash', ['-e', tmp], { encoding: 'utf8' });
+  fs.unlinkSync(tmp);
+  const pares = new Set(), vacias = [];
+  for (const l of (r.stdout || '').split('\n')) {
+    const m = /^CORRE\|([^|]*)\|(.*)$/.exec(l);
+    if (!m) continue;
+    /* el corredor escribe la ruta (`tests/x.js`) y aquí se compara por el
+       nombre pelado; sin normalizar, NINGUNA casaba y el útil daba 0 de 152 */
+    const banco = m[1].replace(/^.*\//, '');
+    if (!m[2].trim()) { vacias.push(banco); continue; }
+    pares.add(banco + '|' + m[2]);
+  }
+  return { pares: pares, vacias: vacias, rc: r.status,
+           err: (r.stderr || '').trim().split('\n').filter(Boolean).slice(0, 4) };
+}
+
+const ci = mutacionesQueCorreLaCI(yml);
+if (ci.error) {
+  console.log('SIN ALCANCE: ' + ci.error);
+  console.log('No se ha podido mirar. Esto no es un verde.');
+  process.exit(2);
+}
+const corridas = ci.pares;
+/* EL SCRIPT TIENE QUE PARSEAR. Si bash se cae —una continuación rota deja
+   nombres de mutación sueltos como si fueran órdenes—, las que vengan después
+   no se corren aunque estén escritas. Eso es ROJO, no un detalle de formato. */
+if (ci.rc !== 0) {
+  console.log('EL PASO DE MUTACIONES NO CORRE ENTERO: bash sale con rc=' + ci.rc);
+  for (const l of ci.err) console.log('    ' + l);
+  console.log('Las mutaciones posteriores al fallo NO se ejecutan, estén escritas o no.');
+  process.exit(1);
+}
+if (ci.vacias.length) {
+  console.log('EL CORREDOR RECIBE ARGUMENTOS VACIOS en: ' + [...new Set(ci.vacias)].join(', '));
+  console.log('Un `MUTA=""` corre el banco SIN mutar, sale con 0 y se cuenta como no cazada.');
+  process.exit(1);
+}
+
 console.log('¿CORRE LA CI TODAS LAS MUTACIONES QUE HAY?\n');
 console.log('  banco                         definidas  en CI   alcance');
 let faltan = [], nBancos = 0, nMut = 0, nCI = 0;
@@ -95,9 +152,17 @@ for (const b of bancos) {
      parciales. Sexta vez hoy que una comprobación mira donde no debe.
      Ahora se recogen TODAS las apariciones y se une lo que sigue a cada una,
      con las continuaciones de línea `\` desdobladas. */
-  const trozo = [...yml.matchAll(new RegExp(b.replace(/[.]/g, '\\.'), 'g'))]
-    .map(mm => yml.slice(mm.index, mm.index + 1500)).join('\n');
-  const sin = claves.filter(k => !new RegExp('\\b' + k + '\\b').test(trozo));
+  /* Y AHORA NO SE BUSCA EL NOMBRE: SE EJECUTA EL PASO. Lo de arriba seguía
+     siendo una comprobación de TEXTO, y aparecer en el YAML no es correrse.
+     MEDIDO, y es mío: al añadir cuatro mutaciones el 23-09 dejé la línea del
+     corredor partida —`py_refl_pol \ \` seguido de una línea SIN barra—, así
+     que `rojo` recibía 5 claves y las 17 siguientes las leía bash como órdenes
+     sueltas. `py_sin_guarda: command not found`, exit 127, el paso muerto y el
+     CI de Siting ROJO en cinco corridas seguidas. Este útil seguía diciendo
+     «140 de 140» porque las 17 SÍ aparecían en el fichero.
+     Séptima vez hoy que una comprobación mira donde no debe — y esta vez en el
+     útil escrito para cazar exactamente eso. */
+  const sin = claves.filter(k => !corridas.has(b + '|' + k));
   nMut += claves.length; nCI += claves.length - sin.length;
   console.log('  %s %s %s   %s%s', b.padEnd(28), String(claves.length).padStart(9),
     String(claves.length - sin.length).padStart(6),
