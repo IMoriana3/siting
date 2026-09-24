@@ -2993,6 +2993,16 @@ function cmpTabla(t){
   /* LO QUE HAY QUE SABER PARA LEER LA TABLA, JUNTO A LA TABLA Y NO EN UN DOC:
      los dos números que salen más redondos son los que más letra pequeña
      llevan, y esconderla sería el defecto que toda esta fase viene quitando. */
+  /* LA HORA, ENCIMA DE LA TABLA Y NO EN UNA NOTA AL PIE. Si ningún criterio
+     varía, la lectura fácil es «la hora da igual» y es FALSA: lo que pasa es que
+     estos criterios están saturados. La diferencia va donde se lee la tabla. */
+  if(t.saturacion){
+    const sat = t.saturacion.saturada;
+    h += '<div style="font-size:10.5px;line-height:1.45;margin-top:6px;padding:6px;'+
+         'border-left:3px solid '+(sat?'#e0a72c':'var(--blue)')+';background:var(--surface-2)">'+
+         (sat?'<b style="color:#e0a72c">La hora NO mueve esta tabla — y eso no es que la hora dé igual.</b> ':'')+
+         esc(t.saturacion.texto)+'</div>';
+  }
   h += '<div class="hint" style="font-size:10px;color:var(--muted-2);line-height:1.45;margin-top:6px">'+
        '<b>Cómo leer esto.</b> El umbral es <code>margen &gt; 0</code>: la sensibilidad pelada, '+
        'sin reserva de desvanecimiento. Los <b>saltos</b> son el camino más corto sobre TODOS los '+

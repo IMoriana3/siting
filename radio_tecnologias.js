@@ -262,8 +262,49 @@
       fila.veredicto = veredicto(k, fila.celdas);
       return fila;
     });
+    /* ── LA HORA, Y POR QUÉ ESTA TABLA NO SE ENTERA ─────────────────────────
+     * Si NINGÚN criterio varía entre las horas miradas, la lectura fácil es «la
+     * hora da igual». ES FALSA, y la medida lo dice: en El Burgo, entre la mejor
+     * y la peor hora entran y salen 1.086 pares de enlace, el 8,1 % de los
+     * viables. La hora SÍ mueve enlaces.
+     *
+     * Lo que pasa es que estos criterios están SATURADOS: con ~12.000 enlaces
+     * viables sobre 215 TCU el grafo sigue denso a cualquier hora, así que la
+     * cobertura y los saltos no se enteran. Son dos cosas distintas y la tabla
+     * tiene que llevar la diferencia encima, no en una nota al pie.
+     *
+     * Y ESTO CAMBIA EN CUANTO ENTREN LORA Y WI-SUN: a 868 MHz el radio de
+     * Fresnel es ~1,7 veces el de 2,45 GHz —la misma geometría despeja menos— y
+     * el balance es otro. Con menos margen los criterios dejan de estar
+     * saturados, empiezan a separar, y entonces la hora importará también aquí. */
+    var conDato = [], varia = false;
+    for (var q = 0; q < filas.length; q++) {
+      for (var w = 0; w < nombres.length; w++) {
+        var cc = filas[q].celdas[nombres[w]];
+        if (!cc || cc.min == null) continue;
+        if (conDato.indexOf(nombres[w]) < 0) conDato.push(nombres[w]);
+        if (cc.min !== cc.max) varia = true;
+      }
+    }
+    var satur = conDato.length && !varia;
     return {
       planta: planta, horas: horas, tecnologias: nombres, filas: filas,
+      saturacion: {
+        saturada: !!satur,
+        conDato: conDato,
+        texto: satur
+          ? "NINGÚN criterio varía entre las " + horas.length + " horas miradas, y eso NO " +
+            "significa que la hora dé igual: significa que estos criterios están SATURADOS " +
+            "con la tecnología que sí tiene datos. Medido en El Burgo: entre la mejor y la " +
+            "peor hora entran y salen 1.086 pares de enlace, el 8,1 % de los viables. " +
+            "Cuando entren LoRa y Wi-SUN —menos margen, y a 868 MHz el radio de Fresnel es " +
+            "~1,7 veces mayor— estos criterios dejarán de estar saturados y la hora " +
+            "importará también en esta tabla."
+          : (conDato.length
+              ? "Hay criterios que varían con la hora: el recorrido [min–max] es el resultado, " +
+                "no su punto medio."
+              : "No hay ninguna tecnología con datos suficientes para saber si la hora mueve algo.")
+      },
       /* A PROPÓSITO NO HAY AQUÍ NINGÚN TOTAL. Ver la cabecera. */
       _sin_indice_unico: "no hay puntuación agregada, y el banco lo comprueba"
     };

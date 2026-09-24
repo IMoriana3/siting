@@ -169,6 +169,12 @@ else {
  * Un 215 de 215 y un «0 sin camino alternativo» son demasiado redondos para
  * dejarlos pasar. Hay que decir de qué están hechos, porque el denominador y la
  * población no son los que el rótulo sugiere. */
+if (tabla.saturacion) {
+  console.log('\n── LA HORA, Y POR QUÉ ESTA TABLA NO SE ENTERA ──\n');
+  if (tabla.saturacion.saturada) console.log('  LA HORA NO MUEVE ESTA TABLA — Y ESO NO ES QUE LA HORA DÉ IGUAL.\n');
+  console.log('  ' + tabla.saturacion.texto.replace(/(.{76}\s)/g, '$1\n  '));
+}
+
 console.log('\n── QUÉ SIGNIFICAN ESTOS NÚMEROS, Y QUÉ NO ──\n');
 
 /* 1 · el margen del PEOR enlace de la malla. Si es enorme, el resultado no dice

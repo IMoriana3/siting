@@ -400,7 +400,7 @@ jobs:
           # el comparador de tecnologías: lo que vigila no es aritmética, es
           # disciplina — un hueco no se rellena, no hay índice único, y no se
           # compara a una sola hora
-          rojo node tests/test_comparador.js rellenaHueco indiceUnico unaHora unCandidatoBasta \
+          rojo node tests/test_comparador.js rellenaHueco indiceUnico unaHora unCandidatoBasta horaDaIgual \
                                              solapaGana sumaEnVezDeUnion
           rojo node tests/test_comparador_visor.js huecoMudo huecoSinMotivo noDevuelveVariante \
                                                    noDevuelveHora sinGuardiaHoras sinLetraPequena
