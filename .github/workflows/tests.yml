@@ -321,6 +321,17 @@ jobs:
                                                  sinSueloDeCuantizacion conMuestrasParciales \
                                                  siempreValor extrapolaSinPartida
 
+          # DE LA EXPORTACION DEL SCADA AL STOW MEDIDO. La mitad de arriba del
+          # anterior: que cuenta como stow y contra que instante se mide.
+          #
+          # LAS DOS GUARDAS DE RACHA VAN EN UNA SOLA MUTACION A PROPOSITO. Se
+          # midio sobre el fichero del 2026-09-24: quitar solo una no cambia un
+          # veredicto (75 stows en los tres casos), porque se cubren entre si.
+          # Con las dos fuera, 75 pasan a 3. Dos mutaciones sueltas habrian
+          # salido VERDES y no habrian probado nada -- novena leccion.
+          rojo node tests/test_stow_desde_scada.js sinGuardasDeRacha sinAtarALaRacha \
+                                                   confundePos0ConPos5
+
           # EL TERRENO DE LA PLANTA. `terreno_planta.js` lee el MISMO
           # `<planta>_relieve.json` que consume el 3D de cobertura-zigbee, y de
           # ahi sale el perfil con el que el motor calcula el relieve.

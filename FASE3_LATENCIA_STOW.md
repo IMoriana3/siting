@@ -13,13 +13,22 @@
 > **Lo más accionable no está en el ranking, está en el §4.1**: el stow autónomo
 > de la TCU por pérdida de comunicación existe y viene configurado en **10
 > minutos**. Eso son 600 s dominando una cadena cuyo siguiente término mayor son
-> 825 s de giro. Es el único punto donde un cambio de configuración —sin
+> los **310 s** de giro. Es el único punto donde un cambio de configuración —sin
 > tecnología nueva— mueve la aguja en centenares de segundos.
 >
-> **Y la pregunta del giro tiene respuesta barata**: el SCADA ya sondea el ángulo
-> de cada TCU (`30506`) cada 30 s. El factor 2,6 entre spec y campo se resuelve
-> diferenciándolo sobre un giro ya registrado, sin cronómetro. Lo que esa
-> resolución de 30 s **no** da es el tramo de radio. Ver §2.4.
+> **LA PREGUNTA DEL GIRO YA ESTÁ CONTESTADA** (2026-09-24, §2.4). 75 stows
+> ajustados uno a uno sobre un evento real: **0,1774 °/s de mediana**, R²
+> mediano 0,9987, o sea **310 s para 55°**. El rango 275–825 s que daba la
+> versión anterior de este documento **queda retirado**, y la lectura de 0,0667
+> °/s queda descartada como velocidad de giro en stow.
+>
+> **Y APARECIÓ UN TÉRMINO QUE ESTE DOCUMENTO NO ESTABA MIDIENDO** (§2.4 bis). En
+> ese stow, entre la primera TCU que arrancó y la última pasaron **30 minutos**,
+> y **la radio no explica ni uno**: las órdenes salieron en 46 s y todas llegaron
+> antes del sondeo siguiente. Los 30 minutos son la secuencia **manual** de paso
+> a AUTO (1.168 s) y nueve órdenes que fracasaron sin reintento rápido — una de
+> ellas tardó **70 minutos** en llegar. Es el aviso más fuerte de todo el
+> documento contra decidir la tecnología de radio por latencia.
 
 Cada cifra lleva su estado, y no se mezclan:
 
@@ -144,46 +153,121 @@ ha buscado: ningún `.ps1` de campo, ningún útil y ningún banco de esta carte
 instrumenta un round-trip. `zigbee_logger.ps1` registra RSSI y rutas, no
 tiempos.
 
-### 2.4 Giro — **DECLARADO y MEDIDO, y no coinciden**
+**MEDIDO — pero SÍ hay una COTA SUPERIOR del camino entero, y es estrecha.**
+Del stow del 2026-09-24 (§2.4). El log de la NCU escribe, **por TCU y con
+segundo exacto**, cuándo emitió la orden:
 
-El 323 s del encargo sale de `TRACKER_SLEW = 0.17` °/s, rotulado en
-`Cobertura-Zigbee/overcast.html:577` como **«spec del actuador»** (catálogo
-Sunner): 55° / 0,17 = **323,5 s** — el encargo lo cita como 323, que es el
-mismo número truncado.
+```
+2026-09-24 14:44:38;Requesting safe position 5, wind_from_east: 0, for TCU 39. Reason: Request from group
+```
 
-Pero `SolarGPTfull/docs/validacion-campo-actuator.md` midió El Burgo I, 106
-TCU, un día — y **dos lecturas independientes del mismo día no coinciden**:
+y el CSV de esa TCU dice cuándo el SCADA la vio ya en `active_security_position
+= 5`. Para las 75 TCU con stow medido:
 
-| origen | °/s | 55° de recorrido |
+| | s |
+|---|---:|
+| petición → primer sondeo con `sec = 5`, mínimo | 34 |
+| petición → primer sondeo con `sec = 5`, mediana | 39 |
+| petición → primer sondeo con `sec = 5`, **máximo (p100)** | **45** |
+
+**Y ESOS 39 s SON SONDEO, NO TRANSPORTE. Todos.** La comprobación que lo
+decide: para cada TCU se mira **el hueco entre el sondeo anterior y el que ya
+trae el 5**, y se resta.
+
+```
+hueco previo al primer sec=5      mediana 39 s   (periodo nominal 30 s)
+(petición → sec=5) − hueco        mediana  0 s · máximo 1 s      <--
+```
+
+O sea: **el sondeo inmediatamente posterior a la orden ya la trae**, en 75 de
+75. El número 39 es el tiempo hasta el siguiente sondeo, y nada más. Lo que se
+puede afirmar es la cota: **la orden llegó a las 75 TCU en menos de un periodo
+de sondeo**, y por debajo de eso **estos datos no resuelven**. Para partirlo en
+saltos sigue haciendo falta el cronómetro del §5.
+
+**El otro lado de la cota, que no se puede callar:** esas son las 75 que
+llegaron. El **p100 de la planta entera no son 45 s**, porque hubo órdenes que
+fracasaron y se cuentan en el §2.4 bis.
+
+### 2.4 Giro — **MEDIDO**, 75 stows de un stow real
+
+> **Actualizado el 2026-09-24 con datos de campo.** Este apartado daba un rango
+> de **275–825 s** y decía que spec y campo «no coinciden». Ese rango queda
+> **RETIRADO**: no era una horquilla física, era la distancia entre lecturas que
+> no declaraban cómo estaban definidas. Ahora hay 75 giros ajustados uno a uno
+> sobre el mismo evento, con su R² publicado.
+
+**La medida.** Exportación del SCADA del **2026-09-24**: 122 ficheros
+`TCU_<nnn>_2026-09-24.csv`, uno por TCU, más `NCU_2026-09-24.csv` y
+`NCU_EVENT_LOG_2026-09-24.csv`. Sondeo de **30 s** por TCU en la ventana del
+stow. El ángulo viene en **grados con dos decimales** (`angle`, `target_angle`),
+no en radianes. **La planta no está declarada en los ficheros y aquí no se
+nombra.**
+
+```
+tools/stow_desde_scada.mjs   el útil, con su banco: tests/test_stow_desde_scada.js
+sha256 del manifiesto de las 124 entradas:
+  5f3b4bcfc09a62fd143f4559e5899acc52546838dfef22ffcdc3fecbe8b70bc5
+Los CSV NO están en el repositorio (36 MB de dato de planta).
+```
+
+**El método** es el del §2.4 anterior y el de `tools/arranques_stow.mjs`: no se
+toma «el primer sondeo en que el ángulo cambió», sino el **cruce de la recta de
+seguimiento con la de giro**, ajustadas por mínimos cuadrados. La velocidad es
+la pendiente de la segunda.
+
+| | °/s | 55° de recorrido |
 |---|---:|---:|
-| spec Sunner | 0,17 | **324 s** |
-| medido, lectura del auditor | 0,1538 | **358 s** |
-| p05 de esa misma lectura | 0,100 | **550 s** |
-| medido, segunda lectura | 0,0667 | **825 s** |
-
-Factor **2,6** en el término dominante. El propio documento lo dice: «la
-validación no es reproducible sin escribir cómo se define la medida».
-
-**Y LA PROPIA TCU DECLARA UN CUARTO VALOR, que ordena los otros tres.**
-`tools/modbus_src/tcu_v6.json`, registro **`41067` «Motor speed at no load» =
-200 mdeg/sec**, o sea **0,200 °/s** → 55° en **275 s**.
-
-«At no load» es el calificador que lo explica todo: es el techo físico, sin
-panel, sin viento y sin rozamiento. Que las medidas de campo (0,1538, 0,100)
-queden POR DEBAJO de él es lo que la física pide. Los cuatro números dejan de
-contradecirse y pasan a ser una escala:
+| medido, mínimo de 75 | 0,1627 | 338 s |
+| medido, p05 | 0,1667 | 330 s |
+| **medido, MEDIANA de 75** | **0,1774** | **310 s** |
+| medido, p95 | 0,1893 | 291 s |
+| medido, máximo | 0,2221 | 248 s |
 
 ```
-  0,200 °/s   275 s   techo declarado por la TCU, SIN CARGA
+R² del ajuste        mediana 0,9987 · mínimo 0,9898   (75 de 75 por encima de 0,98)
+sigma del arranque   mediana 2,66 s · p95 4,24 s · máximo 13,93 s
+muestras por ajuste  mediana 14 · mínimo 5
+recorrido del giro   40,3° a 86,4°, mediana 84,5°  (los objetivos de stow vistos
+                     son +10° y +30°, y el ángulo de partida varía, así que la
+                     amplitud varía con ellos y la VELOCIDAD no)
+```
+
+**Y ahora los cuatro valores viejos se ordenan contra 75 medidas, no contra
+dos:**
+
+```
+  0,200 °/s   275 s   techo declarado por la TCU SIN CARGA (`41067`)
+                      -> queda JUSTO POR ENCIMA del maximo medido (0,2221 lo
+                         roza por arriba; ver el reparo de abajo)
+  0,1893°/s   291 s   p95 medido
+  0,1774°/s   310 s   MEDIANA MEDIDA, 75 stows          <-- el numero
   0,17  °/s   324 s   catalogo Sunner, el que usa el codigo
-  0,1538°/s   358 s   mediana medida en campo
-  0,100 °/s   550 s   p05 de esa misma medida
-  0,0667°/s   825 s   segunda lectura del mismo dia  <-- este sigue sin encajar
+                      -> esta esencialmente en el SUELO de lo medido (p05 0,1667)
+  0,1538°/s   358 s   mediana de la validacion de campo anterior
+                      -> por DEBAJO del minimo de las 75 (0,1627)
+  0,0667°/s   825 s   segunda lectura de aquel dia      <-- NO ES ESTA MAGNITUD
 ```
 
-Los cuatro primeros forman una secuencia coherente. **El quinto no**: 0,0667
-está a un tercio del techo sin carga, y eso ya no lo explica la carga. O es
-otra definición de la medida, o es un hallazgo.
+**El 0,0667 queda descartado como velocidad de giro en stow.** No es que «no
+encaje»: está a **2,7 veces** por debajo del mínimo de 75 medidas independientes
+del mismo movimiento, con R² ≥ 0,99 cada una. Lo que fuera —otra definición de
+la diferencia, un tramo con parada dentro, una ventana que incluía el
+seguimiento— no se puede reconstruir desde aquí, y por eso se retira en vez de
+explicarse.
+
+> **UN REPARO SOBRE EL MÁXIMO.** El máximo medido, 0,2221 °/s, **supera** el
+> techo sin carga que declara la TCU (0,200 °/s, `41067`). Un solo ajuste por
+> encima del techo declarado es, o bien un giro con menos carga de la que el
+> fabricante supone, o bien un ajuste sobre pocas muestras. No se resuelve con
+> estos datos y **no se usa para nada**: el número que se publica es la mediana.
+> Queda anotado porque tapar el dato incómodo es cómo se fabrica una escala que
+> parece coherente.
+
+**Lo que NO cambia:** el 55° sigue siendo `west_sw_limit`, un límite de
+software, y el recorrido real de cada TCU depende de dónde estuviera siguiendo
+al sol. Los 310 s son «55° a la velocidad mediana medida», no «lo que tardó una
+TCU concreta».
 
 **Y ESTO SE PUEDE ZANJAR SIN INSTRUMENTAR NADA — pero no por donde yo dije.**
 
@@ -265,23 +349,164 @@ capacidad vale 90, y la resolución de pulso (`41080`) es 4. Comparar eso con el
 **exige la escala**, y hasta tenerla no hay comparación que hacer. La escala
 sale del Toolbox o de un registro que este mapa no trae. **No se toca el core.**
 
+### 2.4 bis · El stow completo, repartido — **MEDIDO**
+
+El mismo evento del §2.4, mirado como secuencia. **Y el hallazgo es que el
+término dominante no es ninguno de los que este documento venía midiendo.**
+
+**Los tres anclajes, y no son intercambiables:**
+
+```
+14:44:18 … 14:44:43   el OPERADOR habilita la posicion 5 en diez grupos
+                      desde la interfaz web                          span   25 s
+14:44:22 … 14:45:08   la NCU emite la orden TCU a TCU                span   46 s
+14:44:59 … 15:04:27   el OPERADOR manda los grupos a AUTO            span 1168 s
+```
+
+**UNA TCU CON `sec = 5` Y EN MANUAL NO GIRA.** Se queda en el ángulo de
+seguimiento con el motor a OFF. Medido, TCU 39: acepta la posición a las
+14:45:23 y sigue a −53,50° con `motor_state = OFF` seis minutos después. Lo que
+la mueve es el paso a AUTO.
+
+| tramo | n | mediana | p05 | p95 |
+|---|---:|---:|---:|---:|
+| **A**· petición → arranque del giro | 75 | **1.231 s** | 108 s | 1.816 s |
+| **B**· petición → `sec = 5` visto | 75 | 39 s | 35 s | 44 s |
+| **C**· primera muestra en AUTO → arranque | 75 | **−2,7 s** | −16,1 s | +13,0 s |
+
+**La C es la que lo explica todo.** Está centrada en cero: la TCU arranca
+**en el mismo instante en que pasa a AUTO**, dentro del hueco de sondeo (el
+signo negativo es esperable — el cruce de rectas cae antes del primer sondeo
+que ve el giro). O sea que la A de 1.231 s **no mide la cadena técnica**: mide
+cuánto tardó el operador en mandar ese grupo a AUTO.
+
+**Y la dispersión entre TCU, que era la pregunta original:**
+
+```
+primer arranque   14:45:46
+ultimo arranque   15:15:48
+ULTIMA - PRIMERA  1802,6 s  (30 min)   con sigma mediana 2,66 s por arranque
+```
+
+Treinta minutos. **Pero de esos 30 minutos, la radio no explica ni uno**: las
+órdenes salieron en 46 s y todas llegaron antes del sondeo siguiente (§2.3).
+Los 30 minutos son los 1.168 s de la secuencia de AUTO más los reintentos que
+el propio log registra (`Sent 9 out of 14 trackers to AUTO mode`, y nueve
+líneas más como ésa, entre 14:45:21 y 14:47:31).
+
+#### Las órdenes que fracasaron — **MEDIDO**
+
+`Failed to set the security position for TCU N`: **13 en el día, sobre 11 TCU
+distintas** (la 13 y la 10 fallan dos veces). De ellas:
+
+* **2 no son del stow**: TCU 22 (14:42:54) y TCU 24 (14:43:11) fallan sobre una
+  petición de **posición 0**, del ciclo anterior.
+* **11 son del stow**, sobre **9 TCU**: 9, 10, 11, 13, 21, 23, 25, 36, 38.
+
+| TCU | falló | reintento en el log | primer `sec = 5` después | ¿giró? |
+|---:|---|---|---|---|
+| 13 | 14:44:55 | sí, +3.210 s | 15:39:11 (+3.256 s) | sí, 109° |
+| 21 | 14:48:15 | no | 14:49:11 (+56 s) | sí, 87° |
+| 9 | 14:50:26 | no | 14:55:38 (+312 s) | **no** |
+| 23 | 14:54:41 | no | 14:54:54 (+13 s) | sí, 86° |
+| 25 | 14:55:57 | no | 14:56:12 (+15 s) | sí, 102° |
+| 11 | 15:01:00 | no | 15:39:55 (+2.335 s) | sí, 110° |
+| 36 | 15:02:11 | no | 15:02:42 (+31 s) | sí, 110° |
+| 38 | 15:12:18 | no | 15:12:44 (+26 s) | **no** |
+| 10 | 15:17:56 | sí, +3.328 s | 16:28:28 (+4.232 s) | sí, 110° |
+| 13 | 15:38:26 | no | 15:39:11 (+45 s) | sí, 110° |
+| 10 | 16:13:25 | no | 16:28:28 (+903 s) | sí, 110° |
+
+**Las once acabaron en `sec = 5`.** Ninguna se quedó sin recibir la orden. Pero
+la última lo hizo **70 minutos** después de su primer fallo, y **sólo dos de las
+once tienen un reintento escrito en el log**: las demás llegaron sin que nada
+registre por qué.
+
+**Ése es el p100 de verdad**, y no los 45 s del §2.3: si la métrica del encargo
+es «hasta que la ÚLTIMA TCU la recibe», la última fue la TCU 10 a las 16:28:28.
+El camino crítico de este stow **no es la profundidad de la malla: es el
+reintento de una orden que falló y que nadie reintentó deprisa.**
+
+#### El denominador, al lado del número y no en una nota
+
+```
+122   ficheros TCU en la exportacion
+ -9   sin NINGUNA fila en la ventana 14:40-15:20   (TCU 1,4,5,16,17,18,19,31,35)
+-34   con filas pero sin giro ajustable: 20 con muestras insuficientes DENTRO
+      del giro, 14 con menos de 6 filas en la ventana entera, 3 que no mueven
+      el angulo en ninguna muestra
+ -1   con giro ajustable que NO es un stow (TCU 84, ver abajo)
+ -3   con giro fuera de racha o R^2 < 0,98
+ ---
+  75  STOWS MEDIDOS
+```
+
+Las 34 no medibles no son un fallo del método: son TCU que **el SCADA apenas
+sondea**. 40 de los 122 ficheros tienen una cadencia mediana de 26 a 75 s y
+entre 24 y 106 filas en TODO el día, frente a las ~3.380 de una TCU sana. Sobre
+30 filas al día no hay giro que ajustar, y decir que «no se midieron» es más
+barato que inventarlas.
+
+**TCU 84, nombrada.** Es el único caso del día entero que **nunca alcanza
+`active_security_position = 5`**, y no aparece **ni una sola vez** en el log de
+eventos de la NCU: ni petición, ni fallo, ni nada. No es una TCU sorda —tiene
+**3.380 filas**, cadencia normal—. A las 15:15:03 pasa a AUTO y gira 46,3° a
+0,1630 °/s con R² = 0,9989 hacia `target_angle = +55`, que es **la vuelta al
+seguimiento, no el stow**. Un ajuste impecable sobre el giro equivocado: por eso
+el útil ata el ajuste a la racha de `sec = 5` y por eso ésta es la única que la
+atadura expulsa.
+
+**TCU 17**, de paso: tampoco aparece en el log, tiene 21 filas en todo el día, y
+alcanza `sec = 5` a las 15:26:10 sin que ninguna petición lo explique. Se queda
+en MANUAL y no gira.
+
+#### La trampa que se comió la primera lectura de estos datos
+
+`active_security_position` muestra **5 durante un único sondeo** en momentos en
+que no hay stow ninguno. En este fichero pasa **84 veces**, y **82 de esas 84
+caen en el mismo segundo (±1 s) que una `Requesting safe position 0`** del log
+— la orden **contraria**.
+
+**No se afirma por qué.** La correspondencia está medida; el mecanismo que la
+produce no se deduce de estos ficheros y aquí no se nombra. Para descartarlas
+basta el hecho de que duran **un** sondeo.
+
+Leer «la primera vez que aparece un 5» como el arranque adelanta el reloj **dos
+minutos** y sitúa el arranque **antes de que el operador pulsara nada**. Es la
+séptima lección con otro traje: un valor presente se lee como el valor que se
+buscaba.
+
+---
+
 ### 2.5 La cadena, junta
 
 ```
-  detección     1 – 60 s     DECLARADO (defectos de fábrica)
-  decisión NCU     ?         NO MEDIDO
-  radio            ?         NO MEDIDO  <-- lo que se quiere rankear
-  giro         275 – 825 s   DECLARADO vs MEDIDO, factor 3
+  deteccion      1 - 60 s     DECLARADO (defectos de fabrica)
+  decision NCU      ?         NO MEDIDO
+  radio         < 30 s        MEDIDO como COTA: la orden llego a las 75 TCU
+                              antes del sondeo siguiente. Por debajo de un
+                              periodo de sondeo, estos datos no resuelven.
+  giro            310 s       MEDIDO, mediana de 75 stows (55 grados a
+                              0,1774 deg/s). Rango p05-p95: 291-330 s.
+  ---- y los dos que de verdad mandaron el 2026-09-24 ----
+  secuencia
+  de AUTO       1.168 s       MEDIDO: el operador mandando diez grupos a AUTO
+  reintento
+  de un fallo   hasta 4.232 s MEDIDO: TCU 10, de su primer fallo a su sec=5
 ```
 
-El 275 es el techo sin carga que declara la propia TCU (`41067`), o sea el
-límite inferior físico del tramo; el 825 es la segunda lectura de campo. El
-«factor 2,6» del §2.4 es otra cosa y sigue siendo válido: compara la spec de
-catálogo (0,17 °/s) con esa misma segunda lectura, sin meter el techo.
+**El rango 275–825 s del giro queda RETIRADO** (§2.4). No era una horquilla
+física: era la distancia entre dos lecturas que no declaraban su definición.
+Con 75 ajustes sobre el mismo evento, el término vale 310 s y su dispersión
+real es de ±6 %.
 
-**Ésta es la conclusión que el §6 necesita**: la radio se va a mover en
-segundos dentro de una cadena cuyos otros tramos valen decenas y centenares.
-Un ranking sin esta tabla delante se lee como si decidiera algo.
+**Y la conclusión que el §6 necesita ha cambiado de sitio.** No es sólo que la
+radio se mueva en segundos dentro de una cadena de centenares: es que en el
+único stow completo que hay medido, **la radio no explicó ni uno de los 30
+minutos** que separaron a la primera TCU de la última. Los explicaron la
+secuencia manual de paso a AUTO y un puñado de órdenes que fracasaron sin
+reintento rápido. Un ranking por tecnología de radio optimiza un término que en
+este evento no decidió nada.
 
 ---
 
@@ -357,7 +582,8 @@ Ordenadas por lo que se puede decir de ellas hoy.
    cubre: que la NCU esté caída.
 
    **Y su defecto la deja inútil como stow rápido.** 10 minutos son **600 s**,
-   contra un giro de 324–825 s y una radio de segundos: si el camino autónomo
+   contra un giro **medido de 310 s** (§2.4) y una radio de segundos: si el
+   camino autónomo
    es el que actúa, domina la cadena entera él solo. Bajarlo es **puro cambio
    de configuración**, sin tecnología nueva ni obra: de 10 min a 1 min quita
    **540 s** del peor caso cuando la radio falla.
@@ -411,8 +637,19 @@ Ordenadas por lo que se puede decir de ellas hoy.
 
 ## 5. Anclaje a campo: el cronómetro D.2
 
-**Es el árbitro, y hoy no existe.** Sin él, el §6 sería un ranking de valores
-de catálogo.
+> **Al día 2026-09-24.** La exportación del SCADA del §2.4 contestó **la mitad**
+> de lo que este cronómetro venía a contestar: el giro ya está medido (310 s,
+> 75 stows) y la radio tiene **cota** (menos de un periodo de sondeo). Lo que
+> sigue sin resolverse es el **reparto por saltos** dentro de esa cota, que es
+> lo único para lo que el D.2 sigue haciendo falta.
+>
+> **Y una cosa que cambió de prioridad.** El §2.4 bis midió dos términos que
+> valen dos órdenes de magnitud más que la radio y que no necesitan cronómetro
+> ninguno: la secuencia manual de paso a AUTO y el reintento de una orden
+> fallida. Si hay un turno de campo disponible, rinde más instrumentar eso.
+
+**Es el árbitro para el tramo de radio, y hoy no existe.** Sin él, el §6 sería
+un ranking de valores de catálogo.
 
 Lo que hace falta medir es **una sola cosa**: el tiempo entre que la NCU emite
 `force_sp_1` y que cada TCU lo acusa. Con eso salen a la vez el p100, la forma
@@ -455,13 +692,17 @@ centenares:
 |---|---|---|
 | **detección** | **1 – 60 s** según cuál de los tres caminos dispare | DECLARADO (defectos de fábrica) |
 | **decisión de la NCU** | ? | NO MEDIDO |
-| **radio hasta la última TCU** | ? | NO MEDIDO — *es lo que se quiere rankear* |
-| **giro** | **275 – 825 s** | DECLARADO vs MEDIDO, y no coinciden |
+| **radio hasta la última TCU** | **< 30 s** (cota), sin resolver por debajo | MEDIDO como cota, §2.3 |
+| **giro** | **310 s** (p05–p95: 291–330) | **MEDIDO**, 75 stows, §2.4 |
+| **secuencia manual de paso a AUTO** | **1.168 s** | **MEDIDO**, §2.4 bis |
+| **reintento de una orden fallida** | **hasta 4.232 s** | **MEDIDO**, §2.4 bis |
 | *(stow autónomo, si actúa)* | **600 s** por defecto (`40022`) | DECLARADO |
 
 Un ranking que diga «LoRa sale 3 s peor» sin esto delante se lee como si
-decidiera algo, y no decide nada mientras el giro tenga un factor 3 sin
-resolver y la detección pueda costar 60 s ella sola.
+decidiera algo. Y ahora hay algo más fuerte que decir: en el único stow
+completo medido, **los dos términos mayores no son de radio y ni siquiera son
+técnicos** — son un operador pulsando diez grupos y una orden que falló y nadie
+reintentó. La detección puede costar 60 s ella sola.
 
 ### Y el veredicto
 
@@ -477,13 +718,21 @@ hoy, y es lo que este documento aporta:
   por NCU**.
 * La detección puede costar **1 s o 60 s** según el camino que dispare, y eso
   es configuración, no radio.
-* El giro vale entre **275 y 825 s** según a quién se le pregunte. La propia
-  TCU declara el techo —**0,200 °/s sin carga**, `41067`— y eso ordena los
-  demás valores en una escala coherente, salvo la segunda lectura de campo
-  (0,0667 °/s), que se queda a un tercio del techo y no lo explica la carga.
-  **Y se puede zanjar con lo que el SCADA ya guarda**: `30506` (ángulo actual
-  por TCU) diferenciado sobre su ciclo de 30 s. No hace falta cronómetro. Ojo:
-  NO por el registro `30010`, que la NCU no expone — ver la corrección del §2.4.
+* **El giro está MEDIDO y vale 310 s** para 55°: 75 stows de un evento real,
+  mediana **0,1774 °/s**, p05–p95 0,1667–0,1893, R² mediano 0,9987 (§2.4). Se
+  zanjó con lo que el SCADA ya guardaba —`30506` por TCU sobre su ciclo de
+  30 s—, sin cronómetro y sin instrumentar nada. El rango **275–825 s queda
+  retirado** y la lectura de **0,0667 °/s queda descartada**: está 2,7 veces por
+  debajo del mínimo de las 75. El catálogo Sunner (0,17) resulta estar
+  prácticamente en el suelo de lo medido, y el techo sin carga de la TCU (0,200,
+  `41067`) justo por encima del máximo —con el reparo del §2.4 sobre ese máximo.
+* **Y el hallazgo que reordena el encargo** (§2.4 bis): en ese stow, de la
+  primera TCU a la última pasaron **30 minutos**, y **la radio no explica ni
+  uno**. Los explican la secuencia manual de paso a AUTO (1.168 s) y nueve
+  órdenes que fracasaron, una de las cuales tardó **70 minutos** en llegar. Una
+  TCU con `sec = 5` y en MANUAL **no gira**. Antes de elegir tecnología de radio
+  por latencia, estos dos términos valen dos órdenes de magnitud más y se
+  arreglan sin cambiar de radio.
 * **La palanca que más quita del camino crítico no es de radio, ya existe, y
   está configurada en 10 minutos**: el stow autónomo de la TCU por pérdida de
   comunicación con la NCU (`40022`). 600 s dominan la cadena entera. Bajarlo es
