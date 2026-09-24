@@ -33,7 +33,7 @@ NO CAREA el balance completo porque el canon no tiene gemelo Python de
 
 rc = 0 careado · 1 discrepan las primitivas · 2 no se ha podido carear
 """
-import sys, os
+import sys, os, math
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RFFV = os.path.join(RAIZ, '..', 'cobertura-rf-fv', 'python')
@@ -134,6 +134,35 @@ print("""
   a %.0e— sino en QUÉ SE ATREVEN A AFIRMAR con los mismos números. Migrar rf-fv
   al canon no es reconciliar ecuaciones: es que deje de publicar una
   probabilidad que no tiene con qué calcular.""" % (total, TOL))
+
+# ── EL ANTES: QUÉ ENSEÑA HOY rf-fv, Y CUÁNTO VALE ────────────────────────
+print('\n── EL ANTES: la probabilidad que rf-fv publica hoy ──\n')
+
+def phi(x):
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+print('Dónde discrimina esa probabilidad, y dónde no:\n')
+print('  %8s %11s %12s' % ('margen', 'p(σ=6,0)', 'p(σ=10,99)'))
+for mg in (-10, -5, 0, 5, 10, 15, 20, 30, 47, 64):
+    print('  %6d dB %10.1f %% %11.1f %%' % (mg, 100 * phi(mg / 6.0), 100 * phi(mg / 10.99)))
+
+print("""
+  Los 52 enlaces medidos de El Burgo tienen margen p50 de 47,4 dB (preset
+  calibrado) a 64,0 (por defecto). AHÍ LA PROBABILIDAD VALE 100 % SIEMPRE:
+  52 de 52 con el sigma por defecto, 39 de 52 con el del preset, mínimo 96,2 %.
+  No distingue NADA.
+
+  Donde sí distinguiría es entre −10 y +20 dB — que es justo donde NO hay
+  medidas, porque los 52 son el ÁRBOL DE ENCAMINAMIENTO: los enlaces que la
+  malla eligió por funcionar. Sesgo de supervivencia.
+
+  Y el sigma que la escala lo desautoriza su propio autor, por escrito, en el
+  fichero: «el ajuste real da −16,58 con sigma 10,99… y ni ese es una
+  calibración de propagación: sobre 49 enlaces el RSSI correlaciona r = +0,16
+  con log(distancia), o sea que NO depende de la distancia».
+
+  O sea que el número es INÚTIL donde hay datos y NO VALIDADO donde serviría.
+  Quitarlo no pierde información: pierde una cifra que parecía tenerla.""")
 
 if malas:
     print('\nDISCREPAN: ' + ', '.join(malas))
