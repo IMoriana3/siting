@@ -219,6 +219,42 @@ evalúa a varias horas del día, no a una**: con hasta **27,8 dB de variación p
 la hora** (medido en el punto 2), comparar tecnologías a una hora fija no
 compara nada.
 
+### Estado el 2026-09-24: el motor y la disciplina, HECHOS. Los datos, no.
+
+**Hecho:** `radio_tecnologias.js` (la tabla por criterio, sin índice único, con
+`no distinguible con lo medido` y a varias horas), `tools/comparador_tecnologias.mjs`
+sobre plantas reales, y `tests/test_comparador.js` — 42 comprobaciones, 6
+mutaciones, todas en `rc = 1`.
+
+**Medido en El Burgo** (215 TCU, 2 NCU, horas 8/12/16 UTC del solsticio):
+cobertura 215 de 215, 0 sin camino alternativo, saltos 1–2. Los tres números son
+**demasiado buenos y hay que leerlos con su letra pequeña**, que el útil publica:
+
+* el umbral es `margen > 0` —sensibilidad pelada, sin reserva de desvanecimiento—;
+* los saltos son el **camino más corto sobre todos los enlaces viables**, o sea
+  una **cota inferior**: la malla medida de verdad da p50 = 4 y p100 = 6, porque
+  Zigbee no enruta por el más corto;
+* «sin camino alternativo = 0» sobre un grafo casi completo dice que la
+  redundancia **potencial** es alta, no que la malla desplegada lo sea.
+
+**Y un hallazgo que corrige lo que yo iba a escribir:** entre la mejor y la peor
+hora entran y salen **1.086 pares** (8,1 % de los viables) — **la hora SÍ mueve
+enlaces**. Lo que no mueve es esta tabla, porque con ~12.000 enlaces viables
+sobre 215 TCU estos criterios están **saturados**. No es lo mismo, y decirlo mal
+habría escondido justo lo que el punto 6 venía a ver.
+
+**No hecho, y por qué:** las columnas de LoRa y Wi-SUN están **declaradas y
+apagadas**. Desde este entorno la red no llega a ninguna web de fabricante ni de
+distribuidor ni a `etsi.org`, así que no hay datasheet que citar. El bloque
+`candidatos` de cada variante está en `radio_params.json`, vacío y con el motivo.
+
+**Y la elección del módulo NO la hace este repo:** cambia el veredicto (un SX1262
+a 22 dBm y un módulo a 14 dBm no dan lo mismo), así que el comparador corre la
+tabla con el **mejor y el peor candidato** de cada tecnología y publica **en qué
+criterios cambia el veredicto**. Si cambia, eso ES el resultado.
+
+**Falta, además:** el selector en el visor. El motor está; la interfaz no.
+
 ## 7 · Escenario guardable
 
 ### Qué entra

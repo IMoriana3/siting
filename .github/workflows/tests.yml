@@ -397,6 +397,12 @@ jobs:
           # vieja en silencio, que es lo que le pasó a SolarGPTfull
           rojo node tests/test_sol_pin.js copiaDesviada lockRancio sinBacktracking sinTope
 
+          # el comparador de tecnologías: lo que vigila no es aritmética, es
+          # disciplina — un hueco no se rellena, no hay índice único, y no se
+          # compara a una sola hora
+          rojo node tests/test_comparador.js rellenaHueco indiceUnico unaHora unCandidatoBasta \
+                                             solapaGana sumaEnVezDeUnion
+
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
                                                    py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \
