@@ -47,6 +47,7 @@ PATRON="${1:-}"
 declare -A PISO=(
   [test_antena_tcu.js]=119
   [test_arranques_stow.js]=29
+  [test_stow_desde_scada.js]=33
   [test_careo_elburgo.js]=49
   [test_censo_motivos.js]=19
   [test_comparador.js]=60
