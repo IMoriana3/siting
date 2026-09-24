@@ -30,6 +30,24 @@ const check = (n, cond, extra) => {
 const cerca = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 1e-9 : tol);
 
 const MUTACIONES = {
+  // ── radio_zigbee: A2, la ganancia de patrón ──
+  // el patrón deja de entrar en el balance: vuelve la ganancia plana, que es
+  // el estado del que A2 viene a sacarnos
+  patronFuera: ['zigbee', /\+ pat\.totalDb - perdida;/, '- perdida;'],
+  // el patrón se cobra por UN extremo en vez de por los dos
+  patronUnExtremo: ['zigbee', /var pat = RPV\.gananciaPatronEnlace\(D, zA, zB, enlace\.patron \|\| null\);/,
+    'var pat = RPV.gananciaPatronEnlace(D, zA, zB, enlace.patron || null); pat.totalDb = pat.porExtremoDb;'],
+  // un enlace sin patrón declarado se cuela con 0 dB y SIN motivo
+  patronMudo: ['zigbee', /if \(enlace\.patron == null\) motivos\.push\("patron_de_antena_no_declarado"\);/, ''],
+  // LA DE LA ELEVACIÓN NO ESTÁ AQUÍ, y por dos razones que conviene dejar
+  // escritas. La primera: este banco sólo carga `radio_zigbee.js` y
+  // `radio_malla.js`, así que no puede mutar el motor de geometría — una
+  // mutación contra `radio_pv_model.js` sale rc=2 («no casa»), que NO es
+  // cazada. Está en `test_paridad_radio.py`, que sí mutalos dos motores.
+  // La segunda: la primera versión invertía el SIGNO de la elevación, y eso ni
+  // siquiera es una mutación — el patrón es PAR, el número no cambia y el banco
+  // seguiría verde. Una mutación que nadie puede cazar no prueba nada.
+
   // ── radio_zigbee ──
   // la variante sin sensibilidad se inventa un margen: el fallo que este banco
   // existe para impedir
@@ -167,6 +185,38 @@ const enlace = {
 };
 const pPro = ZB.presupuesto(enlace, PRO, PROP, null);
 const pStd = ZB.presupuesto(enlace, STD, PROP, null);
+
+/* ══ A2 · LA GANANCIA DE PATRÓN, QUE ESTABA DEFINIDA Y NO SE USABA ═════════
+   `gananciaPatronDb` llevaba desde la fase 2 en el motor, exportada y con su
+   caso en la paridad, y el balance NUNCA la llamaba: sumaba `gtx + grx`
+   planos. Una absorción del inventario escrita, probada y sin efecto. */
+const enlLlano = { D: 60, zA: 0.805, zB: 0.805, cruces: [], patron: 'dipolo' };
+const enlDesnivel = { D: 28, zA: 0.505, zB: 3.15, cruces: [], patron: 'dipolo' };
+const pLlano = ZB.presupuesto(enlLlano, PRO, PROP, null);
+const pDesn = ZB.presupuesto(enlDesnivel, PRO, PROP, null);
+const pSinPat = ZB.presupuesto({ D: 28, zA: 0.505, zB: 3.15, cruces: [] }, PRO, PROP, null);
+
+check('el balance PUBLICA lo que el patrón le cobra', pDesn.patron != null &&
+      typeof pDesn.patron.totalDb === 'number', JSON.stringify(pDesn.patron));
+check('con alturas IGUALES el patrón es 0,000000 dB EXACTO (broadside)',
+      pLlano.patron.totalDb === 0 && pLlano.patron.elevDeg === 0, String(pLlano.patron.totalDb));
+check('con 0,505 m contra 3,15 m a 28 m ya NO es cero: −0,1131 dB',
+      Math.abs(pDesn.patron.totalDb - (-0.11306)) < 1e-4, String(pDesn.patron.totalDb));
+check('y se cobra por los DOS extremos, no por uno',
+      Math.abs(pDesn.patron.totalDb - 2 * pDesn.patron.porExtremoDb) < 1e-12);
+check('el patrón es PAR en la elevación: dar la vuelta al enlace no lo cambia',
+      ZB.presupuesto({ D: 28, zA: 3.15, zB: 0.505, cruces: [], patron: 'dipolo' }, PRO, PROP, null)
+        .patron.totalDb === pDesn.patron.totalDb);
+check('y RESTA del margen, no suma', pDesn.margenDb < pSinPat.margenDb,
+      pDesn.margenDb + ' vs ' + pSinPat.margenDb);
+check('sin patrón declarado NO se pone 0 en silencio: sale con motivo',
+      pSinPat.motivos.indexOf('patron_de_antena_no_declarado') >= 0 && pSinPat.patron.totalDb === 0);
+check('y con patrón declarado ese motivo NO sale',
+      pDesn.motivos.indexOf('patron_de_antena_no_declarado') < 0);
+let _patMal = false;
+try { ZB.presupuesto({ D: 28, zA: 0.5, zB: 3.15, cruces: [], patron: 'parabolica' }, PRO, PROP, null); }
+catch (e) { _patMal = /no implementado/.test(e.message); }
+check('un patrón que no está implementado LANZA, no cae a isótropa', _patMal);
 
 check('la PRO sí da margen', typeof pPro.margenDb === 'number', pPro.margenDb);
 check('LA ESTÁNDAR NO, porque no hay sensibilidad', pStd.margenDb === null, pStd.margenDb);

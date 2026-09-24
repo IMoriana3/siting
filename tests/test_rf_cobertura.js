@@ -25,9 +25,16 @@ check('el bloque RF se localiza en index.html', !!m);
 if (!m) { console.log('\nFALLOS: ' + ko); process.exit(1); }
 
 const ZigbeePV = require(path.join(RAIZ, 'zigbee_pv_model.js'));
+/* El contexto llevaba sólo `ZigbeePV`, así que `rfEnlace` —que necesita
+   `RadioPV` y `RadioZigbee`— no se podía ejercitar aquí y la mitad del bloque
+   RF quedaba fuera del alcance de este banco. Se amplía. */
+const RadioPV = require(path.join(RAIZ, 'radio_pv_model.js'));
+const RadioZigbee = require(path.join(RAIZ, 'radio_zigbee.js'));
 const ctx = {
-  console, ZigbeePV, window: { ZigbeePV },
+  console, ZigbeePV, RadioPV, RadioZigbee,
+  window: { ZigbeePV, RadioPV, RadioZigbee },
   document: { getElementById: () => ({ value: '30' }) },
+  JSON, Math, Object, Array, Number, String, isFinite, parseFloat,
   S: { motors: [], p: { twid: 12, tlen: 64 }, bifila: null, _rfRows: null },
 };
 vm.createContext(ctx);
@@ -181,6 +188,42 @@ const margenLimpio = ZigbeePV.predictLink(
   const lejos = infinitas({ x: -40, y: 500 }, { x: 40, y: 500 }, xs0);
   check('ZOMBI: con filas infinitas, el enlace a 500 m SÍ las contaba',
     lejos.length === 7, lejos.length + ' — se esperaban las 7 fantasma');
+}
+
+/* ── LA ALTURA DE ANTENA DECLARADA POR EL NODO ───────────────────────────
+   Un extremo que no es un seguidor —la NCU, con el látigo a 3,15 m— no tiene
+   índice de seguidor, y `rfEnlace` le ponía la cota de un TCU: 0,505 m. Los
+   tres enlaces TCU→NCU de El Burgo se evaluaban con la física equivocada y el
+   careo los daba por buenos igual. */
+if (typeof ctx.rfEnlace === 'function' && typeof ctx.rfRows === 'function') {
+  S.motors = [{ x: 0, y: 0, az: 0, len: 64, wid: 12 }, { x: 40, y: 0, az: 0, len: 64, wid: 12 }];
+  S._rfRows = null; S._radioParams = JSON.parse(fs.readFileSync(path.join(RAIZ, 'radio_params.json'), 'utf8'));
+  const rows = ctx.rfRows();
+  const a0 = { ...S.motors[0], i: 0 };
+  const pTcu = ctx.rfEnlace(a0, { ...S.motors[1], i: 1 }, rows);
+  const pNcu = ctx.rfEnlace(a0, { x: 40, y: 0, i: -1, az: 0, antenaM: 3.15 }, rows);
+  check('un TCU-TCU sigue usando la altura del seguidor en los dos extremos',
+        Math.abs(pTcu.zA - pTcu.zB) < 1e-9, [pTcu.zA, pTcu.zB]);
+  check('un extremo con `antenaM` usa ESA cota y no la del seguidor',
+        Math.abs(pNcu.zB - 3.15) < 1e-9 && Math.abs(pNcu.zA - pTcu.zA) < 1e-9, [pNcu.zA, pNcu.zB]);
+  check('y eso cambia el presupuesto: 3,15 m no es lo mismo que 0,5',
+        pNcu.margenDb !== pTcu.margenDb, [pTcu.margenDb, pNcu.margenDb]);
+
+  /* LA PUERTA: un nodo que NO es un seguidor y NO declara antena sale SIN
+     veredicto y con motivo, no con una altura por defecto. Sin esto vuelve
+     exactamente el fallo de los tres enlaces TCU→NCU evaluados a 0,505 m. */
+  const pSin = ctx.rfEnlace(a0, { x: 40, y: 0, i: -1, az: 0, esEquipo: true }, rows);
+  check('un EQUIPO que no declara su antena NO se evalúa',
+        pSin.margenDb === null, pSin.margenDb);
+  check('y dice por qué, con motivo',
+        (pSin.motivos || []).includes('altura_de_antena_no_declarada'), pSin.motivos);
+  /* Y EL RASTER NO SE TOCA: pasa {x,y} pelados a propósito —receptores
+     hipotéticos, no equipos— y tiene que seguir evaluándose. La primera
+     versión de esta puerta los mataba y con ellos el mapa entero: 0 de 500
+     enlaces con margen. Lo cazó `test_rf_panel.js`. */
+  const pRaster = ctx.rfEnlace(a0, { x: 40, y: 0 }, rows);
+  check('un punto pelado del raster SÍ se evalúa, como siempre',
+        pRaster.margenDb != null, pRaster.margenDb);
 }
 
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'

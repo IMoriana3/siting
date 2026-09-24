@@ -103,7 +103,12 @@
     var cruces = enlace.cruces || [];
     var n = cuenta(D, zA, zB, cruces);
 
-    var difrac = RPV.difraccionPanelesDb(D, zA, zB, cruces, f);
+    /* EL DETALLE, no sólo el dB: de su `nuMax` sale el ESTADO del enlace frente
+       a los paneles. `difraccionPanelesDb` es una envoltura de esto, así que el
+       número no cambia ni un bit — lo que cambia es que ya no se tira el resto
+       del resultado. */
+    var detPan = RPV.difraccionPanelesDetalle(D, zA, zB, cruces, f);
+    var difrac = detPan.totalDb;
 
     /* EL RELIEVE, CONTRA LA TIERRA LISA.
      *
@@ -222,6 +227,7 @@
       prxDbm: null, margenDb: null, pEnlace: null, motivos: motivos,
       calibracion: c.modo === CALIBRADO ? { version: c.version, campana: c.campana } : null
     };
+    salida.estado = estadoDelEnlace(detPan, relieve, relieveDet, veg, motivos);
 
     /* Antes que nada: si las alturas venian mezcladas, no hay balance que dar.
        Va aqui y no arriba para que `salida` lleve igualmente los terminos
@@ -242,7 +248,33 @@
     if (variante.canal == null || variante.canal.valor == null) {
       motivos.push("canal_desconocido_ptx_es_cota_superior");
     }
-    salida.prxDbm = variante.ptx_dbm + variante.gtx_dbi + variante.grx_dbi - perdida;
+    /* ══ A2: LA GANANCIA DE PATRÓN, QUE ESTABA DEFINIDA Y NO SE USABA ═══════
+     *
+     * `gananciaPatronDb` existía en el motor, exportada y con su caso en la
+     * paridad desde la fase 2 — y el balance NUNCA la llamaba: sumaba
+     * `gtx + grx` planos. O sea una absorción del inventario (A2) a medias:
+     * escrita, probada, y sin efecto en ningún número.
+     *
+     * `gtx_dbi`/`grx_dbi` son la ganancia de PICO de la antena. El patrón es el
+     * factor RELATIVO a ese pico en la dirección del enlace, así que se suma:
+     * `gtx + patrón` es la ganancia real hacia donde apunta el enlace.
+     *
+     * CON ALTURAS IGUALES ES 0,000 dB EXACTO, que es por lo que entre dos TCU
+     * no cambia nada. Donde cambia es en TCU→NCU, donde 0,505 m contra 3,15 m
+     * sí es una elevación.
+     *
+     * Y ES PREREQUISITO DE SUB-GHz: a 868 MHz la antena es otra, con otro
+     * patrón, y una ganancia plana es optimista de una forma que no se traslada.
+     * Lo dice el propio inventario al declarar A2.
+     *
+     * SIN PATRÓN DECLARADO NO SE PONE 0 EN SILENCIO: se trata como isótropa y
+     * se anota el motivo, que es lo que hace el resto del motor con todo lo que
+     * no sabe. */
+    var pat = RPV.gananciaPatronEnlace(D, zA, zB, enlace.patron || null);
+    if (enlace.patron == null) motivos.push("patron_de_antena_no_declarado");
+    salida.patron = { nombre: enlace.patron || null, elevDeg: pat.elevRad * 180 / Math.PI,
+                      porExtremoDb: pat.porExtremoDb, totalDb: pat.totalDb };
+    salida.prxDbm = variante.ptx_dbm + variante.gtx_dbi + variante.grx_dbi + pat.totalDb - perdida;
 
     /* SIN SENSIBILIDAD NO HAY MARGEN. Es el caso de la variante estándar hoy, y
        devolver aquí un número supuesto sería exactamente el fallo que el
@@ -261,6 +293,81 @@
     return salida;
   }
 
+  /* ══ EL ESTADO DEL ENLACE, Y POR QUE NO SALE DEL ν DEL TERRENO ═══════════
+   *
+   * Tres mecanismos pueden estorbar un enlace: los PANELES, el RELIEVE y la
+   * VEGETACION. El estado del enlace es el PEOR de los tres, y aparte va si se
+   * han podido mirar los tres o no — que son dos afirmaciones distintas y hasta
+   * hoy sólo se publicaba la segunda.
+   *
+   * PANELES: directo del ν dominante de Deygout. Es geometría y longitud de
+   * onda, no depende de nada que aquí esté sin calibrar.
+   *
+   * RELIEVE: SE LEE DEL dB, NO DE SU ν, y esto es lo que casi se cuela.
+   * `relieveDeltaDb` publica ahora `nuReal`, el ν del filo equivalente del
+   * perfil REAL, y clasificar con él parece lo natural. Medido antes de
+   * escribirlo: con perfil PLANO a cota 739 y antenas a 0,475 m sobre 100 m,
+   *
+   *       relieveDb = 0,0000     nuReal = -0,384  →  «rozando»
+   *
+   * O sea que TODA PLANTA LLANA saldría rozando. Y no es un fallo del ν: a 100 m
+   * el primer Fresnel mide 1,75 m y unas antenas a 0,475 m lo invaden de verdad.
+   * Lo que pasa es que ESE suelo ya está cobrado: `dosRayosDb` supone un plano
+   * reflectante debajo y modela su efecto entero. Es el mismo doble conteo que
+   * el comentario del relieve lleva avisando en dB —21,66 dB medidos a 100 m— y
+   * que por eso hace el relieve POR DIFERENCIA contra la tierra lisa.
+   *
+   * Así que el estado del relieve se lee de la MISMA magnitud que su dB, sobre
+   * la misma curva J(ν) y en los MISMOS dos puntos de corte que los paneles:
+   *
+   *       relieve = 0            libre     (J(-0,78) = 0)
+   *       0 < relieve <= J(0)    rozando   (J(0) = 6,0329 dB)
+   *       relieve > J(0)         tapado
+   *
+   * El umbral NO se escribe: se pide, `RPV.perdidaFiloDb(0)`. Un 6,03 tecleado
+   * aquí es una tercera copia de la curva esperando a separarse.
+   *
+   * ESTO ES UNA DERIVACION Y VA DICHO: el relieve es una RESTA de dos pérdidas
+   * de difracción, no J(ν) de un filo suelto, así que leerlo en la curva es una
+   * lectura razonada, no una identidad. Se declara aquí y en la leyenda.
+   *
+   * VEGETACION: hoy NUNCA se evalúa —`vegetacion.modelo` es `null` en
+   * `radio_params.json`—, así que hoy NINGUN enlace está completo. Eso no se
+   * disimula: sale en `sinMirar` y se cuenta en la leyenda.
+   *
+   * `estado: null` es «no se ha podido mirar ninguno», que no es un veredicto. */
+  function estadoDelEnlace(detPan, relieveDb, relieveDet, veg, motivos) {
+    var sinMirar = [], partes = {};
+
+    partes.paneles = { estado: RPV.estadoDeNu(detPan ? detPan.nuMax : null),
+                       nu: detPan ? detPan.nuMax : null };
+
+    var corte = RPV.perdidaFiloDb(0);
+    if (relieveDb == null) {
+      partes.relieve = { estado: null, db: null, nuReal: relieveDet ? relieveDet.nuReal : null };
+      sinMirar.push("relieve");
+    } else if (hayMotivo(motivos, "relieve_dem_sin_resolucion")) {
+      /* el DEM da un relieve INVENTADO a vano corto —hasta 9,89 dB medidos
+         donde el verdadero es 0,00—, así que ese 0 no es un veredicto */
+      partes.relieve = { estado: null, db: relieveDb, nuReal: relieveDet ? relieveDet.nuReal : null };
+      sinMirar.push("relieve");
+    } else {
+      partes.relieve = { estado: relieveDb <= 0 ? "libre" : (relieveDb <= corte ? "rozando" : "tapado"),
+                         db: relieveDb, nuReal: relieveDet ? relieveDet.nuReal : null };
+    }
+
+    if (veg == null) { partes.vegetacion = { estado: null, db: null }; sinMirar.push("vegetacion"); }
+    else partes.vegetacion = { estado: veg <= 0 ? "libre" : (veg <= corte ? "rozando" : "tapado"), db: veg };
+
+    var peor = RPV.peorEstado([partes.paneles.estado, partes.relieve.estado, partes.vegetacion.estado]);
+    return { estado: peor, completo: sinMirar.length === 0, sinMirar: sinMirar,
+             corteDb: corte, partes: partes };
+  }
+  function hayMotivo(motivos, pre) {
+    for (var i = 0; i < motivos.length; i++) if (motivos[i].indexOf(pre) === 0) return true;
+    return false;
+  }
+
   /* CDF normal. Cita: zigbee_pv_model.js `_phi` y su `erf` de Abramowitz-Stegun
      7.1.26, copiada operación a operación para que el gemelo Python coincida. */
   function erf(x) {
@@ -270,6 +377,92 @@
     return x >= 0 ? y : -y;
   }
   function phi(x) { return 0.5 * (1 + erf(x / Math.SQRT2)); }
+
+  /* ══ LA PROCEDENCIA, ROTULADA SIEMPRE ════════════════════════════════════
+   *
+   * «Etiqueta de procedencia siempre visible». Hasta hoy el motor SI sabía con
+   * qué estaba calculando —`modo` va en cada salida desde la fase 2— y la
+   * pantalla no lo enseñaba en ningún sitio: el mapa pintaba las mismas cinco
+   * bandas de color con parámetros calibrados y sin ellos.
+   *
+   * LA CLASE SALE DEL JSON, NO DE AQUI. Cada valor de `radio_params.json` lleva
+   * `procedencia` con un vocabulario cerrado (ver su bloque `_procedencias`).
+   * Esta función no interpreta prosa: lee la clase, y un valor que tenga
+   * `valor` y no tenga `procedencia` NO se salta —sale como desconocida, con su
+   * ruta—, que es lo que impide que un parámetro nuevo entre sin rotular.
+   *
+   * MANDA EL MAS DEBIL. Un balance con trece valores de datasheet y uno copiado
+   * del código de hace dos años vale lo que el copiado. Promediar procedencias
+   * es exactamente el defecto de los agregados: un número correcto calculado
+   * sobre la población equivocada.
+   *
+   * `sigma_db` y `vegetacion.modelo` NO entran en esta cuenta aunque estén
+   * pendientes: no participan en el margen —uno da la probabilidad y el otro su
+   * propio término— y ya salen con motivo propio. Meterlos aquí dejaría el
+   * rótulo clavado en NO DISPONIBLE y taparía el estado real del resto. */
+  var ORDEN_PROC = ["medido", "calibrado", "plano", "datasheet", "norma",
+                    "declarado", "heredado", "pendiente"];
+  var ROTULO_PROC = { medido: "MEDIDO", calibrado: "CALIBRADO", plano: "TEÓRICO",
+                      datasheet: "TEÓRICO", norma: "TEÓRICO",
+                      declarado: "SIN VERIFICAR", heredado: "SIN VERIFICAR",
+                      pendiente: "NO DISPONIBLE" };
+
+  function procedencia(params, variante, calib) {
+    if (!params) return { nivel: null, rotulo: "PROCEDENCIA DESCONOCIDA",
+                          peor: [], sinRotular: [], campana: null,
+                          avisos: ["los parámetros de radio no están cargados"] };
+    var vistos = [], sinRotular = [];
+    function mira(ruta, o) {
+      if (o == null) return;
+      if (typeof o !== "object") return;
+      if (o.procedencia) { vistos.push({ ruta: ruta, clase: o.procedencia }); return; }
+      /* un valor declarado y sin clase: se DICE, no se da por bueno */
+      if (Object.prototype.hasOwnProperty.call(o, "valor")) sinRotular.push(ruta);
+    }
+    var G = params.geometria || {};
+    mira("geometria.eje_tubo_m", G.eje_tubo_m);
+    mira("geometria.cuerda_m_defecto", G.cuerda_m_defecto);
+    mira("geometria.campo_cercano_lambdas", G.campo_cercano_lambdas);
+    mira("geometria.patron_antena", G.patron_antena);
+    if (G.antena_tcu) {
+      mira("geometria.antena_tcu.radio_ancla_m", G.antena_tcu.radio_ancla_m);
+      mira("geometria.antena_tcu.coax_caida_m", G.antena_tcu.coax_caida_m);
+    }
+    var P = params.propagacion || {};
+    mira("propagacion.eps_r_suelo", P.eps_r_suelo);
+    mira("propagacion.sigma_suelo_s_m", P.sigma_suelo_s_m);
+    mira("propagacion.polarizacion", P.polarizacion);
+    if (variante) {
+      if (variante.procedencia) vistos.push({ ruta: "tecnologias." + (variante.nombre || "?"), clase: variante.procedencia });
+      else sinRotular.push("tecnologias." + (variante.nombre || "?"));
+    }
+
+    var avisos = [];
+    if (variante && (variante.canal == null || variante.canal.valor == null))
+      avisos.push("canal desconocido: la potencia declarada es COTA SUPERIOR, con hasta 16 dB de recorrido");
+    if (P.sigma_db == null || P.sigma_db.valor == null || (typeof P.sigma_db === "number" ? false : P.sigma_db.valor == null))
+      avisos.push("sigma sin calibrar: no hay probabilidad de enlace");
+    if (params.vegetacion && params.vegetacion.modelo && params.vegetacion.modelo.valor == null)
+      avisos.push("vegetación no modelada: el follaje no entra en el balance");
+
+    var peorI = -1;
+    for (var i = 0; i < vistos.length; i++) {
+      var k = ORDEN_PROC.indexOf(vistos[i].clase);
+      if (k < 0) { sinRotular.push(vistos[i].ruta + " (clase «" + vistos[i].clase + "» fuera del vocabulario)"); continue; }
+      if (k > peorI) peorI = k;
+    }
+    if (sinRotular.length || peorI < 0) {
+      return { nivel: null, rotulo: "PROCEDENCIA DESCONOCIDA", peor: [],
+               sinRotular: sinRotular, campana: null,
+               avisos: avisos.concat(["hay " + sinRotular.length + " valor(es) sin `procedencia` en radio_params.json"]) };
+    }
+    var nivel = ORDEN_PROC[peorI];
+    var peor = [];
+    for (var j = 0; j < vistos.length; j++) if (vistos[j].clase === nivel) peor.push(vistos[j]);
+    var c = correcciones(calib);
+    return { nivel: nivel, rotulo: ROTULO_PROC[nivel], peor: peor, sinRotular: [],
+             campana: c.modo === CALIBRADO ? c.campana : null, avisos: avisos };
+  }
 
   /* ¿ES VIABLE? Un enlace es viable si su margen llega al umbral. Sin margen
      —sin sensibilidad— la respuesta NO es `false`: es `null`, «no se sabe», y
@@ -337,7 +530,8 @@
   var RadioZigbee = {
     TEORICO: TEORICO, CALIBRADO: CALIBRADO,
     correcciones: correcciones, cuenta: cuenta, presupuesto: presupuesto,
-    viable: viable, erf: erf, phi: phi,
+    viable: viable, erf: erf, phi: phi, estadoDelEnlace: estadoDelEnlace,
+    procedencia: procedencia, ORDEN_PROC: ORDEN_PROC, ROTULO_PROC: ROTULO_PROC,
     censoMotivos: censoMotivos, censoTexto: censoTexto
   };
   raiz.RadioZigbee = RadioZigbee;

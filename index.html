@@ -8,6 +8,7 @@
 <link rel="icon" href="favicon.svg">
 <!-- sin fuentes de Google: offline (fuentes del sistema) -->
 <script src="lib/xlsx.full.min.js"></script><!-- SheetJS LOCAL (sin CDN): offline -->
+<script src="lib/sol.js"></script><!-- COPIA FIJADA de Cobertura-Zigbee/sol.js: sol NOAA + singleaxis de pvlib. Ver lib/sol.lock.json y tests/test_sol_pin.js -->
 <script src="zigbee_pv_model.js"></script><!-- modelo ANTIGUO (A), congelado: se conserva en el selector para comparar -->
 <script src="radio_pv_model.js"></script><!-- motor NUEVO: geometría de banda + física por frecuencia -->
 <script src="radio_zigbee.js"></script><!-- la capa Zigbee: balance, variantes, lo que no se sabe apagado -->
@@ -2260,7 +2261,15 @@ const S={motors:[],ncus:[],rsus:[],reps:[],hull:[],sc:"compacta",
   /* MOTOR: "nuevo" por defecto, "antiguo" conserva zigbee_pv_model.js con su
      sesgo de El Burgo dentro. Los dos van ROTULADOS en pantalla: quien mire un
      mapa tiene que saber cual esta viendo. */
-  rf:{motor:"nuevo", variante:"zigbee_pro_24"},
+  rf:{motor:"nuevo", variante:"zigbee_pro_24",
+      /* EL SOL, para el ángulo por seguidor y por hora (fase 4, punto 2).
+         `on:false` = el deslizador de siempre, que es lo que había. Al
+         encenderlo hacen falta `lat`, `lon` y `horaUTC`; si falta alguna, el
+         enlace sale CON MOTIVO y no con un ángulo inventado.
+         PENDIENTE: el control en pantalla. Hoy lo enciende
+         `tools/careo_angulo_hora.mjs`, que es lo que mide cuánto mueve. */
+      sol:{on:false, lat:null, lon:null, horaUTC:null, gcr:null,
+           axisTilt:0, axisAz:0, backtrack:true, maxAngle:60}},
   /* EL TERRENO DE LA PLANTA. `null` = no se ha intentado; un objeto con
      `ok:false` = se intentó y NO se pudo, con su motivo. Los dos se leen
      distinto y por eso no se mezclan. Lo carga `abreTerreno()` al aplicar un
@@ -2550,7 +2559,52 @@ function rfPropagacion(){ const p=rfParamsNuevo(); if(!p)return null;
   return {eps_r_suelo:p.propagacion.eps_r_suelo.valor, sigma_suelo_s_m:p.propagacion.sigma_suelo_s_m.valor,
           polarizacion:p.propagacion.polarizacion.valor, sigma_db:p.propagacion.sigma_db.valor,
           vegetacion:{modelo:p.vegetacion.modelo.valor}}; }
-function rfAngulo(_i){ return rfTilt(); }          // punto 2: por seguidor y por hora
+/* ══ EL ÁNGULO DE UN SEGUIDOR, POR SEGUIDOR Y POR HORA ════════════════════
+   (fase 4, punto 2 del visor)
+
+   Hasta hoy esto devolvía `rfTilt()` —el deslizador— para TODOS los seguidores
+   y a TODAS las horas. El parámetro `_i` existía desde la fase 2 esperando
+   justo esto, con el comentario que lo decía.
+
+   EL MODELO NO SE ESCRIBE AQUÍ. Sale de `lib/sol.js`, que es de
+   Cobertura-Zigbee y está contrastado contra pvlib en `backtracking.html`:
+   posición NOAA del sol y el `singleaxis` de pvlib con backtracking por GCR.
+   Hay copia fijada con su lock porque esta app se sirve desde Pages y no puede
+   leer un repo hermano en marcha, y `tests/test_sol_pin.js` la carea byte a
+   byte contra el canon — sin hermano sale rc = 2, no verde.
+
+   LO QUE «POR SEGUIDOR» VALE HOY, MEDIDO: en las DOCE plantas del hermano,
+   TODOS los seguidores tienen la MISMA rotación de eje. Como `singleaxis`
+   depende del azimut del eje y de la posición del sol —que sobre 500 m no
+   cambia—, hoy el ángulo sale idéntico para todos. O sea que el efecto entero
+   está en la mitad «POR HORA». El `i` se pasa de verdad igualmente, porque el
+   día que llegue una planta con bloques girados distinto —o seguimiento
+   adaptado a pendiente— funcionará sin tocar nada. Va MEDIDO y escrito para
+   que nadie lo lea como un olvido.
+
+   SIN DATOS NO SE INVENTA UN ÁNGULO: si falta la posición de la planta o la
+   hora, se cae al deslizador Y SE ANOTA EL MOTIVO, que viaja hasta la salida
+   de `rfEnlace`. Un valor por defecto callado aquí movería todos los enlaces
+   del mapa sin que nada lo dijera. */
+let _rfAngMotivo=null;
+function rfAnguloMotivo(){ return _rfAngMotivo; }
+function rfAngulo(i){
+  const s=S.rf&&S.rf.sol;
+  if(!s||!s.on){ return rfTilt(); }
+  if(typeof Sol==="undefined"||!Sol.singleaxis){ _rfAngMotivo="modelo_de_sol_no_cargado"; return rfTilt(); }
+  if(s.lat==null||s.lon==null){ _rfAngMotivo="posicion_de_planta_no_declarada"; return rfTilt(); }
+  if(s.horaUTC==null){ _rfAngMotivo="hora_no_declarada"; return rfTilt(); }
+  const p=Sol.solarPos(s.horaUTC, s.lat, s.lon);
+  if(!(p.elev>0)){ _rfAngMotivo="sol_bajo_el_horizonte"; return rfTilt(); }
+  /* EL EJE ES EL DEL SEGUIDOR `i`, no uno común: eso es el «por seguidor». */
+  const m=(i!=null&&S.motors&&S.motors[i])?S.motors[i]:null;
+  const axisAz=(m&&m.az!=null)?m.az:(s.axisAz||0);
+  const a=Sol.singleaxis(90-p.elev, p.az, {axisTilt:s.axisTilt||0, axisAz:axisAz,
+                                           backtrack:s.backtrack!==false, gcr:s.gcr,
+                                           maxAngle:s.maxAngle==null?60:s.maxAngle});
+  if(!isFinite(a)){ _rfAngMotivo="el_modelo_no_da_angulo"; return rfTilt(); }
+  return a;
+}
 /* LA COTA DEL EJE DEL TUBO, POR PLANTA. `alturaEje` lee `eje_m` del `montaje`
    de la planta y, si no esta, cae al defecto declarado CON MOTIVO —que es lo
    que pasa en las DOCE, porque nadie lo ha medido—. El motivo viaja hasta la
@@ -2582,6 +2636,7 @@ function rfCruces(n,m,rows){
 }
 
 function rfEnlace(n,m,rows){
+  _rfAngMotivo=null;
   const P=rfPropagacion(), V=rfVariante();
   if(!P||!V) return {margenDb:null, motivos:["parametros_no_cargados"], cruces:[], D:0};
   const D=Math.hypot(m.x-n.x,m.y-n.y);
@@ -2593,7 +2648,31 @@ function rfEnlace(n,m,rows){
      pasa el punto de destino como un {x,y} pelado. Mientras `rfAngulo` devuelva
      el tilt global esto da igual; cuando el angulo sea por seguidor y por hora
      -punto 2 de la fase 4- hay que pasar el indice de los DOS extremos. */
-  let zA=rfAlturaAntena(rfAngulo(n.i)), zB=rfAlturaAntena(rfAngulo(m.i));
+  /* LA ALTURA DE ANTENA DEL EXTREMO, SI EL NODO LA DECLARA. Un extremo que no
+     es un seguidor —la NCU, con el latigo a 3,15 m segun `antena_ncu_m`— no
+     tiene indice de seguidor y con `rfAlturaAntena(rfAngulo(i))` salia a la
+     cota de un TCU: 0,505 m. Los tres enlaces TCU->NCU de El Burgo se estaban
+     evaluando con la fisica equivocada y el careo los daba por buenos igual.
+     Con `antenaM` declarado se usa ese, y si no, el del seguidor como siempre. */
+  /* UN NODO QUE NO ES UN SEGUIDOR TIENE QUE DECLARAR SU ANTENA. Si no la
+     declara NO se le pone una por defecto: sale sin veredicto y con motivo.
+     Esto existe porque ya pasó: al meter el COORD en el careo, `rfEnlace` le
+     puso la cota de un TCU —0,505 m en vez de los 3,15 de la NCU— y los tres
+     enlaces TCU->NCU salieron «acierto» calculados mal. A 28-47 m sobra margen
+     de las dos maneras, asi que el careo los habria dado por buenos igual.
+     Caer a la altura del indice EN SILENCIO es justo lo que no puede volver. */
+  /* LA REGLA NO ES «no es un seguidor»: EL RASTER PASA {x,y} PELADOS a
+     proposito —son receptores hipoteticos del mapa, no equipos— y con esa
+     regla el mapa de cobertura entero se quedaba sin margen. Lo cazo
+     `test_rf_panel.js`: 0 de 500 enlaces con margen en las cuatro plantas.
+     La regla buena es: un nodo que se declara EQUIPO (`esEquipo`) y no dice a
+     que altura tiene la antena no se evalua. Un punto del raster no declara
+     nada y sigue con la altura de seguidor, como siempre. */
+  const sinAnt=[n,m].filter(z=>z&&z.esEquipo&&z.antenaM==null);
+  if(sinAnt.length) return {margenDb:null, motivos:["altura_de_antena_no_declarada"],
+                            cruces:[], D:D, zA:null, zB:null};
+  let zA=(n&&n.antenaM!=null)?n.antenaM:rfAlturaAntena(rfAngulo(n.i));
+  let zB=(m&&m.antenaM!=null)?m.antenaM:rfAlturaAntena(rfAngulo(m.i));
   /* EL TERRENO, SI LO HAY. `rfAlturaAntena` da la altura SOBRE EL SUELO; el
      motor quiere cotas ABSOLUTAS cuando se le pasa perfil, o la antena queda
      bajo su propia tierra lisa y el relieve sale 0,0029 dB —indistinguible de
@@ -2631,14 +2710,23 @@ function rfEnlace(n,m,rows){
      da es invento, medido hasta 9,89 dB a 30-50 m. */
   const vMin=(S.terreno&&S.terreno.ok&&typeof TerrenoProyecto.vanoMinUtil==="function")
     ? TerrenoProyecto.vanoMinUtil(S.terreno) : 0;
+  /* EL PATRÓN DE ANTENA VIAJA CON EL ENLACE, del JSON de parámetros y no
+     escrito aquí: `geometria.patron_antena` («ficha de la Jinchang
+     JCW435700RA, 3 dBi, dipolo ~lambda/2»). Es la absorción A2 del inventario,
+     que llevaba desde la fase 2 definida en el motor y sin usar por nadie. */
+  const _pat=(_pg&&_pg.geometria&&_pg.geometria.patron_antena)?_pg.geometria.patron_antena.valor:null;
   const pr=RadioZigbee.presupuesto({D:D, zA:zA, zB:zB, cruces:cruces, perfil:perfil,
-                                    vanoMinUtil:vMin}, V, P, S._radioCalib||null);
+                                    vanoMinUtil:vMin, patron:_pat}, V, P, S._radioCalib||null);
   /* el DETALLE de Deygout sale de la MISMA llamada que el total: `presupuesto`
      usa `difraccionPanelesDb`, que es la envoltura de `difraccionPanelesDetalle`.
      Pedirlo aparte no recalcula nada distinto, es la misma función. */
   pr.detalle=RadioPV.difraccionPanelesDetalle(D,zA,zB,cruces,V.f_hz);
   pr.cruces=cruces; pr.D=D; pr.zA=zA; pr.zB=zB; pr.variante=V.nombre||null;
   const e=rfEjeTubo(); if(e&&e.motivo) pr.motivos=(pr.motivos||[]).concat([e.motivo]);
+  /* EL MOTIVO DEL ÁNGULO, hasta la salida. Si el modelo de sol estaba pedido y
+     no se ha podido usar, el enlace se ha evaluado con el deslizador y eso NO
+     puede quedarse callado. */
+  const am=rfAnguloMotivo(); if(am) pr.motivos=(pr.motivos||[]).concat(["angulo_"+am]);
   /* EL CENSO DE MOTIVOS, ACUMULADO AQUI, que es el unico sitio por donde pasan
      TODOS los enlaces del mapa y del panel.
      Existe por un defecto que estuvo a la vista sin verse: 568 de 6.036
@@ -2655,7 +2743,24 @@ function rfEnlace(n,m,rows){
 /* Se arranca el censo antes de pintar y se lee despues. Se REINICIA en cada
    pintado: un contador que acumula entre pintados cuenta el mismo enlace
    muchas veces y el porcentaje deja de significar nada. */
-function censoArranca(){ S._censo={n:0,sinMargen:0,motivos:{}}; }
+function censoArranca(){ S._censo={n:0,sinMargen:0,motivos:{}};
+  S._censoEst={n:0,libre:0,rozando:0,tapado:0,sinVeredicto:0,completos:0,sinMirar:{}}; }
+/* LA LINEA DE ESTADOS PARA LA LEYENDA, con su DENOMINADOR y con cuántos de esos
+   enlaces se han podido mirar ENTEROS. «He mirado» y «está bien» son dos
+   afirmaciones: un 100 % de libres sobre enlaces a los que nadie ha mirado el
+   terreno ni la vegetación no es un 100 % de nada. */
+function censoEstadoTexto(){
+  const c=S._censoEst; if(!c||!c.n) return null;
+  const pc=v=>(100*v/c.n).toFixed(0)+" %";
+  const p=[];
+  if(c.libre)   p.push("libre "+c.libre+" ("+pc(c.libre)+")");
+  if(c.rozando) p.push("rozando "+c.rozando+" ("+pc(c.rozando)+")");
+  if(c.tapado)  p.push("tapado "+c.tapado+" ("+pc(c.tapado)+")");
+  if(c.sinVeredicto) p.push("sin veredicto "+c.sinVeredicto+" ("+pc(c.sinVeredicto)+")");
+  const faltan=Object.keys(c.sinMirar).map(k=>k+" "+c.sinMirar[k]).join(", ");
+  return {linea:p.join(" · ")+"   [de "+c.n+" enlaces]",
+          alcance:"completos "+c.completos+" de "+c.n+(faltan?"  ·  sin mirar: "+faltan:"")};
+}
 function censoTexto(){
   const c=S._censo; if(!c||!c.n) return null;
   const pares=Object.entries(c.motivos).filter(([k])=>k.startsWith("relieve"));
@@ -2745,6 +2850,78 @@ function rfMargin(n,m,rows){
   return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m,rows)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
+
+/* ══ EL VEREDICTO DE UN ENLACE, Y POR QUÉ POR DEFECTO NO ES UN dB ═══════════
+   (fase 4, punto 5)
+
+   Los parámetros de este repo son HEREDADOS del modelo congelado —lo dice su
+   propio `radio_params.json`—, `sigma_db` está a `null` y el canal es
+   desconocido, lo que deja la potencia declarada como COTA SUPERIOR con hasta
+   16 dB de recorrido. Pintar cinco bandas de color de un margen así presenta
+   como predicción algo que no lo es.
+
+   EL ESTADO SI SE SOSTIENE SIN CALIBRAR, y por una razón concreta: sale de ν,
+   que es geometría y longitud de onda. No depende de la potencia, ni de la
+   sensibilidad, ni de sigma, ni de las correcciones de campaña — o sea, de nada
+   de lo que aquí falta. Un enlace con el primer Fresnel despejado lo está con
+   +19 dBm y con +3.
+
+   LO QUE EL ESTADO NO CONTESTA, Y POR ESO LA CAPA DE COBERTURA NO CAMBIA: el
+   estado dice «¿hay algo en medio?», no «¿llega?». A 300 m en campo abierto el
+   estado es LIBRE y el enlace está muerto por espacio libre. Son dos preguntas
+   distintas; el mapa de calor sigue contestando la suya en dB, rotulado.
+
+   EL MOTOR ANTIGUO SIGUE PINTANDO SU dB. Está congelado, se elige a mano y la
+   leyenda ya dice que lleva el sesgo de El Burgo de −33,6 dB dentro: existe
+   justamente para carearlo contra el nuevo, y quitarle el número lo dejaría
+   inservible para eso. */
+/* LA PALETA NO ES LA DE SALUD, Y ESO ESTÁ MEDIDO.
+   «Tapado» NO quiere decir «sin enlace»: quiere decir que el rayo directo está
+   cortado y el enlace vive de la difracción. En una planta fotovoltaica eso es
+   lo NORMAL, porque las antenas de las TCU van bajo los módulos. Medido en El
+   Burgo sobre los 215 enlaces TCU→NCU:
+
+       tapados                       190 de 215
+       de ésos, con >= 8 dB           77  (41 %)
+       NCU → 50, 35,9 m, ν = 0,43   TAPADO y 48,16 dB de margen
+
+   Con la paleta roja de `rfColor` eso pinta de rojo oscuro el 88 % de la planta
+   y se lee como catástrofe. Así que el tapado va en OCRE —«hay material
+   delante»— y no en rojo: el color dice CUÁNTO estorba, no si el enlace vale. */
+const RF_EST_COLOR={libre:"#2f9e54", rozando:"#e0a72c", tapado:"#8c5a1e"};
+const RF_EST_GRIS="#9aa6b2";
+function rfCalibrado(){ return !!(S._radioCalib); }
+
+/* EL VEREDICTO COMPLETO, POR LA PUERTA UNICA.
+   OJO: el pintado de los puntos TCU llamaba a `rfMargin` DIRECTAMENTE —el motor
+   ANTIGUO— saltándose `rfMargenDe`, así que los puntos del mapa y el panel de
+   perfil podían estar mostrando dos motores distintos con 33,6 dB entre ellos.
+   Es la misma avería que el comentario de `rfMargenDe` dice venir a impedir, y
+   había vuelto por el sitio donde nadie miraba: el bucle de dibujado. */
+function rfVeredicto(n,m,rows){
+  if(rfMotor()==="antiguo") return {margenDb:rfMargin(n,m,rows), estado:null,
+                                    motivos:["motor_antiguo_sin_estado"]};
+  return rfEnlace(n,m,rows);
+}
+function rfColorVeredicto(v){
+  if(!v) return RF_EST_GRIS;
+  /* con campaña calibrada, el dB vuelve a mandar: es lo que el punto 5 pide */
+  if(rfCalibrado()||rfMotor()==="antiguo") return rfColor(v.margenDb);
+  if(v.estado&&v.estado.estado) return RF_EST_COLOR[v.estado.estado]||RF_EST_GRIS;
+  return RF_EST_GRIS;
+}
+/* LA ANILLA DE «SIN ENLACE» ES UNA AFIRMACION EN dB, Y SIN CALIBRAR NO SE HACE.
+   La primera versión la ponía por TAPADO, y eso habría anillado 190 de los 215
+   enlaces de El Burgo — entre ellos uno de 48,16 dB de margen. El estado
+   contesta «¿hay algo en medio?»; «¿llega?» sólo lo contesta el margen, y un
+   margen sin campaña ni canal conocido no es una predicción. Así que sin
+   calibrar NO se anilla nada y la leyenda dice que esa pregunta se queda sin
+   contestar, con lo que falta para contestarla. */
+function rfVeredictoMalo(v){
+  if(!v) return false;
+  if(rfCalibrado()||rfMotor()==="antiguo") return v.margenDb!=null&&v.margenDb<8;
+  return false;
+}
 
 /* ── MAPA DE CALOR DEL MARGEN, desde un Tx que se coloca con un clic ──────────
    Rescatado de `demo-siting.html` (SolarGPTfull, 21-08). La capa RF de arriba ya contesta «¿llega
@@ -3261,6 +3438,64 @@ function updatePanel(){
   renderLegend();
 }
 function warnHtml(cls,ic,msg){ return `<div class="warnbox ${cls}"><span>${ic}</span><span>${msg}</span></div>`; }
+/* ══ LA LEYENDA DE LA CAPA RF ══════════════════════════════════════════════
+   (fase 4, punto 5)
+
+   LA CAPA RF NO TENIA LEYENDA. Pintaba los seguidores de rojo a verde y no
+   decía ni con qué motor, ni con qué parámetros, ni qué significaba el color.
+   El mapa de calor sí tiene la suya —dice «TEÓRICO, sin campaña» desde la fase
+   2—, así que la misma información existía en una capa y faltaba en la otra.
+
+   TRES COSAS, SIEMPRE, Y EN ESTE ORDEN:
+     · CON QUÉ está pintado — el rótulo de procedencia, del dato y no de una
+       opinión: sale de `procedencia` del JSON de parámetros;
+     · QUÉ significa el color;
+     · CUÁNTO se ha mirado — el censo de estados CON SU DENOMINADOR, y cuántos
+       de esos enlaces se han podido mirar ENTEROS. Un 100 % de libres sobre
+       enlaces a los que nadie ha mirado el terreno no es un 100 % de nada. */
+function leyendaRF(){
+  if(!S.v.rf) return "";
+  const P=rfParamsNuevo(), V=rfVariante();
+  let h=`<div class="li tit">Capa RF · enlace de cada seguidor con su NCU</div>`;
+  if(rfMotor()==="antiguo"){
+    h+=`<div class="li"><b style="color:var(--warn,#e0a72c)">modelo antiguo (A)</b> `
+     + `<span class="sub">congelado · con el sesgo de El Burgo −33,6 dB dentro · el color es su dB</span></div>`;
+    return h;
+  }
+  /* EL ROTULO DE PROCEDENCIA, SIEMPRE. Hasta hoy el motor sabía con qué estaba
+     calculando —`modo` viaja en cada salida desde la fase 2— y la pantalla no
+     lo enseñaba en ningún sitio de esta capa. */
+  const pr = (typeof RadioZigbee!=="undefined"&&RadioZigbee.procedencia)
+    ? RadioZigbee.procedencia(P, V, S._radioCalib||null) : null;
+  if(pr){
+    const rojo = (pr.rotulo!=="MEDIDO"&&pr.rotulo!=="CALIBRADO") ? ` style="color:var(--warn,#e0a72c)"` : "";
+    const camp = pr.campana ? " · campaña "+pr.campana : "";
+    h+=`<div class="li"><b${rojo}>${pr.rotulo}</b>${camp}`
+     + (pr.peor.length?` <span class="sub">manda el más débil: ${pr.peor[0].ruta}${pr.peor.length>1?" y "+(pr.peor.length-1)+" más":""}</span>`:"")
+     + `</div>`;
+    for(const a of pr.avisos) h+=`<div class="li"><span class="sub"${rojo}>${a}</span></div>`;
+  }
+  /* QUÉ SIGNIFICA EL COLOR — y con parámetros calibrados vuelve a ser el dB. */
+  if(rfCalibrado()){
+    h+=`<div class="li"><span class="sub">el color es el MARGEN en dB (hay campaña calibrada)</span></div>`;
+  } else {
+    h+=`<div class="li"><span class="sub">el color es el ESTADO, no un dB: sin campaña, el margen no es una predicción</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.libre}"></span>libre <span class="sub">ν ≤ −0,78 · primer Fresnel despejado (P.526)</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.rozando}"></span>rozando <span class="sub">−0,78 &lt; ν ≤ 0 · el rayo pasa e invade Fresnel</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_COLOR.tapado}"></span>tapado <span class="sub">ν &gt; 0 · el canto corta el rayo directo</span></div>`
+     + `<div class="li"><span class="sub">tapado NO es «sin enlace»: el enlace vive de la difracción y con margen de sobra funciona. En una planta FV es lo normal — las antenas de las TCU van bajo los módulos. En El Burgo, 190 de 215 tapados y 77 de ésos con 8 dB o más.</span></div>`
+     + `<div class="li"><span class="sub" style="color:var(--warn,#e0a72c)">«¿llega?» NO lo contesta esta capa sin campaña calibrada: eso es el margen, y hace falta el canal (inventario) y sigma (campaña).</span></div>`
+     + `<div class="li"><span class="sw" style="background:${RF_EST_GRIS}"></span>sin veredicto <span class="sub">no se ha podido evaluar</span></div>`;
+  }
+  /* EL ALCANCE DE LA CAPA: cuántos, y de cuántos. */
+  const ce=censoEstadoTexto();
+  if(ce){
+    h+=`<div class="li"><span class="sub">${ce.linea}</span></div>`
+     + `<div class="li"><span class="sub" style="color:var(--warn,#e0a72c)">${ce.alcance}</span></div>`;
+  }
+  return h;
+}
+
 function renderLegend(){
   const pbs=[...new Set(S.motors.map(m=>m.pb).filter(Boolean))];
   /* Con el mapa de calor puesto los seguidores van en gris y los power blocks no se pintan, así
@@ -3268,6 +3503,7 @@ function renderLegend(){
      peor que no tener leyenda. La fila de los seguidores la pone abajo el bloque de la capa. */
   let h = S.cov.on ? "" :
     `<div class="li"><span class="sw" style="border-radius:50%;background:${hueColor(0,false)}"></span>Motor (color = NCU)</div>`;
+  h+=leyendaRF();
   h+=`<div class="li"><span class="sw" style="background:var(--navy);transform:rotate(45deg)"></span>NCU</div>
     <div class="li"><span class="sw" style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid var(--amber)"></span>HSU (meteo)</div>`;
   if(S.reps && S.reps.length) h+=`<div class="li"><span class="sw" style="border-radius:50%;background:#8e44ad"></span>Repetidor</div>`;
@@ -3568,8 +3804,20 @@ function draw(){
   for(const m of S.motors){
     const s=w2s(tcuPt(m)); const dim=S.sel && m.ncu!==S.sel;   // la marca va donde está la TCU (su viga), no en el eje
     let col = dim ? "rgba(150,160,170,.32)" : motorColor(m);
-    if(S.v.rf && !dim){ m._rfMargin = (m.ncu!=null && _rfById[m.ncu]) ? rfMargin(_rfById[m.ncu],tcuPt(m),_rfRows) : null; col = rfColor(m._rfMargin); }
-    else { m._rfMargin = null; }
+    if(S.v.rf && !dim){ m._rfVer = (m.ncu!=null && _rfById[m.ncu]) ? rfVeredicto(_rfById[m.ncu],tcuPt(m),_rfRows) : null;
+                        m._rfMargin = m._rfVer ? m._rfVer.margenDb : null; col = rfColorVeredicto(m._rfVer); }
+    else { m._rfMargin = null; m._rfVer = null; }
+    /* EL CENSO DE ESTADOS SE CUENTA AQUI, SOBRE LOS ENLACES REALES, y no dentro
+       de `rfEnlace`: por ahí pasan también los miles de puntos del ráster, y un
+       recuento que los mezclara sería un número correcto sobre la población
+       equivocada — el mismo defecto que el p50 de 0,00 m del DEM. La pregunta
+       de la leyenda es «de los enlaces de esta planta, ¿cuántos están tapados?»,
+       no «de los píxeles que he pintado». */
+    if(S._censoEst&&m._rfVer){ const e=m._rfVer.estado;
+      if(!e||!e.estado) S._censoEst.sinVeredicto++;
+      else { S._censoEst[e.estado]++; if(e.completo) S._censoEst.completos++;
+             for(const q of (e.sinMirar||[])) S._censoEst.sinMirar[q]=(S._censoEst.sinMirar[q]||0)+1; }
+      S._censoEst.n++; }
     /* CON EL MAPA DE CALOR PUESTO, EL LAYOUT VA EN GRIS. El fondo ya habla en rojo/verde; si
        además los seguidores van en rojo/verde —por NCU o, peor, por la capa RF, que usa la misma
        escala— hay dos escalas del mismo color en el mismo dibujo y no se lee ninguna. Ése era el
@@ -3642,7 +3890,7 @@ function draw(){
   }
   // cobertura RF: anilla en rojo los TCU sin enlace (margen < 8 dB) según el modelo físico
   if(S.v.rf){
-    for(const m of S.motors){ if(m._rfMargin==null||m._rfMargin>=8)continue; const s=w2s(tcuPt(m));
+    for(const m of S.motors){ if(!rfVeredictoMalo(m._rfVer))continue; const s=w2s(tcuPt(m));
       ctx.beginPath(); ctx.arc(s.x,s.y,r+2.8,0,2*Math.PI); ctx.strokeStyle="#e0322c"; ctx.lineWidth=1.8; ctx.stroke(); }
   }
   // cobertura: TCU fuera del radio de su NCU; violeta si la cubre un repetidor, rojo si no

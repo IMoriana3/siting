@@ -88,8 +88,14 @@ const MUTACIONES = {
   sinRecorte92:   ['radio_pv_model.js', /return \{ hst: Math\.min\(hst, hIni\) \+ hRef,/,
                                         'return { hst: hst + hRef,'],
   // el terreno vuelve a Deygout: el resultado pasa a depender del muestreo
-  terrenoDeygout: ['radio_pv_model.js', /var a = bullingtonDb\(D, zA, zB, real, fHz\);/,
-                                        'var a = difraccionCantosDetalle(D, zA, zB, real, fHz).totalDb;'],
+  /* El ancla era `var a = bullingtonDb(D, zA, zB, real, fHz);` y se quedó atrás
+     el 24-09, cuando el relieve pasó a pedir el DETALLE de Bullington para
+     sacar su ν. La mutación empezó a salir rc=2 —«ya no casa con el código»—
+     que NO es «cazada» y por eso el corredor de la CI lo puso en rojo. Se
+     reapunta al sitio nuevo: el terreno vuelve a irse a Deygout, que es lo que
+     esta mutación existe para impedir. */
+  terrenoDeygout: ['radio_pv_model.js', /var dRe = bullingtonDetalle\(D, zA, zB, real, fHz\);\n    var a = dRe\.db;/,
+                                        'var dRe = bullingtonDetalle(D, zA, zB, real, fHz);\n    var a = difraccionCantosDetalle(D, zA, zB, real, fHz).totalDb;'],
   // el perfil deja de recortarse al vano: la recta se ajusta sobre TODO lo que
   // llegue y la altura de antena efectiva sale mal
   sinRecortarVano:['radio_pv_model.js', /var rec = recortaPerfil\(perfil, D\);/,

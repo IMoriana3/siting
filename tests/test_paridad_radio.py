@@ -41,6 +41,32 @@ MUTACIONES = {
                               'return {"dz": -radio_m, "lateral": 0.0}'),
     # el lateral se pierde SOLO en JS: es el que decide por que lado sale el rayo
     "js_sin_lateral": ("js", r'lateral: r \* Math\.sin\(a\)', 'lateral: 0'),
+    # ── A2: EL PATRON APLICADO AL ENLACE ───────────────────────────────────
+    # la elevacion se calcula con los argumentos cambiados SOLO en Python: deja
+    # de ser el angulo del enlace y pasa a ser su complementario
+    "py_patron_elev":   ("py", r'    elev = math\.atan2\(zB - zA, D\)', '    elev = math.atan2(D, zB - zA)'),
+    # el patron se cobra por UN extremo, solo en JS
+    "js_patron_uno":    ("js", r'return \{ elevRad: elev, porExtremoDb: g, totalDb: 2 \* g \};',
+                                'return { elevRad: elev, porExtremoDb: g, totalDb: g };'),
+    # el vano nulo deja de estar acotado en Python y se cuela un atan2(dz, 0)
+    "py_patron_vano0":  ("py", r'    if not \(D > 0\):\n        return \{"elevRad": 0\.0, "porExtremoDb": 0\.0, "totalDb": 0\.0\}',
+                                '    if False:\n        return {"elevRad": 0.0, "porExtremoDb": 0.0, "totalDb": 0.0}'),
+
+    # ── LO NUEVO DEL PUNTO 5: ν PUBLICADO, BULLINGTON CON DETALLE Y ESTADO ──
+    # el nuMax se queda en el nivel 0 SOLO en Python: la recursion lo sube en el
+    # 27,8 % de los casos del corpus, asi que esto tiene que cazarse
+    "py_numax_nivel0": ("py", r'    m = v\n    if izq and izq\.get\("nuMax"\)',
+                               '    return v\n    if izq and izq.get("nuMax")'),
+    # el umbral de despeje se pasa al otro lado SOLO en JS: -0,78 deja de ser
+    # libre. Un motor con el corte movido pinta media planta de otro color
+    "js_estado_borde": ("js", r'if \(nuMax <= NU_DESPEJA\) return "libre";',
+                               'if (nuMax < NU_DESPEJA) return "libre";'),
+    # el orden del peor estado se invierte SOLO en Python
+    "py_peor_estado":  ("py", r'if _ORDEN_ESTADO\[e\] > n:', 'if _ORDEN_ESTADO[e] < n:'),
+    # Bullington deja de decir CON QUE ν se cobro, solo en Python: el estado del
+    # terreno se queda sin fuente y nadie se entera
+    "py_bullington_v": ("py", r'return \{"db": perdida_filo_db\(v\) if v > -0\.78 else 0\.0,\n            "modo": modo, "sB": s_b, "zBull": z_bull, "v": v\}',
+                               'return {"db": perdida_filo_db(v) if v > -0.78 else 0.0,\n            "modo": modo, "sB": s_b, "zBull": z_bull, "v": None}'),
     # el patron se aplana SOLO en Python
     "py_patron_iso":  ("py", r'f = math\.cos\(\(math\.pi / 2\) \* math\.sin\(elev_rad\)\) / c',
                               'f = 1.0'),
@@ -365,8 +391,86 @@ def casos_paneles():
 # no puede tener dos funciones que den el despeje de una fila, y lo que el motor
 # calcula ahora -el corte con el plano inclinado y su Deygout- esta cubierto por
 # «paneles» y por la parte de panel de «antena».
+def casos_bullington():
+    """BULLINGTON CON DETALLE, Y POR QUE ESTA FAMILIA NO EXISTIA.
+
+    `bullingtonDetalle` vivia SOLO EN JS: Python tenia `bullington_db`, que
+    calculaba lo mismo por dentro y devolvia unicamente el dB. Una funcion que
+    existe en un motor y no en el otro es un trozo de fisica que la paridad NO
+    PUEDE VIGILAR -no es que estuviera mal, es que nadie podia saberlo-, y el `v`
+    con el que se cobra el filo equivalente es justo lo que el ESTADO del enlace
+    necesita. Ahora existe en los dos y se carea aqui: modo, sB, zBull y v.
+
+    Los casos barren los cuatro modos: sin cantos, ninguno dentro del vano,
+    vision directa y obstruido."""
+    out = []
+    for D, zA, zB in [(100, 739.475, 739.475), (60, 0.805, 0.805), (338, 5.0, 2.0)]:
+        llano = [[s, 0.0] for s in range(0, int(D) + 1, 5)]
+        cerro = [[s, 3.0 * math.exp(-((s - D / 2) / (D / 8)) ** 2)] for s in range(0, int(D) + 1, 5)]
+        rampa = [[s, 0.02 * s] for s in range(0, int(D) + 1, 5)]
+        base = zA if zA > 100 else 0.0
+        for p in (llano, cerro, rampa):
+            cantos = [{"s": x[0], "z": base + x[1]} for x in p]
+            out.append([D, zA, zB, cantos, 2.45e9])
+        out.append([D, zA, zB, [], 2.45e9])                       # sin cantos
+        out.append([D, zA, zB, [{"s": -1.0, "z": base}], 2.45e9])  # ninguno dentro
+    return out
+
+
+def casos_estado():
+    """EL CLASIFICADOR DE ESTADO, ν a ν, Y EN LOS BORDES EXACTOS.
+
+    -0,78 y 0 son los dos puntos de corte, y un motor que se pasara al otro lado
+    de uno de ellos cambiaria el color de media planta sin cambiar un dB."""
+    return [None, -1e9, -9.0, -0.781, -0.78, -0.7799, -0.5, -1e-9, 0.0,
+            1e-9, 0.001, 0.5, 3.0, 40.0]
+
+
+def casos_patron_enlace():
+    """A2: EL PATRON APLICADO A UN ENLACE, por sus dos extremos.
+
+    `ganancia_patron_db` ya estaba careada a una elevacion suelta. Lo que no
+    estaba es la cuenta que el BALANCE usa: sacar la elevacion del enlace y
+    cobrarla por los dos extremos. Ahi es donde se equivoca uno, no en el
+    coseno.
+
+    Se barren alturas IGUALES —donde tiene que salir 0,000000 exacto— y el caso
+    TCU->NCU real (0,505 contra 3,15), que es donde deja de ser cero, a vanos
+    de 12 a 350 m. Y el enlace dado la vuelta, porque el patron es PAR."""
+    out = []
+    for patron in ["dipolo", "iso", None]:
+        for D in [12.0, 27.5, 37.0, 47.1, 100.0, 158.0, 350.0]:
+            out.append([D, 0.805, 0.805, patron])      # dos TCU: elevacion 0
+            out.append([D, 0.505, 3.15, patron])       # TCU -> NCU
+            out.append([D, 3.15, 0.505, patron])       # el mismo, del reves
+            out.append([D, 0.505, 6.50, patron])       # TCU -> HSU
+        out.append([0.0, 0.5, 3.15, patron])           # vano nulo
+    return out
+
+
+def casos_peor():
+    """EL PEOR DE VARIOS ESTADOS, que es lo que decide el color del enlace.
+
+    Un enlace con los paneles despejados y el terreno delante esta TAPADO: manda
+    el mecanismo que mas estorba. Si un motor ordenara al reves, el mapa pintaria
+    de verde enlaces cortados y NINGUN dB cambiaria — no habria nada mas que lo
+    dijera. Se barren todas las combinaciones de hasta tres, con None dentro,
+    porque `None` -mecanismo no evaluado- no puede contar como estado."""
+    vals = ["libre", "rozando", "tapado", None]
+    out = [[], [None], [None, None]]
+    for a in vals:
+        out.append([a])
+        for b in vals:
+            out.append([a, b])
+            for c in vals:
+                out.append([a, b, c])
+    return out
+
+
 CASOS = {
     "paneles": casos_paneles(), "regimen": casos_regimen(),
+    "bullington": casos_bullington(), "estado": casos_estado(),
+    "peor": casos_peor(), "patron_enlace": casos_patron_enlace(),
     "relieve": casos_relieve(), "escalares": casos_escalares(),
     "antena": casos_antena(),
 }
@@ -403,7 +507,17 @@ out.escalares = casos.escalares.map(c => {
 out.paneles = casos.paneles.map(([D, zA, zB, cr, f]) => {
   const r = R.difraccionPanelesDetalle(D, zA, zB, cr, f);
   const d = r.dominante;
-  return [r.totalDb, r.motivo, d === null ? null : [d.s, d.sEje, d.nu, d.perdidaDb, d.estado, d.despeje, d.borde, d.wBorde]];
+  return [r.totalDb, r.motivo, d === null ? null : [d.s, d.sEje, d.nu, d.perdidaDb, d.estado, d.despeje, d.borde, d.wBorde], r.nuMax, R.estadoDeNu(r.nuMax)];
+});
+out.bullington = casos.bullington.map(([D, zA, zB, cantos, f]) => {
+  const r = R.bullingtonDetalle(D, zA, zB, cantos, f);
+  return [r.db, r.modo, r.sB, r.zBull, r.v, R.estadoDeNu(r.v)];
+});
+out.estado = casos.estado.map(v => R.estadoDeNu(v));
+out.peor = casos.peor.map(es => R.peorEstado(es));
+out.patron_enlace = casos.patron_enlace.map(([D, zA, zB, pat]) => {
+  const g = R.gananciaPatronEnlace(D, zA, zB, pat);
+  return [g.elevRad, g.porExtremoDb, g.totalDb];
 });
 out.antena = casos.antena.map(c => {
   switch (c[0]) {
@@ -462,7 +576,19 @@ def corre_python(mod, casos):
         r = mod.difraccion_paneles_detalle(D, zA, zB, cr, f)
         d = r["dominante"]
         out["paneles"].append([r["totalDb"], r["motivo"], None if d is None else
-            [d["s"], d["sEje"], d["nu"], d["perdidaDb"], d["estado"], d["despeje"], d["borde"], d["wBorde"]]])
+            [d["s"], d["sEje"], d["nu"], d["perdidaDb"], d["estado"], d["despeje"], d["borde"], d["wBorde"]],
+            r["nuMax"], mod.estado_de_nu(r["nuMax"])])
+    out["bullington"] = []
+    for D, zA, zB, cantos, f in casos["bullington"]:
+        r = mod.bullington_detalle(D, zA, zB, cantos, f)
+        out["bullington"].append([r["db"], r["modo"], r["sB"], r["zBull"], r["v"],
+                                  mod.estado_de_nu(r["v"])])
+    out["estado"] = [mod.estado_de_nu(v) for v in casos["estado"]]
+    out["peor"] = [mod.peor_estado(es) for es in casos["peor"]]
+    out["patron_enlace"] = []
+    for D, zA, zB, pat in casos["patron_enlace"]:
+        g = mod.ganancia_patron_enlace(D, zA, zB, pat)
+        out["patron_enlace"].append([g["elevRad"], g["porExtremoDb"], g["totalDb"]])
     out["antena"] = []
     for c in casos["antena"]:
         if c[0] == "ancla":

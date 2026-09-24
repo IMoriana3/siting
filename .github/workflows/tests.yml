@@ -34,15 +34,21 @@ jobs:
           git clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
-      - name: banco de pruebas
-        run: |
-          set -o pipefail
-          rc=0
-          for f in tests/test_*.js; do
-            echo "── $f ──"
-            node "$f" || rc=1
-          done
-          exit $rc
+      # EL CORREDOR, que ya no mira solo el codigo de salida.
+      #
+      # Antes esto era un `for f in tests/test_*.js; do node "$f" || rc=1; done`
+      # — o sea, el codigo de salida y nada mas. Y el codigo de salida es justo
+      # lo que nos ha mentido dos veces en un dia: cuatro pasos de esta CI
+      # decian «no se ha medido nada» y salian con 0, y en cobertura-zigbee un
+      # banco entraba sin argumentos, daba cero vueltas y llevaba cuatro meses
+      # en verde sin mirar una planta (#741).
+      #
+      # `tests/correr.sh` aplica la regla de factiun-cartera: verde es salir
+      # con 0 **y** sin lineas de fallo **y** publicando al menos PISO
+      # comprobaciones. Trae ademas dos guardias: un banco nuevo sin piso se
+      # pone ROJO, y una exencion sobre un fichero borrado tambien.
+      - name: banco de pruebas (con piso por banco)
+        run: bash tests/correr.sh
 
       # LA HERRAMIENTA DE INFORME, aunque no sea un banco. Extrae `rfRows` y
       # `buildAdjacency` del HTML con una expresión regular, así que se rompe
@@ -58,11 +64,26 @@ jobs:
       # llevaba dentro uno de los utiles que nadie corria. Sin hermano carga el
       # motor, comprueba que la API que usa sigue existiendo, dice que no ha
       # comprobado nada y sale con 0.
-      - name: el careo del terreno contra el 3D
+      # LAS ONCE PLANTAS, NO UNA. `careo_terreno_3d.mjs` corre por defecto contra
+      # `dicayagua_relieve.json` y punto, asi que «el motor y el 3D leen el
+      # mismo fichero bit a bit» estaba confirmado para UNA de once. Salio al
+      # preguntarse que afirmaciones se apoyaban en este paso, ahora que por fin
+      # corre. Medidas las once: 0 discrepancias y peor |delta| = 0 en todas, y
+      # cuestan 4 s enteras.
+      - name: el careo del terreno contra el 3D (las once plantas)
         run: |
           set +e
-          node tools/careo_terreno_3d.mjs
-          rc=$?
+          rc=0; n=0
+          for f in ../Cobertura-Zigbee/*_relieve.json; do
+            [ -e "$f" ] || continue
+            b=$(basename "$f")
+            case "$b" in *demsolo*) continue;; esac
+            node tools/careo_terreno_3d.mjs --relieve "$b" || rc=$?
+            n=$((n+1))
+          done
+          # cero plantas careadas NO es un verde: es el hermano ausente
+          if [ "$n" = "0" ]; then echo "SIN CAREO: ninguna planta careada"; rc=2; fi
+          echo "plantas careadas: $n"
           set -e
           echo "$rc|el careo del terreno contra el 3D" >> "$RUNNER_TEMP/censo_bancos"
           if [ "$rc" = "1" ]; then exit 1; fi
@@ -163,6 +184,43 @@ jobs:
       # el hecho que lo cierra —que ningun enlace de la cartera llega a 800 m—
       # deja de ser cierto en cuanto alguien mueva una NCU, y entonces la lectura
       # de la tabla de relieve por banda cambia.
+      # ¿PUEDE ALGÚN PASO DE CI SALIR CON 0 SIN HABER MEDIDO? El cribado de los
+      # cinco patrones —guarda que rinde 0, bucle de cero vueltas, tragado
+      # explícito, suite que no recoge, invoca lo que no hay— sobre este repo y
+      # sobre los hermanos que estén clonados.
+      #
+      # Y SE MIDE A SÍ MISMO: publica cuántos pasos y cuántos comandos ha
+      # resuelto de los que hay, y se pone ROJO por debajo del 90 %. La primera
+      # versión veía 3 ficheros de los 17 pasos de SolarGPTfull y salía casi
+      # limpia — o sea, el mismo defecto que persigue, en sí misma. Sin PyYAML
+      # sale con rc = 2, no con 0.
+      - name: ¿algún paso puede salir verde sin haber medido?
+        run: node tools/auditoria_verdes.mjs
+
+      # ¿CORRE LA CI TODAS LAS MUTACIONES QUE HAY? El corredor de abajo lleva
+      # las claves escritas A MANO, banco por banco: exige `rc = 1` exacto —lo
+      # que ya ha cazado anclas caducadas— pero corre las que alguien apuntó,
+      # no las que hay. Encontrado midiéndolo: las CUATRO mutaciones del
+      # picómetro y del punto duplicado, añadidas hoy, estaban definidas y no
+      # se corrían nunca. Sin workflow sale con rc = 2, no con 0.
+      - name: ¿se corren todas las mutaciones que hay?
+        run: node tools/alcance_mutaciones.mjs
+
+      # MEDIDO FRENTE A PREDICHO (fase 4 · punto 3). Corre en CI porque lleva
+      # TRES puertas sobre la unión de nodos —`desig`, la distancia del fichero
+      # y la posición nodo a nodo— y las tres cazaron el mismo defecto: la clave
+      # era (NCU, esclavo) y no el esclavo a secas. Con la clave mala el informe
+      # daba 91,8 % de aciertos, que suena perfectamente razonable.
+      - name: medido frente a predicho (El Burgo)
+        run: |
+          set +e
+          node tools/medido_vs_predicho.mjs
+          rc=$?
+          set -e
+          echo "$rc|medido frente a predicho" >> "$RUNNER_TEMP/censo_bancos"
+          if [ "$rc" = "1" ]; then exit 1; fi
+          if [ "$rc" != "0" ]; then echo "::warning title=NO COMPROBADO::medido vs predicho no ha comparado nada (rc=$rc)"; fi
+
       - name: vanos muestreados contra enlaces reales
         run: node tools/vanos_muestreados_vs_reales.mjs > /dev/null
 
@@ -230,7 +288,7 @@ jobs:
                                              sinReflejado sueloSinPerdida anguloDirecto \
                                              sinCentrar sinRecorte92 terrenoDeygout sinRecortarVano \
                                              cantoAlMasAlto puntoMudo \
-                                             sinTolerancia toleranciaFloja
+                                             sinTolerancia toleranciaFloja puntoDuplicado
 
           # Las de paridad rompen UN SOLO LADO, y por los dos lados: una
           # mutación que tocase los dos ficheros a la vez dejaría el banco
@@ -239,7 +297,8 @@ jobs:
                                               canalCallado noSeSabeEsSi sinRaizArt sinRutaEsCero nuncaArbol \
                                               relieveCallado relieveCortoCero dosRayosSinLisa \
                                               mezclaSigue mezclaSiempre \
-                                              sinUmbralCorto umbralApaga
+                                              sinUmbralCorto umbralApaga \
+                                              patronFuera patronUnExtremo patronMudo
 
           # EL CENSO DE MOTIVOS TIENE QUE SALIR PUBLICADO, no en un log. Existe
           # porque 568 enlaces llevaban un mes con motivo `no cubre el vano` y
@@ -327,7 +386,19 @@ jobs:
           # vez no lo puede producir una mutacion de un solo lado, y lo cubre la
           # comprobacion de clases: probado rompiendo los dos, `relieve` sale OK y
           # la de clases saca 22 cruces.
+          # fase 4, punto 5: el estado del enlace, la procedencia y su llegada a
+          # la pantalla. `relievePorNu` es la que vigila el doble conteo del
+          # suelo plano, que es lo que casi se cuela.
+          rojo node tests/test_rf_estado.js bordeDespeje relievePorNu peorNoManda completoRegalado \
+                                            sinRotularSeCuela procedenciaOptimista corteTecleado \
+                                            demCuelaComoVisto anillaPorTapado tapadoEnRojo
+
+          # la copia fijada de `sol.js`: una copia sin quien la caree se queda
+          # vieja en silencio, que es lo que le pasó a SolarGPTfull
+          rojo node tests/test_sol_pin.js copiaDesviada lockRancio sinBacktracking sinTope
+
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
+                                                   py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \
                                                    py_csqrt_rama \
                                                    js_tol_regimen js_fase_signo \
@@ -335,7 +406,10 @@ jobs:
                                                    js_cerca_fija py_conductor \
                                                    js_panel_eje py_panel_huella \
                                                    py_eje_medida js_eje_cero py_tapa_cero \
-                                                   js_parte_eje py_sin_senphi py_tierra_muda
+                                                   js_parte_eje py_sin_senphi py_tierra_muda \
+                                                   py_numax_nivel0 js_estado_borde py_peor_estado \
+                                                   py_bullington_v \
+                                                   py_patron_elev js_patron_uno py_patron_vano0
 
           # rc = 2 es «la mutación ya no casa con el código»: un ancla que se
           # quedó atrás en un refactor. NO es «cazada», y por eso esto falla.
@@ -370,6 +444,15 @@ jobs:
         run: |
           f="$RUNNER_TEMP/censo_bancos"
           [ -f "$f" ] || { echo "::error::el censo no se escribio: ningun paso lo alimento"; exit 1; }
+          # ── CUANTOS ESPERABA. El censo sabia decir lo que le contaron y NO
+          #    cuantos deberian haberle contado: si un paso moria antes de
+          #    escribir su linea, censaba 3 de 4 y se quedaba tan ancho.
+          #    «He mirado» y «esta bien» son dos afirmaciones, y esta puerta
+          #    solo hacia la segunda — el mismo defecto que vino a arreglar.
+          #    El numero se sube A MANO al anyadir un paso que alimente el
+          #    censo, y si alguien se olvida, esto se para.
+          ESPERADOS=5
+          censados=$(grep -c . "$f" || true)
           mide=0; nc=0; rojo=0
           {
             echo "### Censo de bancos"
@@ -393,8 +476,24 @@ jobs:
           echo ""
           echo "  miden: $mide · NO COMPROBADOS: $nc · rojos: $rojo"
           printf '\n**miden %d · NO COMPROBADOS %d · rojos %d**\n' "$mide" "$nc" "$rojo" >> "$GITHUB_STEP_SUMMARY"
+          echo "  censados: $censados de $ESPERADOS esperados"
+          if [ "$censados" != "$ESPERADOS" ]; then
+            echo "::error title=CENSO INCOMPLETO::han llegado $censados lineas y se esperaban $ESPERADOS."
+            echo "  Un paso que alimenta el censo no ha llegado a escribir su linea, o se ha"
+            echo "  anyadido uno sin subir ESPERADOS. En los dos casos el censo esta mintiendo."
+            printf '\n> ❌ censo incompleto: %s de %s\n' "$censados" "$ESPERADOS" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           if [ "$rojo" != "0" ]; then echo "::error::$rojo banco(s) en rojo"; exit 1; fi
           if [ "$nc" != "0" ]; then
             echo "::warning title=NO COMPROBADO::$nc banco(s) no han medido nada. Esto NO es un verde entero."
             printf '\n> ⚠️ %d banco(s) no han medido nada. Esto NO es un verde entero.\n' "$nc" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # EL ENLACE A LA GUÍA DE PUERTAS, COMPROBADO. Un enlace roto al documento
+      # que dice «una puerta verde afirma dos cosas» sería el chiste final.
+      # Resuelve el fichero en el clon de `proyectos` que haya al lado —el del
+      # PIN si este repo lo fija— y si no hay, lo trae con --depth 1 (es
+      # público). Sin red y sin clon sale con rc = 2, no con 0.
+      - name: el enlace a la guía de puertas apunta a algo que existe
+        run: bash docs/enlace_guia.sh

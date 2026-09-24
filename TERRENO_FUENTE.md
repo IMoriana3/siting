@@ -228,6 +228,37 @@ De ahí salen las dos cosas que este repo se lleva:
    tolerancia se prueba a **1 m, 1 mm y 1 µm**: una que no distinga esas tres
    de 1e-13 no es una tolerancia, es un apagón.
 
+### ⚠ UNA PUERTA VERDE AFIRMA DOS COSAS
+
+**«He mirado» y «está bien». Hasta hoy sólo comprobábamos la segunda.**
+
+No es una idea: es lo que ha salido **cinco veces en un día**, y las cinco
+habrían pasado la prueba clásica de «rompe la puerta y mira si salta».
+
+| puerta | miraba | de cuántos |
+|---|---|---|
+| la regex de la HSU | se paraba en el paréntesis de `projX(glon)` | — |
+| `auditoria_verdes.mjs` | 3 ficheros | de 17 pasos |
+| `careo_terreno_3d.mjs` | 1 planta | de 11 |
+| `gate_ps1_planta.py` | **0 ficheros `.ps1`**, y decía «ninguno se rompería» | de 6 |
+| `test_una_holgura.js` | 2 ficheros | de 7 |
+
+La última es la más clara de todas: afirma algo de **todo el repo** —«el
+despeje de una fila lo da UNA sola función»— y miraba el motor y su espejo de
+Python. Metiendo una segunda función de despeje en `radio_zigbee.js` seguía
+dando *«TODO OK — 13 comprobaciones»*. Medido, no razonado.
+
+Las cinco **funcionaban** sobre lo que miraban: romperles el dato de dentro las
+ponía rojas. Lo que ninguna decía es **cuánto había mirado**.
+
+> Cada puerta publica su **ALCANCE** —cuántos ficheros, casos, plantas o líneas
+> examina, **de cuántos existen**— y cuando el alcance es parcial o cero sale
+> con **rc = 2** o en rojo, nunca en verde.
+
+Romper la puerta prueba que **reacciona a lo que mira**. No prueba que mire
+donde debe. Son dos fallos distintos, y el segundo es el caro: produce un verde
+tranquilizador en vez de un rojo.
+
 ### El mismo método volvió a cazar, y esta vez en la propia CI
 
 Mirando **cuánto tardaba cada paso** de la CI de este repo: cuatro cerraban en
@@ -418,3 +449,15 @@ Hacen falta 4 teselas z14 para Ayora y 9 para San José.
   hay son de El Burgo, que no tiene levantamiento. Hasta que haya medidas en
   Ayora o San José, el relieve del §4 es lo que el modelo dice que cobra el
   terreno, no lo que se ha visto cobrar.
+
+---
+
+## Cómo se comprueba una comprobación
+
+El estándar de puertas —piso por banco, alcance publicado, los tres estados
+MIDE / NO COMPROBADO / ROJO— vive en un solo sitio:
+**[`proyectos/docs/puertas-y-alcance.md`](https://github.com/IMoriana3/proyectos/blob/main/docs/puertas-y-alcance.md)**.
+
+Un original y enlaces; dos copias divergen. `docs/enlace_guia.sh` comprueba en
+CI que este enlace apunta a algo que existe — un enlace roto a la guía de
+puertas sería el chiste final.
