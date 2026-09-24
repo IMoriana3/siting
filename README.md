@@ -37,4 +37,29 @@ GitHub Pages: https://imoriana3.github.io/siting/ · `.nojekyll` incluido. Sourc
 - El **chrome** (cabecera, panel, controles) es oscuro Factiun; el **lienzo técnico se mantiene claro a propósito**: las NCU se dibujan en navy con borde blanco, pensadas para fondo claro.
 - Limitaciones: sin persistencia; repetidores con radio directo (las cadenas mesh no se modelan — ver San José); cobertura en línea recta. Vía prevista de entrada: DWG → DXF (`ezdxf`).
 
+## Si estás mirando una captura del mapa anterior al 2026-09-24
+
+Hasta esa fecha el bucle de dibujado pintaba los puntos TCU con el modelo
+**congelado** (`rfMargin`, con `EL_BURGO_BIAS_DB` = −33,6 dB dentro), saltándose
+la puerta única, mientras el panel de perfil usaba el motor nuevo. Medido sobre
+6.035 enlaces de 10 plantas (`node tools/careo_motores_mapa.mjs`):
+
+| | |
+|---|---|
+| diferencia mediana (viejo − nuevo) | **−20,0 dB** — el mapa era PESIMISTA |
+| puntos en otra banda de color | **74 %** |
+| puntos al otro lado del umbral de 8 dB de la anilla | **39 %** |
+
+Para casi todo es un corrimiento de banda, no un cambio de veredicto. **La
+excepción es Bagnarelli**: 7 de sus 17 enlaces salían con −153, −146 y −132 dB
+donde el motor nuevo da de 13 a 41. Casi media planta se veía en rojo oscuro
+por valores imposibles del congelado. **Lo que se decidiera mirando ese mapa
+hay que rehacerlo.**
+
+Y desde el 2026-09-24 el color del punto ya no es un dB por defecto sino el
+ESTADO del enlace (libre / rozando / tapado): los parámetros de radio son
+heredados, `sigma_db` está sin calibrar y el canal es desconocido, así que ese
+margen no es una predicción. El dB vuelve solo en cuanto haya campaña. La
+leyenda de la capa lo dice en pantalla.
+
 *Factiun · proyecto interno.*
