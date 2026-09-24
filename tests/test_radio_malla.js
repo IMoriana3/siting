@@ -519,6 +519,54 @@ console.log('\n· el perfil corto por coma flotante');
         (r3.motivos || []).includes('relieve_perfil_no_cubre_el_vano'), r3.motivos);
 }
 
+/* ── EL CONTRATO DE LA CITA ───────────────────────────────────────────────
+   `_procedencias._la_cita` dice que un valor de clase `datasheet`, `plano` o
+   `norma` tiene que traer los cuatro campos de la cita puestos. Hoy NINGUNA
+   cita del fichero es de esas clases —todas son `heredado` o `pendiente`—, así
+   que comprobarlo sólo sobre el fichero real PASARÍA EN VACÍO: cero casos
+   mirados y verde. Es la puerta muerta que este repo ya pagó una vez.
+
+   Por eso se comprueba el COMPROBADOR primero, contra casos hechos a mano, y
+   sólo después se aplica al fichero. Así se le puede ver fallar hoy, sin
+   esperar a que alguien meta la primera lectura de datasheet. */
+{
+  const CAMPOS = ['documento', 'version', 'pagina', 'leido_el'];
+  const OBLIGAN = (PARAMS._procedencias._la_cita || {}).la_obligan || [];
+  const incompleta = (c) => !OBLIGAN.includes(c.clase) ? []
+    : CAMPOS.filter(k => c[k] == null);
+
+  console.log('\nel contrato de la cita');
+  check('el vocabulario declara qué clases obligan a citar', OBLIGAN.length === 3, OBLIGAN);
+  check('y son datasheet, plano y norma',
+        ['datasheet', 'plano', 'norma'].every(x => OBLIGAN.includes(x)), OBLIGAN);
+
+  // el comprobador, contra casos hechos a mano: se le ve pasar Y fallar
+  const buena = { clase: 'datasheet', documento: 'X', version: 'A', pagina: 12, leido_el: '2026-09-24' };
+  check('una cita COMPLETA de clase datasheet pasa', incompleta(buena).length === 0);
+  check('a la que le falta la página NO pasa, y dice cuál falta',
+        JSON.stringify(incompleta({ ...buena, pagina: null })) === '["pagina"]');
+  check('sin documento, sin versión y sin fecha: las nombra las tres',
+        incompleta({ ...buena, documento: null, version: null, leido_el: null }).length === 3);
+  check('un `heredado` sin cita NO es un defecto suyo',
+        incompleta({ clase: 'heredado', documento: null, version: null, pagina: null, leido_el: null }).length === 0);
+
+  // y ahora sí, el fichero real
+  let vistas = 0, malas = [];
+  for (const [nt, tec] of Object.entries(PARAMS.tecnologias)) {
+    for (const [nc, c] of Object.entries(tec._citas || {})) {
+      if (!c || typeof c !== 'object' || !c.clase) continue;
+      vistas++;
+      const f = incompleta(c);
+      if (f.length) malas.push(nt + '.' + nc + ' (' + c.clase + ') le falta: ' + f.join(', '));
+    }
+  }
+  check('el fichero trae ranuras de cita, y son ' + vistas, vistas >= 12, vistas);
+  check('ninguna cita del fichero incumple el contrato', malas.length === 0, malas);
+  check('y hoy NINGUNA es todavía lectura de documento — el hueco se ve, no se deduce',
+        !Object.values(PARAMS.tecnologias).some(t =>
+          Object.values(t._citas || {}).some(c => c && OBLIGAN.includes(c.clase))));
+}
+
 console.log('\n' + (ko ? 'FALLOS: ' + ko + ' (de ' + (ok + ko) + ')'
                        : 'TODO OK — ' + ok + ' comprobaciones'));
 if (MUTA) {

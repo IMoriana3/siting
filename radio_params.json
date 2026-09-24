@@ -19,28 +19,49 @@
   ],
   "_procedencias": {
     "_que_es": "LA CLASE DE CADA VALOR, LEGIBLE POR MÁQUINA. No es información nueva: es lo que el `_fuente` de cada valor YA dice, escrito en un vocabulario CERRADO para que el motor pueda rotular la salida sin leer prosa. Sacar la clase de una expresión regular sobre el `_fuente` sería poner el criterio en el sitio donde menos se mira, y además rompería el día que alguien reescriba una cita.",
-
     "_por_que": "El mapa tiene que decir SIEMPRE con qué se ha pintado. Un margen en dB salido de valores que nadie ha verificado no es una predicción, y hasta hoy la pantalla no distinguía un caso del otro: pintaba las mismas cinco bandas de color con parámetros calibrados y sin ellos.",
-
     "vocabulario": {
-      "medido":    "medido en campo sobre este equipo o esta planta",
+      "medido": "medido en campo sobre este equipo o esta planta",
       "calibrado": "ajustado contra una campaña de medidas; la campaña viaja con el valor",
-      "plano":     "de un plano o documento de fabricante (DWG, DR, FTR)",
+      "plano": "de un plano o documento de fabricante (DWG, DR, FTR)",
       "datasheet": "leído del datasheet o la ficha del modelo EXACTO",
-      "norma":     "de una norma o recomendación citada (ITU-R, IEC)",
+      "norma": "de una norma o recomendación citada (ITU-R, IEC)",
       "declarado": "alguien lo ha declarado; ni plano, ni datasheet, ni medida",
-      "heredado":  "copiado del código de estos repos. NADIE lo ha verificado contra un datasheet ni contra una medida: es el valor que ya se usaba",
+      "heredado": "copiado del código de estos repos. NADIE lo ha verificado contra un datasheet ni contra una medida: es el valor que ya se usaba",
       "pendiente": "no hay valor todavía (`null`)"
     },
-
     "_rotulo": "Para la pantalla se agrupan en cuatro: medido → MEDIDO · calibrado → CALIBRADO · plano/datasheet/norma → TEÓRICO · declarado/heredado → SIN VERIFICAR · pendiente → NO DISPONIBLE. Manda SIEMPRE el MÁS DÉBIL de los valores que entran en ese número, no la media ni el más fuerte.",
-
+    "_la_cita": {
+      "_que_es": "LA RANURA DE CITA, una por NÚMERO y no por variante. Cuatro campos: `documento`, `version`, `pagina`, `leido_el`. Vacía significa que nadie ha leído ese número de un documento — y eso se ve, en vez de deducirse de la ausencia de prosa.",
+      "campos": [
+        "documento",
+        "version",
+        "pagina",
+        "leido_el"
+      ],
+      "la_obligan": [
+        "datasheet",
+        "plano",
+        "norma"
+      ],
+      "_regla": "Un valor que se declare `datasheet`, `plano` o `norma` con la cita INCOMPLETA no es una lectura: es un `declarado` con mejor nombre. El banco lo pone rojo. Al revés no: `heredado`, `declarado` y `pendiente` no llevan cita, y no llevarla no es un defecto suyo.",
+      "_por_que_un_comentario_no_basta": [
+        "Porque ya nos pasó, y el caso está en el `_de_donde` del -103 de aquí abajo.",
+        "",
+        "Un comentario de código dice de dónde CREE quien lo escribió que sale un número.",
+        "No dice de qué documento, de qué revisión ni de qué página, así que nadie puede ir",
+        "a comprobarlo ni enterarse de que la revisión siguiente lo cambió. Por eso la clase",
+        "de esos valores es `heredado` y NO `datasheet`, por muy convencido que suene el",
+        "comentario.",
+        "",
+        "`leido_el` no es burocracia: una hoja de datos se revisa. Sin la fecha de lectura no",
+        "se sabe si la version citada era la vigente cuando se leyó."
+      ]
+    },
     "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
   },
-
   "version": "1.0.0",
   "generado": "2026-09-20",
-
   "geometria": {
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
     "ant_h_m": {
@@ -56,9 +77,8 @@
         "línea es un `_fuente` roto; corregido al encontrarlo."
       ]
     },
-
     "eje_tubo_m": {
-      "valor": 1.20,
+      "valor": 1.2,
       "procedencia": "declarado",
       "_es_defecto_declarado": true,
       "_rotulo": "eje estándar 1,20 m, no específico de la planta",
@@ -110,7 +130,6 @@
         "0,80 m demasiado baja, y eso sí mueve el rebote en el suelo: 4,8-5,8 dB por enlace."
       ]
     },
-
     "antena_tcu": {
       "_que_es": [
         "DÓNDE ESTÁ LA ANTENA DE LA TCU, que no es una cota fija. El conector cuelga del",
@@ -130,7 +149,7 @@
         "_ojo": "el giro es `makeRotationX(−alfa)` en el marco canónico — Cobertura-Zigbee/terreno.html:1907."
       },
       "coax_caida_m": {
-        "valor": 0.50,
+        "valor": 0.5,
         "procedencia": "heredado",
         "_fuente": "código: Cobertura-Zigbee/seguidor.js — `antHang: 0.50`, «la antena CUELGA 50 cm vertical desde el conector».",
         "_ojo": "el 3D ya lo dibuja así: `aTip = [ax, ay − hang, az]` con (ax,ay,az) el conector YA rotado — terreno.html:1925. El motor usa la misma cuenta a propósito."
@@ -144,16 +163,14 @@
         "del recorrido, justo donde el panel más tapa."
       ]
     },
-
     "antena_ncu_m": {
       "valor": 3.15,
       "procedencia": "plano",
       "_fuente": "código: Cobertura-Zigbee/equipos.js `ncuAntY: 3.15` — «CENTRO del látigo, en la cabeza del poste». Plano DR_NCU_v0 / «Montaje NCU», poste C 100×60 de 2,95 m (`ncuMastH` de equipos.js).",
       "_ojo": "coincide con `ANTENNAS.ncu.h` de cobertura-rf-fv. Dos módulos independientes dicen lo mismo, que es la mejor señal que hay aquí."
     },
-
     "antena_hsu_m": {
-      "valor": 6.50,
+      "valor": 6.5,
       "procedencia": "plano",
       "_fuente": "código: Cobertura-Zigbee/equipos.js `hsuAntY: 6.50` — «CENTRO de los látigos, en su brazo». Plano FTR.24.00145_5_C / «Montaje HSU», torre de celosía autoportante de 8 m.",
       "_ojo": [
@@ -166,7 +183,6 @@
         "que cita el plano."
       ]
     },
-
     "campo_cercano_lambdas": {
       "valor": 2,
       "procedencia": "norma",
@@ -189,7 +205,6 @@
         "de ahí no es un dB: es un ESTADO con su motivo."
       ]
     },
-
     "patron_antena": {
       "valor": "dipolo",
       "procedencia": "datasheet",
@@ -237,20 +252,70 @@
       ]
     }
   },
-
   "tecnologias": {
     "_que_es": "Lo que SÍ depende de la radio: balance, banda, protocolo y regulación.",
-
     "zigbee_pro_24": {
-
       "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee-PRO",
-      "f_hz": 2.45e9,
+      "f_hz": 2450000000.0,
       "ptx_dbm": 19.0,
       "gtx_dbi": 3.0,
       "grx_dbi": 3.0,
       "rx_sens_dbm": -103.0,
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` (modelo CONGELADO), cuyo comentario dice: «ptxDbm: XBee-PRO RR. Estándar +8. Canal 26: máx +3. Antena Jinchang 3 dBi».",
+      "_citas": {
+        "ptx_dbm": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "comentario de `defaultParams()`: «XBee-PRO RR. Estándar +8». Distingue PRO de estándar, así que al menos dice de cuál habla."
+        },
+        "rx_sens_dbm": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": [
+            "BUSCADO EN LOS DIEZ REPOS EL 2026-09-24, y el resultado no es el que esperábamos.",
+            "",
+            "Hay CUATRO copias del -103 —Siting/zigbee_pv_model.js, cobertura-rf-fv/web/",
+            "zigbee_pv_model.js, cobertura-rf-fv/python/zigbee_pv_model.py y un `const",
+            "SENS=-103` suelto en cobertura-rf-fv/index.html— y SOLO UNA lleva procedencia,",
+            "la del puerto Python:",
+            "",
+            "    rx_sens_dbm: float = -103.0  # XBee RR Zigbee, modo normal (1% PER)",
+            "",
+            "Dice «XBee RR», NO «XBee-PRO RR». El comentario de la potencia sí distingue las",
+            "dos variantes; el de la sensibilidad NO. Así que llamar a este número «el de la",
+            "PRO», como hace el nombre de esta variante, ya afirma más de lo que la fuente",
+            "sostiene. No es una cita: es un comentario, sin documento, versión ni página.",
+            "",
+            "Y de ahí sale por qué la variante estándar lo tiene a `null` (ver `zigbee_std_24`):",
+            "NO es que alguien olvidara copiarlo. No hay un segundo número que copiar, y el que",
+            "hay ni siquiera dice ser el de la PRO. PRO y no-PRO llevan receptores distintos, así",
+            "que con la hoja delante serán DOS números. Copiar uno al otro sería inventar."
+          ]
+        },
+        "gtx_dbi": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "comentario de `defaultParams()`: «Antena Jinchang 3 dBi». Es la antena de la TCU, la de 2,4 GHz."
+        },
+        "grx_dbi": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "la misma antena, en el otro extremo."
+        }
+      },
       "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada.",
       "canal": {
         "valor": null,
@@ -274,20 +339,51 @@
         ]
       }
     },
-
     "zigbee_std_24": {
-
       "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee estándar (no PRO)",
-      "f_hz": 2.45e9,
+      "f_hz": 2450000000.0,
       "ptx_dbm": 8.0,
       "gtx_dbi": 3.0,
       "grx_dbi": 3.0,
       "rx_sens_dbm": null,
       "_fuente": "código: el mismo comentario de `defaultParams()` dice «Estándar +8» para la potencia.",
-      "_pendiente_fase_2": "La SENSIBILIDAD del estándar NO aparece en el código y no se inventa: `null` hasta leerla del datasheet. Con `null` esta variante no emite margen."
+      "_pendiente_fase_2": "La SENSIBILIDAD del estándar NO aparece en el código y no se inventa: `null` hasta leerla del datasheet. Con `null` esta variante no emite margen.",
+      "_citas": {
+        "ptx_dbm": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "comentario de `defaultParams()`: «Estándar +8»."
+        },
+        "rx_sens_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "NO existe en el código, y por eso está a `null`. La tentación es copiar aquí el -103 de la PRO «porque la hoja de datos es la misma». La hoja puede ser la misma y el NÚMERO no lo es: PRO y no-PRO llevan receptores distintos y la hoja los lista por separado. Además el -103 ni siquiera dice ser el de la PRO (ver `zigbee_pro_24._citas.rx_sens_dbm._de_donde`). Se lee, no se hereda de al lado."
+        },
+        "gtx_dbi": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "la misma antena de TCU que la PRO: «Jinchang 3 dBi»."
+        },
+        "grx_dbi": {
+          "clase": "heredado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "la misma antena, en el otro extremo."
+        }
+      }
     },
-
     "_las_dos_de_sub_giga": [
       "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
       "",
@@ -307,9 +403,7 @@
       "falta y de qué documento sale. En cuanto lleguen los datasheets se rellenan",
       "estos campos y las columnas se encienden solas, sin tocar una línea de código."
     ],
-
     "lora_eu868": {
-
       "procedencia": "pendiente",
       "nombre": "LoRa EU868 — PREDICCIÓN, sin campaña y sin datasheet leído",
       "f_hz": null,
@@ -317,7 +411,10 @@
       "gtx_dbi": null,
       "grx_dbi": null,
       "rx_sens_dbm": null,
-      "canal": { "valor": null, "procedencia": "pendiente" },
+      "canal": {
+        "valor": null,
+        "procedencia": "pendiente"
+      },
       "candidatos": {
         "_que_es": [
           "LOS MÓDULOS ENTRE LOS QUE HAY QUE ELEGIR, y la elección NO es un detalle:",
@@ -333,7 +430,18 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "VACÍA. Desde este entorno la red no llega a ninguna web de fabricante ni de distribuidor ni a etsi.org (probados y denegados por el proxy de salida: semtech, ti, silabs, microchip, st, mouser, digikey, etsi). Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_estado": "VACÍA. Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_la_red_2026_09_24": [
+          "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
+          "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
+          "—se descargó una hoja de 10,4 MB para comprobarlo, y la cadena de redirecciones",
+          "acaba en `docs.digi.com`—. `microchip.com` y `etsi.org` abren el túnel y devuelven",
+          "403 DE SU PROPIO servidor, que es anti-bot y no la lista de salida. `st.com` y",
+          "`mouser.es` dan timeout a los 20 s, con h2 y con HTTP/1.1.",
+          "",
+          "Se apunta la fecha porque este campo se queda viejo solo: decir «la red no llega»",
+          "sin decir cuándo se probó es lo mismo que no decir nada."
+        ],
         "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
         "lista": []
       },
@@ -345,11 +453,86 @@
         "f_hz": "sale del plan de canal, así que depende de lo anterior."
       },
       "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: clase C multicast —el nodo escucha siempre, la orden llega sin esperar ventana— y el ciclo de trabajo del 1 % limita al EMISOR, no al receptor: para una orden de stow (rara, corta, unidireccional) no muerde; para los reintentos sí. Eso es arquitectura, no balance, y no necesita datasheet.",
-      "_ojo_sub_giga": "A 868 MHz la longitud de onda es ~2,8 veces la de 2,45 GHz, así que el radio de Fresnel es ~1,7 veces mayor: LA MISMA GEOMETRÍA DESPEJA MENOS. El canon ya lo calcula bien (`radioFresnel` depende de λ), pero es la razón por la que una calibración hecha a 2,4 GHz NO se traslada."
+      "_ojo_sub_giga": "A 868 MHz la longitud de onda es ~2,8 veces la de 2,45 GHz, así que el radio de Fresnel es ~1,7 veces mayor: LA MISMA GEOMETRÍA DESPEJA MENOS. El canon ya lo calcula bien (`radioFresnel` depende de λ), pero es la razón por la que una calibración hecha a 2,4 GHz NO se traslada.",
+      "_citas": {
+        "_que_es": "Una ranura por número, VACÍA. Ninguno de estos se ha leído de un documento.",
+        "_una_variante_por_SF": [
+          "LA SENSIBILIDAD DE LoRa NO ES UN NÚMERO, ES UNA TABLA: cambia con el factor de",
+          "ensanchado (SF) y con el ancho de banda. Así que cuando lleguen las hojas, cada SF",
+          "que el datasheet declare entra como UNA VARIANTE PROPIA —`lora_eu868_sf7`,",
+          "`_sf9`, `_sf12`…— con su `ptx_dbm`, su `rx_sens_dbm` y su cita.",
+          "",
+          "Se meten TODOS los que declare la hoja, no una selección: el comparador tiene que",
+          "enseñar el RANGO COMPLETO de cada tecnología. Si el orden entre tecnologías cambia",
+          "según el SF, eso ES el resultado y hay que verlo, no esconderlo eligiendo un SF."
+        ],
+        "ptx_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja del módulo, con su condición (a qué tensión y con qué PA)."
+        },
+        "rx_sens_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja, POR SF Y ANCHO DE BANDA. Un solo número sin decir a qué SF se declara no significa nada."
+        },
+        "f_hz": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "del plan de canal, que sale de la normativa (EN 300 220-2 / ERC 70-03), no del módulo."
+        },
+        "gtx_dbi": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "HUECO DECLARADO: la antena de 3 dBi que hay en el modelo es la de la TCU, de 2,4 GHz. A 868 MHz hace falta OTRA antena y nadie la ha elegido. No se reutiliza el 3: una antena de otra banda no da la misma ganancia."
+        },
+        "grx_dbi": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "el mismo hueco, en el otro extremo."
+        },
+        "erp_max_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de ERC 70-03, anexo de 863-870 MHz. Es normativa, no módulo."
+        },
+        "ciclo_trabajo": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de ERC 70-03: el ciclo de trabajo depende de la sub-banda, no del módulo."
+        },
+        "norma": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "ETSI EN 300 220-2, con su versión."
+        }
+      }
     },
-
     "wisun_fan_863": {
-
       "procedencia": "pendiente",
       "nombre": "Wi-SUN FAN 863-870 MHz — PREDICCIÓN, sin campaña y sin datasheet leído",
       "f_hz": null,
@@ -357,7 +540,10 @@
       "gtx_dbi": null,
       "grx_dbi": null,
       "rx_sens_dbm": null,
-      "canal": { "valor": null, "procedencia": "pendiente" },
+      "canal": {
+        "valor": null,
+        "procedencia": "pendiente"
+      },
       "candidatos": {
         "_que_es": [
           "LOS MÓDULOS ENTRE LOS QUE HAY QUE ELEGIR, y la elección NO es un detalle:",
@@ -373,7 +559,18 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "VACÍA. Desde este entorno la red no llega a ninguna web de fabricante ni de distribuidor ni a etsi.org (probados y denegados por el proxy de salida: semtech, ti, silabs, microchip, st, mouser, digikey, etsi). Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_estado": "VACÍA. Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_la_red_2026_09_24": [
+          "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
+          "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
+          "—se descargó una hoja de 10,4 MB para comprobarlo, y la cadena de redirecciones",
+          "acaba en `docs.digi.com`—. `microchip.com` y `etsi.org` abren el túnel y devuelven",
+          "403 DE SU PROPIO servidor, que es anti-bot y no la lista de salida. `st.com` y",
+          "`mouser.es` dan timeout a los 20 s, con h2 y con HTTP/1.1.",
+          "",
+          "Se apunta la fecha porque este campo se queda viejo solo: decir «la red no llega»",
+          "sin decir cuándo se probó es lo mismo que no decir nada."
+        ],
         "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
         "lista": []
       },
@@ -384,10 +581,110 @@
         "plan_de_canal": "el plan de 863-870 MHz con su separación de canales, su e.r.p. máxima y su ciclo de trabajo, de la norma.",
         "f_hz": "sale del plan de canal."
       },
-      "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: multicast por MPL, pensado justo para una orden como el stow; y malla multisalto como Zigbee, con la MISMA dependencia de la profundidad — que es el parámetro que hoy no está medido para ninguna de las tres."
+      "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: multicast por MPL, pensado justo para una orden como el stow; y malla multisalto como Zigbee, con la MISMA dependencia de la profundidad — que es el parámetro que hoy no está medido para ninguna de las tres.",
+      "_citas": {
+        "_que_es": "Una ranura por número, VACÍA. Ninguno de estos se ha leído de un documento.",
+        "_una_variante_por_modo_PHY": [
+          "Wi-SUN FAN define VARIOS modos PHY, con distinta tasa e índice de modulación, y la",
+          "sensibilidad cambia con el modo. Igual que con los SF de LoRa: cada modo que la hoja",
+          "declare entra como UNA VARIANTE PROPIA, y entran TODOS, no una selección.",
+          "Si el orden entre tecnologías cambia según el modo, eso es el resultado."
+        ],
+        "ptx_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja del módulo, con su condición."
+        },
+        "rx_sens_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja, POR MODO PHY. Un número sin el modo no vale."
+        },
+        "f_hz": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "del plan de canal de la banda 863-870."
+        },
+        "gtx_dbi": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "HUECO DECLARADO: los 3 dBi del modelo son de la antena de TCU a 2,4 GHz. A sub-giga hace falta otra antena, sin elegir."
+        },
+        "grx_dbi": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "el mismo hueco, en el otro extremo."
+        },
+        "erp_max_dbm": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de ERC 70-03, anexo 863-870 MHz."
+        },
+        "ciclo_trabajo": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de ERC 70-03, por sub-banda."
+        },
+        "norma": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "ETSI EN 300 220-2, con su versión."
+        }
+      }
+    },
+    "_el_protocolo_de_la_tcu": {
+      "_que_es": "Los tres campos que el criterio `telemetria` exige (`tasa_bps`, `carga_util_b`, `periodo_s`) NO salen de ninguna hoja de datos: salen del protocolo real de la TCU, que vive en estos repos. Medido el 2026-09-24, con su fichero.",
+      "periodo_s": {
+        "valor": 30,
+        "clase": "declarado",
+        "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30 («ciclo completo de lectura por NCU»). Las HSU/RSU van aparte a 10 s (meteo_interval_s), «viento manda en seguridad»."
+      },
+      "carga_util_b": {
+        "valor": 44,
+        "clase": "declarado",
+        "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU: max_regs_per_read 110, limite Modbus 125."
+      },
+      "tasa_bps": {
+        "valor": null,
+        "clase": "pendiente",
+        "_de_donde": [
+          "MEDIDO: 19200, de Cobertura-Zigbee/tools/gen_modbus_map.mjs -> «SUNNER_TCU_ModbusMap v6,",
+          "FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245».",
+          "",
+          "PERO VA A `null` A PROPOSITO, Y ESTA ES LA RAZON: 19200 es la tasa del PUERTO SERIE",
+          "Modbus, no la capacidad de la radio. Si aqui se pone 19200 para Zigbee y la tasa PHY",
+          "para LoRa y Wi-SUN, el criterio de telemetria compara COSAS DISTINTAS y el resultado",
+          "no significa nada. Cual de las dos es la buena es una decision de modelado, no un dato",
+          "que se pueda leer: esta preguntada y sin contestar. Hasta entonces `telemetria` sale",
+          "como NO COMPARABLE, que es lo honesto."
+        ]
+      }
     }
   },
-
   "propagacion": {
     "_que_es": "Parámetros del medio. Pocos, y con significado físico.",
     "eps_r_suelo": {
@@ -396,7 +693,7 @@
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `epsR: 15.0`"
     },
     "sigma_suelo_s_m": {
-      "valor": 5e-3,
+      "valor": 0.005,
       "procedencia": "heredado",
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `sigmaGround: 5e-3`"
     },
@@ -412,7 +709,6 @@
       "_ojo": "Sin campaña calibrada, el motor va en modo TEÓRICO y lo rotula. NO se hereda el sigma del modelo antiguo: el 6,0 de `defaultParams()` es un valor de partida, no una medida, y el 10,99 de cobertura-rf-fv sale de un ajuste cuya correlación con la distancia es r = +0,16."
     }
   },
-
   "vegetacion": {
     "_que_es": "Follaje atravesado por el enlace. Depende de la frecuencia, así que NO es geometría.",
     "modelo": {
