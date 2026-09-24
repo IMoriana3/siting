@@ -37,6 +37,13 @@ GitHub Pages: https://imoriana3.github.io/siting/ · `.nojekyll` incluido. Sourc
 - El **chrome** (cabecera, panel, controles) es oscuro Factiun; el **lienzo técnico se mantiene claro a propósito**: las NCU se dibujan en navy con borde blanco, pensadas para fondo claro.
 - Limitaciones: sin persistencia; repetidores con radio directo (las cadenas mesh no se modelan — ver San José); cobertura en línea recta. Vía prevista de entrada: DWG → DXF (`ezdxf`).
 
+## El plan de la fase 4
+
+`docs/FASE4_VISOR.md` — los ocho puntos, con lo hecho, **lo que quedó fuera de
+cada punto hecho**, y lo que aún no está definido dicho como tal. Existe porque
+los puntos 6, 7 y 8 vivían sólo en una conversación, y un plan que no está en
+el repo se pierde en el primer corte de contexto.
+
 ## ⚠ EL CORTE: 2026-09-24, commit `aef8c53`
 
 **Cualquier captura, informe o decisión tomada sobre el mapa RF con fecha
