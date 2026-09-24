@@ -14,6 +14,7 @@
 <script src="radio_zigbee.js"></script><!-- la capa Zigbee: balance, variantes, lo que no se sabe apagado -->
 <script src="radio_malla.js"></script><!-- vecinos viables, saltos, articulaciones -->
 <script src="radio_tecnologias.js"></script><!-- el comparador por criterio: sin índice único, y un hueco no se rellena -->
+<script src="radio_escenario.js"></script><!-- el escenario guardable: URL o JSON, nunca almacenamiento del navegador -->
 <script src="terreno_planta.js"></script><!-- muestreo de <planta>_relieve.json, el MISMO que usa el 3D -->
 <script src="terreno_proyecto.js"></script><!-- el terreno que VIAJA CON EL PROYECTO: carga perezosa + sha -->
 <style>
@@ -330,6 +331,22 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
             leído <b>no da número</b>: dice qué le falta. Y se evalúa a varias horas porque el
             ángulo de las mesas mueve el margen hasta 27,8 dB.</div>
           <div id="cmp-out" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h3>Escenario</h3>
+        <div class="toggles">
+          <button class="btn btn-ghost" id="esc-guardar" style="width:100%">Guardar escenario</button>
+          <label class="tg" style="display:block;margin-top:6px">Cargar uno guardado (.json)
+            <input type="file" id="esc-fich" accept=".json,application/json" style="width:100%;margin-top:4px;font-size:11px"></label>
+          <div class="hint" style="font-size:10.5px;color:var(--muted-2);line-height:1.4;margin-top:6px">
+            Guarda planta, tecnología, hora, altura de eje, vegetación, terreno <b>con su
+            calidad</b>, posiciones de NCU y el <b>sha</b> de los parámetros. En la URL si cabe;
+            si no, un JSON. <b>Nada se guarda en el navegador.</b> Al abrir uno viejo se
+            compara el sha: si difiere, se avisa — nunca se pinta con los de hoy diciendo
+            que son los de entonces.</div>
+          <div id="esc-out" style="margin-top:8px"></div>
         </div>
       </div>
 
@@ -2986,6 +3003,135 @@ function cmpTabla(t){
   return h;
 }
 
+/* ══ EL ESCENARIO GUARDABLE (fase 4, punto 7) ══════════════════════════════
+   El formato y el careo los pone `radio_escenario.js`; aquí está lo que la
+   página aporta: de dónde sale cada campo, cómo se calculan los SHA, y qué se
+   enseña al abrir uno viejo.
+
+   LOS SHA SE CALCULAN SOBRE LOS BYTES DE VERDAD, no sobre lo que el fichero
+   dice de sí mismo: se vuelve a pedir `radio_params.json` y `radio_pv_model.js`
+   y se hashea lo que llega. Un `version: 3` escrito a mano no ata nada.
+
+   Y SI NO SE PUEDEN CALCULAR, VAN A `null` CON SU MOTIVO. `crypto.subtle` sólo
+   existe en contexto seguro: abierto con doble clic (file://) no está. Eso
+   NO se rellena con un placeholder — un escenario que dice tener sha y no lo
+   tiene compararía igual contra cualquier cosa. */
+async function escSha(texto){
+  try{
+    if(!(globalThis.crypto && globalThis.crypto.subtle)) return null;
+    const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+    return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("");
+  }catch(e){ return null; }
+}
+/* Devuelve {sha, texto} de UNA sola petición: el sha y el contenido se sacan de
+   los MISMOS bytes. Pedirlo dos veces —una para hashear y otra para leer— deja
+   la puerta abierta a que el fichero cambie entre las dos. */
+async function escBytes(url){
+  try{
+    const r = await fetch(url,{cache:"no-store"}); if(!r.ok) return {sha:null, texto:null};
+    const t = await r.text();
+    return {sha: await escSha(t), texto: t};
+  }catch(e){ return {sha:null, texto:null}; }
+}
+function escMotivoSha(){
+  if(!(globalThis.crypto && globalThis.crypto.subtle))
+    return "sin `crypto.subtle`: la página se ha abierto fuera de un contexto seguro (file://)";
+  return "no se ha podido leer el fichero para hashearlo";
+}
+async function escCaptura(){
+  const [pb, mb] = await Promise.all([escBytes("radio_params.json"), escBytes("radio_pv_model.js")]);
+  const pSha = pb.sha, mSha = mb.sha;
+  /* LOS PARÁMETROS SALEN DE LOS BYTES RECIÉN PEDIDOS, no de `rfParamsNuevo()`.
+     Ese devuelve `null` mientras nadie haya encendido la capa RF —se cargan
+     perezosamente— y el escenario salía con la mitad de los campos vacíos sin
+     que nada estuviera mal. Cazado probándolo en un navegador de verdad. */
+  let P = null;
+  try{ P = pb.texto ? JSON.parse(pb.texto) : rfParamsNuevo(); }catch(e){ P = rfParamsNuevo(); }
+  const ter = S.terreno;
+  return RadioEsc.captura({
+    ahora: new Date().toISOString(),
+    planta: S.planta || S.sc || null,
+    motor: rfMotor(),
+    variante: S.rf && S.rf.variante,
+    horaUTC: (S.rf && S.rf.sol && S.rf.sol.horaUTC) || null,
+    solOn: !!(S.rf && S.rf.sol && S.rf.sol.on),
+    ejeM: (P && P.geometria) ? RadioPV.alturaEje((S.p&&S.p.montaje)||null, P.geometria.eje_tubo_m.valor) : null,
+    cuerdaM: (S.bifila && S.bifila.cuerda) || null,
+    vegetacion: (P && P.vegetacion) ? {modelo: P.vegetacion.modelo.valor} : null,
+    /* EL TERRENO CON SU CALIDAD, y el caso «se intentó y no se pudo» distinto
+       del caso «no se intentó»: los dos se leen distinto y no se mezclan. */
+    terreno: ter ? {id: ter.id || ter.planta || null, ok: ter.ok !== false,
+                    calidad: ter.calidad || ter.fuente || null, sha256: ter.sha256 || null,
+                    motivo: ter.motivo || null}
+                 : {id: null, ok: null, calidad: null, sha256: null,
+                    motivo: "no se ha cargado terreno en esta sesión"},
+    ncus: (S.ncus||[]).map(n=>({id:n.id, x:n.x, y:n.y})),
+    paramsVersion: P ? P.version : null,
+    paramsSha: pSha, paramsShaMotivo: pSha ? null : escMotivoSha(),
+    motorSha: mSha, motorVersion: (globalThis.RadioPV && RadioPV._version) || null
+  });
+}
+async function escGuardar(){
+  const out = document.getElementById("esc-out"); if(!out) return;
+  out.innerHTML = '<div style="color:var(--muted-2);font-size:11.5px">Calculando los sha…</div>';
+  const esc = await escCaptura();
+  const v = RadioEsc.valida(esc);
+  const base = location.href.split("#")[0];
+  const u = RadioEsc.aUrl(esc, base);
+  const esc_ = RadioEsc.aTexto(esc);
+  let h = "";
+  if(!v.ok) h += '<div style="color:#e0322c;font-size:11.5px">Le falta '+v.faltan.join(", ")+
+                 ': este escenario NO es reproducible.</div>';
+  else if(!v.reproducible) h += '<div style="color:#e0a72c;font-size:11.5px">Se guarda, pero '+
+                 'SIN sha de parámetros: al abrirlo no se podrá saber si son los mismos.</div>';
+  if(v.avisos.length) h += '<div style="color:var(--muted-2);font-size:10.5px">'+v.avisos.join(" · ")+'</div>';
+  if(u.cabe){
+    location.hash = "esc=" + u.url.split("#esc=")[1];
+    h += '<div style="color:#2f9e54;font-size:11.5px;margin-top:4px">Está en la URL de esta '+
+         'página ('+u.bytes+' de '+u.limite+' caracteres): cópiala y ya está.</div>';
+  }else{
+    h += '<div style="color:#e0a72c;font-size:11.5px;margin-top:4px">'+u.motivo+'</div>';
+  }
+  const b = new Blob([esc_],{type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(b);
+  a.download = "escenario_"+(esc.planta||"planta")+".json"; a.textContent = "⬇ descargar el JSON";
+  a.style.cssText = "display:inline-block;margin-top:6px;color:var(--blue);font-size:11.5px";
+  out.innerHTML = h; out.appendChild(a);
+}
+/* AL ABRIR UNO VIEJO. Lo único que esta función NO hace es pintar con los
+   parámetros de hoy diciendo que son los de entonces. Si el sha difiere —o no
+   se puede saber— lo dice y ofrece recalcular; aplicar el escenario es una
+   decisión de quien mira, no de la página. */
+async function escAplica(esc, comoVino){
+  const out = document.getElementById("esc-out"); if(!out) return;
+  const v = RadioEsc.valida(esc);
+  if(!v.ok){ out.innerHTML = '<div style="color:#e0322c;font-size:11.5px">No es un escenario '+
+    'utilizable: le falta '+v.faltan.join(", ")+'.</div>'; return; }
+  const [pb2, mb2] = await Promise.all([escBytes("radio_params.json"), escBytes("radio_pv_model.js")]);
+  const pSha = pb2.sha, mSha = mb2.sha;
+  const P = rfParamsNuevo();
+  const c = RadioEsc.carea(esc, {paramsSha:pSha, motorSha:mSha, paramsVersion:P?P.version:null});
+  const col = c.estado==="igual" ? "#2f9e54" : "#e0a72c";
+  let h = '<div style="color:var(--muted-2);font-size:10.5px">escenario '+comoVino+
+          (esc._guardado?' · guardado '+esc._guardado.slice(0,16).replace("T"," "):"")+'</div>'+
+          '<div style="color:'+col+';font-size:11.5px;margin-top:4px">'+c.texto+'</div>';
+  if(c.estado!=="igual"){
+    h += '<div style="font-size:10.5px;color:var(--muted-2);margin-top:4px">'+
+         c.diferencias.filter(x=>x.estado!=="igual").map(x=>
+           x.campo+": entonces "+String(x.entonces||"—").slice(0,12)+"… · ahora "+
+           String(x.ahora||"—").slice(0,12)+"…").join("<br>")+'</div>';
+  }
+  out.innerHTML = h;
+  /* Lo que SÍ se aplica sin riesgo: lo que el propio escenario trae. Lo que NO
+     se toca son los parámetros — si difieren, difieren, y se ve. */
+  if(esc.variante && S.rf) S.rf.variante = esc.variante;
+  if(esc.motor) S.rf.motor = esc.motor;
+  if(esc.hora_utc != null && S.rf && S.rf.sol){ S.rf.sol.horaUTC = esc.hora_utc; S.rf.sol.on = !!esc.sol_on; }
+  S._rfRows = null; S._covSig = null;
+  if(typeof draw === "function") draw();
+  if(typeof renderLegend === "function") renderLegend();
+}
+
 /* ══ EL VEREDICTO DE UN ENLACE, Y POR QUÉ POR DEFECTO NO ES UN dB ═══════════
    (fase 4, punto 5)
 
@@ -4665,6 +4811,27 @@ document.getElementById("zoom-out").onclick=()=>zoomBy(1/1.45);
    ver el comentario de `cmpCorrer`. */
 document.getElementById("cmp-run").onclick=cmpCorrer;
 cmpPinta();
+/* EL ESCENARIO. Guardar a botón; cargar por fichero o por la propia URL, que es
+   lo que hace que se pueda pasar a otro. */
+document.getElementById("esc-guardar").onclick=escGuardar;
+document.getElementById("esc-fich").onchange=function(){
+  const f=this.files&&this.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ let e=null;
+    try{ e=JSON.parse(r.result); }
+    catch(err){ document.getElementById("esc-out").innerHTML=
+      '<div style="color:#e0322c;font-size:11.5px">Ese fichero no es un escenario: '+err.message+'</div>'; return; }
+    escAplica(e,"cargado del fichero «"+f.name+"»"); };
+  r.readAsText(f);
+};
+/* Y si la URL trae uno, se abre solo: es el caso de «te paso el enlace». */
+try{
+  const _e=RadioEsc.deUrl(location.hash);
+  if(_e) escAplica(_e,"venido en la URL");
+}catch(err){
+  const _o=document.getElementById("esc-out");
+  if(_o) _o.innerHTML='<div style="color:#e0322c;font-size:11.5px">'+err.message+'</div>';
+}
 /* ===================== Arranque ===================== */
 S.motors=scenario("compacta");
 resize(); recomputeNewData();

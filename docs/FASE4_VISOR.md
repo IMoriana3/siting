@@ -295,6 +295,37 @@ entonces — que es exactamente lo que pasó con las capturas del motor antiguo.
 
 El escenario lleva **su propia versión de formato** y el **commit del motor**.
 
+### Estado el 2026-09-24: HECHO
+
+`radio_escenario.js` + el panel «Escenario» del visor. Guarda planta, motor,
+variante, hora UTC absoluta, altura de eje, cuerda, vegetación, **terreno con su
+calidad** (y el caso «no se intentó» distinto de «se intentó y no se pudo»),
+posiciones de NCU, y el **sha256** de `radio_params.json` y de
+`radio_pv_model.js`.
+
+**El sha y no la versión.** `version: 3` se puede escribir a mano sin que el
+contenido cambie. Lo que ata son los bytes. Y el **commit** del motor, que el
+encargo pedía, esta página **no lo sabe** —un HTML de Pages no conoce su commit—
+así que va a `null` con su motivo y en su lugar está el sha, que identifica más.
+
+**Un sha que falta NO compara igual.** Sin `crypto.subtle` (contexto no seguro)
+el escenario lo dice, y al abrirlo el careo responde «**no se puede saber**», que
+no es «son iguales».
+
+**En la URL si cabe** (medido: un escenario de El Burgo ocupa 1.073 de los 2.000
+caracteres del límite práctico), y si no, JSON que se descarga. **Nada en el
+navegador**, y hay una comprobación que mira el fuente —sin comentarios— para que
+siga siendo verdad.
+
+**Probado en un navegador de verdad**, y encontró un defecto: `escCaptura` leía
+los parámetros de `rfParamsNuevo()`, que devuelve `null` mientras nadie haya
+encendido la capa RF, y el escenario salía con la mitad de los campos vacíos sin
+que nada estuviera mal. Ahora salen de los bytes recién pedidos — los MISMOS que
+se hashean.
+
+Banco: `tests/test_escenario.js`, **52 comprobaciones, 8 mutaciones** en `rc = 1`,
+dos de ellas sobre el bloque del `index.html` real.
+
 ## 8 · Informe
 
 ### Formato

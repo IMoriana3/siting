@@ -405,6 +405,12 @@ jobs:
           rojo node tests/test_comparador_visor.js huecoMudo huecoSinMotivo noDevuelveVariante \
                                                    noDevuelveHora sinGuardiaHoras sinLetraPequena
 
+          # el escenario guardable: un sha que falta NO compara igual, y nada
+          # se guarda en el navegador
+          rojo node tests/test_escenario.js huecoEsIgual sinRecalcular sinFormato textoInestable \
+                                            shaOpcional urlSiempreCabe paginaRellenaSha \
+                                            paginaGuardaEnNavegador
+
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
                                                    py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \
                                                    py_sin_guarda js_sin_guarda js_guarda_todo \

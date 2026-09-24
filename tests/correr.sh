@@ -50,6 +50,7 @@ declare -A PISO=(
   [test_censo_motivos.js]=19
   [test_comparador.js]=42
   [test_comparador_visor.js]=19
+  [test_escenario.js]=52
   [test_cov_heatmap.js]=60
   [test_estadistica.js]=35
   [test_radio_geom.js]=79
