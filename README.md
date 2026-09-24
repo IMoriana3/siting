@@ -37,29 +37,75 @@ GitHub Pages: https://imoriana3.github.io/siting/ · `.nojekyll` incluido. Sourc
 - El **chrome** (cabecera, panel, controles) es oscuro Factiun; el **lienzo técnico se mantiene claro a propósito**: las NCU se dibujan en navy con borde blanco, pensadas para fondo claro.
 - Limitaciones: sin persistencia; repetidores con radio directo (las cadenas mesh no se modelan — ver San José); cobertura en línea recta. Vía prevista de entrada: DWG → DXF (`ezdxf`).
 
-## Si estás mirando una captura del mapa anterior al 2026-09-24
+## ⚠ EL CORTE: 2026-09-24, commit `aef8c53`
 
-Hasta esa fecha el bucle de dibujado pintaba los puntos TCU con el modelo
-**congelado** (`rfMargin`, con `EL_BURGO_BIAS_DB` = −33,6 dB dentro), saltándose
-la puerta única, mientras el panel de perfil usaba el motor nuevo. Medido sobre
-6.035 enlaces de 10 plantas (`node tools/careo_motores_mapa.mjs`):
+**Cualquier captura, informe o decisión tomada sobre el mapa RF con fecha
+anterior al 24-09-2026 lleva el MOTOR ANTIGUO.** El corte es exacto: lo cambia
+el commit `aef8c53` («Fase 4 · punto 5»), que es el que hace pasar el bucle de
+dibujado por `rfMargenDe` en vez de por `rfMargin`.
+
+Hasta ese commit el bucle pintaba los puntos TCU con el modelo **congelado**
+(`rfMargin`, con `EL_BURGO_BIAS_DB` = −33,6 dB dentro), saltándose la puerta
+única, mientras el panel de perfil usaba el motor nuevo: el color del punto y
+el número del panel podían venir de dos motores distintos en el mismo enlace.
+
+Medido sobre 6.035 enlaces de 10 plantas — `node tools/careo_motores_mapa.mjs`:
 
 | | |
 |---|---|
 | diferencia mediana (viejo − nuevo) | **−20,0 dB** — el mapa era PESIMISTA |
-| puntos en otra banda de color | **74 %** |
-| puntos al otro lado del umbral de 8 dB de la anilla | **39 %** |
+| puntos en otra banda de color | **74 %** (4.440 de 6.035) |
+| puntos al otro lado del umbral de 8 dB de la anilla | **39 %** (2.364) |
 
-Para casi todo es un corrimiento de banda, no un cambio de veredicto. **La
-excepción es Bagnarelli**: 7 de sus 17 enlaces salían con −153, −146 y −132 dB
-donde el motor nuevo da de 13 a 41. Casi media planta se veía en rojo oscuro
-por valores imposibles del congelado. **Lo que se decidiera mirando ese mapa
-hay que rehacerlo.**
+Para nueve de las diez plantas es un **corrimiento de banda**: el veredicto de
+fondo no cambia, sólo el color. Hay una excepción, y no es menor.
 
-Y desde el 2026-09-24 el color del punto ya no es un dB por defecto sino el
-ESTADO del enlace (libre / rozando / tapado): los parámetros de radio son
-heredados, `sigma_db` está sin calibrar y el canal es desconocido, así que ese
-margen no es una predicción. El dB vuelve solo en cuanto haya campaña. La
-leyenda de la capa lo dice en pantalla.
+### BAGNARELLI ES OTRA COSA: ahí el veredicto se invierte
+
+`node tools/careo_motores_mapa.mjs --planta bagnarelli`
+
+| seguidor | D (m) | VIEJO dB | color viejo | NUEVO dB | color nuevo |
+|---|---|---|---|---|---|
+| TK005 |  41,0 |    18,3 | verde claro |  51,0 | verde |
+| TK008 |  50,0 |    10,2 | ámbar       |  42,7 | verde |
+| TK002 |  56,5 | **−132,5** | rojo oscuro |  40,7 | verde |
+| TK011 |  60,0 |     1,9 | rojo        |  34,1 | verde |
+| TK014 |  70,7 | **−153,1** | rojo oscuro |  22,4 | verde claro |
+| TK017 |  81,7 |    −7,0 | rojo oscuro |  17,7 | verde claro |
+| TK004 |  96,5 | **−134,1** | rojo oscuro |  32,1 | verde |
+| TK007 | 103,3 |     8,0 | rojo        |  30,3 | verde |
+| TK010 | 111,0 | **−153,5** | rojo oscuro |  17,4 | verde claro |
+| TK001 | 113,2 |    16,9 | verde claro |  34,0 | verde |
+| TK013 | 119,4 |    −9,1 | rojo oscuro |  16,5 | verde claro |
+| TK016 | 128,4 |   −10,7 | rojo oscuro |   9,6 | ámbar |
+| TK003 | 138,5 | **−146,9** | rojo oscuro |  20,5 | verde claro |
+| TK006 | 144,8 |     3,9 | rojo        |  24,4 | verde claro |
+| TK009 | 151,7 | **−157,5** | rojo oscuro |  13,4 | ámbar |
+| TK012 | 173,1 |   −13,4 | rojo oscuro |   3,9 | rojo |
+| TK015 | 181,0 | **−160,8** | rojo oscuro |  −2,6 | rojo oscuro |
+
+**10 de los 17 enlaces pasan de margen NEGATIVO a POSITIVO.** 12 entran o salen
+de la anilla de «sin enlace» y 16 cambian de color. El mapa viejo enseñaba 12
+de 17 en rojo oscuro — una planta prácticamente muerta — donde el motor nuevo
+da 9,6 dB o más en 15 de 17. Los siete valores de −132 a −161 dB son
+**imposibles**: no son una predicción pesimista, son el modelo congelado
+descolgándose en esa geometría.
+
+> **Si alguien decidió algo sobre Bagnarelli mirando ese mapa —dónde va la NCU,
+> si hacía falta un repetidor, si la planta necesitaba otra cosa— hay que
+> rehacerlo.** No es un ajuste de tono: es que el mapa decía «no llega» donde
+> llega con 20 a 50 dB de sobra.
+
+Sólo TK015 sigue sin margen con los dos motores (−160,8 → −2,6), y ahí el
+veredicto de «no llega» se sostiene.
+
+### Y desde ese mismo commit, el color ya no es un dB
+
+Los parámetros de radio son heredados del modelo congelado, `sigma_db` está sin
+calibrar y el canal es desconocido —hasta 16 dB de recorrido—, así que ese
+margen no es una predicción. El color del punto es el **estado** del enlace
+(libre / rozando / tapado), que sale de ν y no depende de nada de eso. El dB
+vuelve solo en cuanto haya campaña calibrada. La leyenda de la capa lo dice en
+pantalla, con su rótulo de procedencia.
 
 *Factiun · proyecto interno.*

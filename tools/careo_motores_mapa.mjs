@@ -51,6 +51,7 @@
  * DICE, con su recuento, en vez de barrerse.
  *
  *   node tools/careo_motores_mapa.mjs
+ *   node tools/careo_motores_mapa.mjs --planta bagnarelli   (enlace a enlace)
  *
  * rc = 0 medido · 2 no se ha podido medir (no es un verde)
  */
@@ -64,6 +65,11 @@ if (!DIR) { console.log('SIN ALCANCE: no encuentro el repo hermano con los layou
 const PISO_PLANTAS = 8;   // MEDIDO el 2026-09-24: 10 plantas declaran NCU de 12
 const BANDAS = [[0, 25], [25, 50], [50, 75], [75, 100], [100, 150], [150, 250], [250, 1e9]];
 const UMBRAL_ANILLA = 8;  // el mismo con el que el mapa anillaba «sin enlace»
+
+/* UNA PLANTA, ENLACE A ENLACE. Para las que salen con INVERSIÓN y no con
+   corrimiento, la mediana no vale: hay que poder mirar cada enlace. */
+const iP = process.argv.indexOf('--planta');
+const SOLA = iP >= 0 ? process.argv[iP + 1] : null;
 
 const layouts = fs.readdirSync(DIR).filter(f => /_layout\.json$/.test(f)).sort();
 if (!layouts.length) { console.log('SIN ALCANCE: no hay layouts en ' + DIR); process.exit(2); }
@@ -81,6 +87,7 @@ let conNcu = 0, sinNcu = [], sinGw = 0;
 for (const f of layouts) {
   const planta = f.replace('_layout.json', '');
   const layout = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8'));
+  if (SOLA && planta !== SOLA) continue;
   if (!(layout.ncus || []).length) { sinNcu.push(planta); continue; }
   conNcu++;
   let ctx, S, rows;
@@ -95,8 +102,31 @@ for (const f of layouts) {
     const p = { x: m.x, y: m.y };
     const viejo = ctx.rfMargin(n, p, rows);
     const nuevo = ctx.rfEnlace(n, p, rows).margenDb;
-    todo.push({ planta, D: Math.hypot(p.x - n.x, p.y - n.y), viejo, nuevo });
+    const r = ctx.rfEnlace(n, p, rows);
+    todo.push({ planta, id: m.id, D: Math.hypot(p.x - n.x, p.y - n.y), viejo, nuevo,
+                estado: r.estado && r.estado.estado, difrac: r.difraccionDb });
   }
+}
+
+if (SOLA) {
+  const s = todo.filter(x => x.nuevo != null).sort((a, b) => a.D - b.D);
+  if (!s.length) { console.log('SIN ALCANCE: «' + SOLA + '» no tiene enlaces evaluables.'); process.exit(2); }
+  const col = v => v < 0 ? 'rojo oscuro' : v < 8 ? 'rojo' : v < 16 ? 'ámbar' : v < 25 ? 'verde claro' : 'verde';
+  console.log('── ' + SOLA.toUpperCase() + ', ENLACE A ENLACE ──\n');
+  console.log(pad('seguidor', 10) + pd('D (m)', 8) + pd('VIEJO dB', 10) + pd('color viejo', 14) +
+              pd('NUEVO dB', 10) + pd('color nuevo', 14) + pd('difrac', 8) + '  estado');
+  for (const x of s)
+    console.log(pad(x.id, 10) + pd(x.D.toFixed(1), 8) + pd(x.viejo.toFixed(1), 10) +
+                pd(col(x.viejo), 14) + pd(x.nuevo.toFixed(1), 10) + pd(col(x.nuevo), 14) +
+                pd(x.difrac == null ? '—' : x.difrac.toFixed(1), 8) + '  ' + (x.estado || '—'));
+  const inv = s.filter(x => (x.viejo < 0) !== (x.nuevo < 0));
+  const anilla = s.filter(x => (x.viejo < UMBRAL_ANILLA) !== (x.nuevo < UMBRAL_ANILLA));
+  console.log('\nde ' + s.length + ' enlaces:');
+  console.log('  pasaban de margen NEGATIVO a positivo: ' + inv.length + '  ← inversión de veredicto');
+  console.log('  entran o salen de la anilla de 8 dB:   ' + anilla.length);
+  console.log('  el color cambia en:                    ' +
+              s.filter(x => col(x.viejo) !== col(x.nuevo)).length);
+  process.exit(0);
 }
 
 console.log('alcance: ' + conNcu + ' plantas con NCU declarada de ' + layouts.length +
