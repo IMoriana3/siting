@@ -78,14 +78,20 @@
        cartera instrumenta un round-trip». Va declarado para que la tabla diga
        que falta, en vez de callarse el criterio más importante. */
     latencia_stow:       BALANCE.concat(["t_salto_s"]),
-    telemetria:          ["tasa_bps", "carga_util_b", "periodo_s"],
+    /* DOS TASAS, Y HACEN FALTA LAS DOS. `tasa_bps` es la capacidad de la RADIO
+       —lo único comparable entre tecnologías, que es para lo que existe el
+       campo— y `tasa_serie_bps` es el puerto serie Modbus de la TCU, un límite
+       DEL SISTEMA que no se mueve al cambiar de radio. Sin la segunda, este
+       criterio publicaría una ocupación de radio que el serie no deja alcanzar:
+       un número correcto sobre una pregunta que no es la que importa. */
+    telemetria:          ["tasa_bps", "tasa_serie_bps", "carga_util_b", "periodo_s"],
     legalidad:           ["norma", "erp_max_dbm", "ciclo_trabajo"]
   };
 
   var UNIDAD = {
     tcu_cubiertas: "TCU", tcu_sin_alternativa: "TCU", ncu_necesarias: "NCU",
     saltos_max: "saltos", saltos_mediano: "saltos", latencia_stow: "s",
-    telemetria: "% de la disponible", legalidad: null
+    telemetria: "% del puerto, por UNA TCU", legalidad: null
   };
 
   var ROTULO = {
@@ -182,6 +188,41 @@
     out.ncu_necesarias = celda(raices.length, UNIDAD.ncu_necesarias, "plano",
                                { min: raices.length, max: raices.length,
                                  motivo: "las declaradas en el layout; este comparador NO propone otras" });
+    /* ── TELEMETRÍA: cuánta de la capacidad disponible se lleva el sondeo ───
+     * Y LO QUE DE VERDAD APORTA, que no es el porcentaje: DECIR CUÁL MANDA.
+     * El enlace tiene dos estrangulamientos en serie —la radio y el puerto
+     * serie Modbus de la TCU— y manda el más lento. Si manda el serie, este
+     * número NO CAMBIA al cambiar de tecnología, así que comparar radios aquí
+     * no decide nada; y eso es un resultado, no un empate.
+     *
+     * Publicarlo sólo contra la radio sería peor que no publicarlo: daría tres
+     * columnas distintas sugiriendo que la elección mueve algo que no mueve. */
+    if (!out.telemetria) {
+      var rf = variante.tasa_bps, ser = variante.tasa_serie_bps;
+      var manda = (ser < rf) ? "serie" : "radio";
+      var tasaEf = Math.min(rf, ser);
+      var pct = 100 * (variante.carga_util_b * 8) / (variante.periodo_s * tasaEf);
+      /* ES POR UNA TCU, Y ESO HAY QUE DECIRLO. El dato de partida —44 B cada
+         30 s— es de UNA TCU, así que el porcentaje también. La cifra que de
+         verdad interesa es la del PUERTO, con todas las TCU que cuelgan de esa
+         NCU compartiéndolo; y ésa no se publica aquí porque este comparador NO
+         sabe cuántas TCU cuelga cada NCU: sabe cuántas hay y cuántas NCU, no el
+         reparto. Repartirlas a partes iguales sería inventarse la asignación.
+         Un «0,06 %» sin el «por TCU» al lado se lee como holgura enorme, y con
+         145 TCU en un puerto la cuenta es otra. */
+      var motivoCuello = manda === "serie"
+        ? "EL CUELLO ES EL PUERTO SERIE (" + ser + " b/s) y no la radio (" + rf +
+          " b/s): este número no se mueve al cambiar de tecnología, así que aquí " +
+          "la comparación entre radios NO decide nada."
+        : null;
+      out.telemetria = celda(pct, UNIDAD.telemetria, "predicho", {
+        min: pct, max: pct, manda: manda, tasa_efectiva_bps: tasaEf,
+        por: "una TCU",
+        falta_para_el_puerto: "cuántas TCU cuelgan de cada NCU; este comparador no lo sabe y no lo reparte a ojo",
+        motivo: motivoCuello
+      });
+    }
+
     out._porHora = porHora;
     /* SI LA MALLA ES UN ÁRBOL, «sin camino alternativo» no informa: en un árbol
        lo es todo el que cuelgue de alguien. Va dicho, como en `analiza()`. */
@@ -238,6 +279,20 @@
       if (ga) { mejor = vivos[a]; break; }
     }
     if (mejor) return { estado: "gana", texto: "gana " + mejor, gana: mejor, sinDato: sinDato };
+
+    /* UN EMPATE CON CAUSA NO ES EL MISMO EMPATE. Si en TODAS las tecnologías
+       vivas manda el puerto serie, estas columnas no empatan «por poco»:
+       empatan porque el número que publican no depende de la radio. Decir
+       «no distinguible» a secas invitaría a buscar el desempate donde no lo
+       hay; decir por qué cierra la pregunta. */
+    var porSerie = vivos.filter(function (n) { return porTec[n].manda === "serie"; });
+    if (criterio === "telemetria" && porSerie.length === vivos.length) {
+      return { estado: "no_distinguible", mandaElSerie: true, sinDato: sinDato,
+               texto: "no distingue, y se sabe por qué: en las " + vivos.length +
+                      " manda el PUERTO SERIE de la TCU (" + porTec[vivos[0]].tasa_efectiva_bps +
+                      " b/s), no la radio. Cambiar de tecnología no mueve este número." };
+    }
+
     empate = true;
     return { estado: "no_distinguible",
              texto: "no distinguible con lo medido: los recorridos se solapan",

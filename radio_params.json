@@ -314,6 +314,38 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "la misma antena, en el otro extremo."
+        },
+        "carga_util_b": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU (max_regs_per_read 110; limite Modbus 125). MEDIDO el 2026-09-24."
+        },
+        "periodo_s": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30, «ciclo completo de lectura por NCU». Las HSU/RSU van aparte a 10 s (meteo_interval_s). MEDIDO el 2026-09-24."
+        },
+        "tasa_serie_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "Cobertura-Zigbee/tools/gen_modbus_map.mjs: «SUNNER_TCU_ModbusMap v6, FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245». MEDIDO el 2026-09-24. Es LIMITE DEL SISTEMA, no de la radio: no cambia al cambiar de tecnologia."
+        },
+        "tasa_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "250 kbps, la tasa PHY de 802.15.4 en 2,4 GHz (O-QPSK). DECLARADO POR INAKI el 2026-09-24, no leido del IEEE 802.15.4: por eso la clase es `declarado` y no `norma`. Cuando se cite el estandar (documento, version, pagina, fecha) pasa a `norma` y la cita se rellena."
         }
       },
       "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada.",
@@ -337,7 +369,11 @@
           "MIENTRAS SEA `null`, la variante PRO va rotulada como NO VERIFICADA y su margen es una",
           "cota superior, no una predicción. No se supone el canal: se lee."
         ]
-      }
+      },
+      "carga_util_b": 44,
+      "periodo_s": 30,
+      "tasa_serie_bps": 19200,
+      "tasa_bps": 250000
     },
     "zigbee_std_24": {
       "procedencia": "heredado",
@@ -381,8 +417,44 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "la misma antena, en el otro extremo."
+        },
+        "carga_util_b": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU (max_regs_per_read 110; limite Modbus 125). MEDIDO el 2026-09-24."
+        },
+        "periodo_s": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30, «ciclo completo de lectura por NCU». Las HSU/RSU van aparte a 10 s (meteo_interval_s). MEDIDO el 2026-09-24."
+        },
+        "tasa_serie_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "Cobertura-Zigbee/tools/gen_modbus_map.mjs: «SUNNER_TCU_ModbusMap v6, FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245». MEDIDO el 2026-09-24. Es LIMITE DEL SISTEMA, no de la radio: no cambia al cambiar de tecnologia."
+        },
+        "tasa_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "250 kbps, la tasa PHY de 802.15.4 en 2,4 GHz (O-QPSK). DECLARADO POR INAKI el 2026-09-24, no leido del IEEE 802.15.4: por eso la clase es `declarado` y no `norma`. Cuando se cite el estandar (documento, version, pagina, fecha) pasa a `norma` y la cita se rellena."
         }
-      }
+      },
+      "carga_util_b": 44,
+      "periodo_s": 30,
+      "tasa_serie_bps": 19200,
+      "tasa_bps": 250000
     },
     "_las_dos_de_sub_giga": [
       "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
@@ -529,8 +601,44 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "ETSI EN 300 220-2, con su versión."
+        },
+        "carga_util_b": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU (max_regs_per_read 110; limite Modbus 125). MEDIDO el 2026-09-24."
+        },
+        "periodo_s": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30, «ciclo completo de lectura por NCU». Las HSU/RSU van aparte a 10 s (meteo_interval_s). MEDIDO el 2026-09-24."
+        },
+        "tasa_serie_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "Cobertura-Zigbee/tools/gen_modbus_map.mjs: «SUNNER_TCU_ModbusMap v6, FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245». MEDIDO el 2026-09-24. Es LIMITE DEL SISTEMA, no de la radio: no cambia al cambiar de tecnologia."
+        },
+        "tasa_bps": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja del modulo, POR SF: en LoRa la tasa util cambia con el factor de ensanchado y el ancho de banda, igual que la sensibilidad. Cada SF entra como variante propia con SU tasa."
         }
-      }
+      },
+      "carga_util_b": 44,
+      "periodo_s": 30,
+      "tasa_serie_bps": 19200,
+      "tasa_bps": null
     },
     "wisun_fan_863": {
       "procedencia": "pendiente",
@@ -653,36 +761,63 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "ETSI EN 300 220-2, con su versión."
+        },
+        "carga_util_b": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU (max_regs_per_read 110; limite Modbus 125). MEDIDO el 2026-09-24."
+        },
+        "periodo_s": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30, «ciclo completo de lectura por NCU». Las HSU/RSU van aparte a 10 s (meteo_interval_s). MEDIDO el 2026-09-24."
+        },
+        "tasa_serie_bps": {
+          "clase": "declarado",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "Cobertura-Zigbee/tools/gen_modbus_map.mjs: «SUNNER_TCU_ModbusMap v6, FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245». MEDIDO el 2026-09-24. Es LIMITE DEL SISTEMA, no de la radio: no cambia al cambiar de tecnologia."
+        },
+        "tasa_bps": {
+          "clase": "pendiente",
+          "documento": null,
+          "version": null,
+          "pagina": null,
+          "leido_el": null,
+          "_de_donde": "de la hoja del modulo, POR MODO PHY: Wi-SUN FAN define varios y la tasa cambia con el modo. Cada modo entra como variante propia con SU tasa."
         }
-      }
+      },
+      "carga_util_b": 44,
+      "periodo_s": 30,
+      "tasa_serie_bps": 19200,
+      "tasa_bps": null
     },
     "_el_protocolo_de_la_tcu": {
-      "_que_es": "Los tres campos que el criterio `telemetria` exige (`tasa_bps`, `carga_util_b`, `periodo_s`) NO salen de ninguna hoja de datos: salen del protocolo real de la TCU, que vive en estos repos. Medido el 2026-09-24, con su fichero.",
-      "periodo_s": {
-        "valor": 30,
-        "clase": "declarado",
-        "_de_donde": "SCADA/config/plants.yml -> polling.interval_s: 30 («ciclo completo de lectura por NCU»). Las HSU/RSU van aparte a 10 s (meteo_interval_s), «viento manda en seguridad»."
-      },
-      "carga_util_b": {
-        "valor": 44,
-        "clase": "declarado",
-        "_de_donde": "SCADA/collector/traffic.py map_params() -> stride 22 registros por TCU x 2 bytes. Se leen en lotes de 5 TCU: max_regs_per_read 110, limite Modbus 125."
-      },
-      "tasa_bps": {
-        "valor": null,
-        "clase": "pendiente",
-        "_de_donde": [
-          "MEDIDO: 19200, de Cobertura-Zigbee/tools/gen_modbus_map.mjs -> «SUNNER_TCU_ModbusMap v6,",
-          "FW v1.4.3, por RTU a 19200 8E1, ID de fabrica 245».",
-          "",
-          "PERO VA A `null` A PROPOSITO, Y ESTA ES LA RAZON: 19200 es la tasa del PUERTO SERIE",
-          "Modbus, no la capacidad de la radio. Si aqui se pone 19200 para Zigbee y la tasa PHY",
-          "para LoRa y Wi-SUN, el criterio de telemetria compara COSAS DISTINTAS y el resultado",
-          "no significa nada. Cual de las dos es la buena es una decision de modelado, no un dato",
-          "que se pueda leer: esta preguntada y sin contestar. Hasta entonces `telemetria` sale",
-          "como NO COMPARABLE, que es lo honesto."
-        ]
-      }
+      "_que_es": "El protocolo de la TCU no cambia porque cambie la radio, asi que estos tres campos son IGUALES en las cuatro variantes. Estan repetidos en cada una porque el comparador los lee de la variante; esta nota es donde se explica por que coinciden.",
+      "_las_dos_tasas": [
+        "SON DOS COSAS DISTINTAS Y HACEN FALTA LAS DOS:",
+        "",
+        "  tasa_bps        la CAPACIDAD DE LA RADIO. Es lo unico comparable entre",
+        "                  tecnologias, que es para lo que existe el campo.",
+        "  tasa_serie_bps  el puerto SERIE Modbus de la TCU, 19200 8E1. Es un limite",
+        "                  DEL SISTEMA: no se mueve al cambiar de radio.",
+        "",
+        "Y por eso el criterio de telemetria dice CUAL MANDA. Si el serie es mas lento",
+        "que la radio, el cuello es el serie, este numero no cambia al cambiar de",
+        "tecnologia, y la comparacion entre radios NO DECIDE NADA ahi. Eso tambien es un",
+        "resultado, y sale escrito en vez de deducirse de que las tres columnas empaten.",
+        "",
+        "Con lo de hoy: 19200 contra 250000 en Zigbee. El cuello es el serie, y por un",
+        "factor de trece."
+      ]
     }
   },
   "propagacion": {
