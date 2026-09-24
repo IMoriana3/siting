@@ -13,6 +13,7 @@
 <script src="radio_pv_model.js"></script><!-- motor NUEVO: geometría de banda + física por frecuencia -->
 <script src="radio_zigbee.js"></script><!-- la capa Zigbee: balance, variantes, lo que no se sabe apagado -->
 <script src="radio_malla.js"></script><!-- vecinos viables, saltos, articulaciones -->
+<script src="radio_tecnologias.js"></script><!-- el comparador por criterio: sin índice único, y un hueco no se rellena -->
 <script src="terreno_planta.js"></script><!-- muestreo de <planta>_relieve.json, el MISMO que usa el 3D -->
 <script src="terreno_proyecto.js"></script><!-- el terreno que VIAJA CON EL PROYECTO: carga perezosa + sha -->
 <style>
@@ -315,6 +316,21 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <div id="warn"></div>
         <button class="btn btn-primary" id="eq-pdf2" style="width:100%;margin-top:10px">⬇ Informe (PDF)</button>
         <button class="btn btn-ghost" id="eq-open" style="width:100%;margin-top:8px">Listado de equipos</button>
+      </div>
+
+      <div class="sec">
+        <h3>Comparador de tecnologías</h3>
+        <div class="toggles">
+          <div id="cmp-tecs" style="display:flex;flex-direction:column;gap:3px"></div>
+          <label class="tg" style="display:block;margin-top:6px">Horas UTC (mínimo dos, separadas por comas)
+            <input type="text" id="cmp-horas" value="8,12,16" style="width:100%;margin-top:4px;padding:5px;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;font:12px 'IBM Plex Mono',monospace"></label>
+          <button class="btn btn-ghost" id="cmp-run" style="width:100%;margin-top:8px">Comparar</button>
+          <div class="hint" style="font-size:10.5px;color:var(--muted-2);line-height:1.4;margin-top:6px">
+            Tabla <b>por criterio</b>, sin puntuación agregada. Una tecnología sin datasheet
+            leído <b>no da número</b>: dice qué le falta. Y se evalúa a varias horas porque el
+            ángulo de las mesas mueve el margen hasta 27,8 dB.</div>
+          <div id="cmp-out" style="margin-top:8px"></div>
+        </div>
       </div>
 
       <div class="sec" style="flex:1">
@@ -2550,8 +2566,14 @@ function rfCargaParams(){
   if(S._radioParams||S._radioParamsPedidos)return;
   S._radioParamsPedidos=true;
   fetch("radio_params.json",{cache:"no-store"}).then(r=>r.json()).then(j=>{
-    S._radioParams=j; S._covSig=null; draw(); renderLegend();
-  }).catch(e=>{ S._radioParamsError=String(e&&e.message||e); draw(); });
+    /* Y el comparador se repinta AQUÍ: sus casillas son las tecnologías de este
+       fichero, así que antes de que llegue no hay nada que ofrecer. Pintarlas
+       sólo al arrancar dejaba el panel vacío para siempre. */
+    S._radioParams=j; S._covSig=null; draw(); renderLegend(); cmpPinta();
+  }).catch(e=>{ S._radioParamsError=String(e&&e.message||e); draw();
+                const b=document.getElementById("cmp-tecs");
+                if(b) b.innerHTML='<div class="hint" style="color:#e0a72c">No cargó <code>radio_params.json</code>: '+
+                                  String(e&&e.message||e)+'. Sin él no hay tecnologías que comparar.</div>'; });
 }
 function rfParamsNuevo(){ return S._radioParams||null; }
 function rfVariante(){ const p=rfParamsNuevo(); return p?p.tecnologias[S.rf&&S.rf.variante||"zigbee_pro_24"]:null; }
@@ -2850,6 +2872,119 @@ function rfMargin(n,m,rows){
   return ZigbeePV.predictLink({x:0,y:0,ground:0,h:RF_ANT_H},{x:D,y:0,ground:0,h:RF_ANT_H},p,null,rfObstacles(n,m,rows)).marginDb;
 }
 function rfColor(mg){ if(mg==null)return "#9aa6b2"; if(mg<0)return "#7a1d1d"; if(mg<8)return "#e0322c"; if(mg<16)return "#e0a72c"; if(mg<25)return "#7bbf5a"; return "#2f9e54"; }
+
+/* ══ EL COMPARADOR DE TECNOLOGÍAS (fase 4, punto 6) ═════════════════════════
+   La tabla por criterio la calcula `radio_tecnologias.js`; aquí sólo está lo
+   que la interfaz aporta: de dónde salen los nodos, qué es «enlaza» en esta
+   página, y cómo se pinta un hueco para que NO parezca un cero.
+
+   SE CORRE A BOTÓN, no al mover un deslizador. En El Burgo son 64.000 enlaces
+   por comparación (3,7 s medidos fuera del navegador) y en San José dos órdenes
+   de magnitud más: recalcular en cada gesto colgaría la página.
+
+   Y DEJA LA PÁGINA COMO ESTABA: la comparación cambia `S.rf.variante` y la hora
+   del sol para poder preguntar por cada tecnología, así que las guarda y las
+   devuelve. Sin eso, mirar el comparador cambiaría el mapa de debajo. */
+const CMP_ALCANCE_M = 400;     // poda geométrica, no física: ver `radio_malla.js`
+function cmpVariantes(){
+  const p = rfParamsNuevo(); if(!p || !p.tecnologias) return {};
+  const o = {}; for(const k of Object.keys(p.tecnologias)) if(k[0] !== "_") o[k] = p.tecnologias[k];
+  return o;
+}
+function cmpPinta(){
+  const box = document.getElementById("cmp-tecs"); if(!box) return;
+  const V = cmpVariantes(), ks = Object.keys(V);
+  if(!ks.length){ box.innerHTML = '<div class="hint" style="color:var(--muted-2)">Sin <code>radio_params.json</code> cargado: no hay tecnologías que comparar.</div>'; return; }
+  box.innerHTML = ks.map(k=>{
+    const v = V[k], apagada = v.procedencia === "pendiente";
+    return '<label class="tg"><input type="checkbox" class="cmp-t" value="'+k+'" checked> <span'+
+      (apagada?' style="opacity:.6"':'')+'>'+(v.nombre||k)+
+      (apagada?' <b style="color:#e0a72c">· pendiente</b>':'')+'</span></label>';
+  }).join("");
+}
+function cmpHoras(){
+  const t = (document.getElementById("cmp-horas")||{}).value || "";
+  return t.split(",").map(s=>parseFloat(s.trim())).filter(h=>isFinite(h) && h>=0 && h<24);
+}
+function cmpNodos(){
+  const raices = [], nodos = [];
+  for(const n of S.ncus){ nodos.push({id:"N"+n.id, x:n.x, y:n.y, _ncu:n}); raices.push("N"+n.id); }
+  for(let i=0;i<S.motors.length;i++){
+    const m = S.motors[i]; if(m.ncu==null) continue;
+    const p = tcuPt(m); nodos.push({id:"T"+i, x:p.x, y:p.y, i:i});
+  }
+  return {nodos, raices};
+}
+function cmpCorrer(){
+  const out = document.getElementById("cmp-out"); if(!out) return;
+  const sel = [...document.querySelectorAll(".cmp-t")].filter(c=>c.checked).map(c=>c.value);
+  const horas = cmpHoras(), V = cmpVariantes(), {nodos, raices} = cmpNodos();
+  const di = (t)=>{ out.innerHTML = '<div style="color:#e0a72c;font-size:11.5px;line-height:1.5">'+t+'</div>'; };
+  if(sel.length < 2) return di("Marca <b>al menos dos</b> tecnologías: comparar una consigo misma no compara nada.");
+  if(horas.length < 2) return di("Hacen falta <b>al menos dos horas</b>. Con hasta 27,8 dB de variación por el ángulo de las mesas, comparar a una hora fija compara horas, no tecnologías.");
+  if(!raices.length) return di("Esta planta no tiene NCU colocadas: sin raíz no hay malla que recorrer.");
+  if(nodos.length - raices.length < 1) return di("No hay TCU asignadas a ninguna NCU.");
+  const vs = {}; for(const k of sel) vs[k] = V[k];
+
+  const antesVar = S.rf && S.rf.variante, antesSol = S.rf && S.rf.sol ? Object.assign({}, S.rf.sol) : null;
+  out.innerHTML = '<div style="color:var(--muted-2);font-size:11.5px">Comparando '+sel.length+
+    ' tecnologías en '+(nodos.length-raices.length)+' TCU y '+horas.length+' horas…</div>';
+  let tabla = null, err = null;
+  try{
+    const enlazaDe = (variante, hora)=>{
+      const clave = Object.keys(V).find(k=>V[k]===variante); if(!clave) return null;
+      S.rf.variante = clave;
+      if(S.rf.sol) S.rf.sol.horaUTC = Date.UTC(2026,5,21,hora,0);
+      S._rfRows = null;
+      const rows = rfRows();
+      return (a,b)=>{
+        const r = rfEnlace({x:a.x,y:a.y,i:a.i},{x:b.x,y:b.y,i:b.i},rows);
+        if(!r || r.margenDb==null) return {viable:null, margenDb:null};
+        return {viable:r.margenDb>0, margenDb:r.margenDb};
+      };
+    };
+    tabla = RadioTec.compara(S.planta||"", nodos, raices, vs, horas, enlazaDe, CMP_ALCANCE_M);
+  }catch(e){ err = String(e && e.message || e); }
+  finally{
+    if(antesVar!=null) S.rf.variante = antesVar;
+    if(antesSol && S.rf.sol) Object.assign(S.rf.sol, antesSol);
+    S._rfRows = null;
+  }
+  if(err) return di("No se ha podido comparar: "+err);
+  out.innerHTML = cmpTabla(tabla);
+}
+function cmpTabla(t){
+  const esc = s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const TD = 'text-align:right;padding:3px 0;';
+  const cel = c=>{
+    if(!c) return '<td style="'+TD+'color:#9aa6b2">—</td>';
+    /* UN HUECO SE PINTA COMO HUECO. Ni «0», ni «—» a secas: el motivo va en el
+       `title` para que no haya que ir a buscarlo a ningún sitio. */
+    if(c.min==null) return '<td style="'+TD+'color:#e0a72c" title="'+esc(c.motivo||"")+'">no se puede</td>';
+    const v = c.min===c.max ? c.min : (c.min+"–"+c.max);
+    return '<td style="'+TD+'"'+(c.motivo?' title="'+esc(c.motivo)+'"':'')+'>'+v+'</td>';
+  };
+  let h = '<table style="width:100%;border-collapse:collapse;font:11px \'IBM Plex Mono\',monospace">';
+  h += '<tr style="color:var(--muted-2)"><th style="text-align:left">criterio</th>'+
+       t.tecnologias.map(x=>'<th style="text-align:right">'+esc(x.replace(/_/g," "))+'</th>').join("")+'</tr>';
+  for(const f of t.filas){
+    h += '<tr style="border-top:1px solid var(--line)"><td style="text-align:left;padding:3px 4px 3px 0">'+
+         esc(f.rotulo)+'</td>'+t.tecnologias.map(x=>cel(f.celdas[x])).join("")+'</tr>';
+    h += '<tr><td colspan="'+(t.tecnologias.length+1)+'" style="color:var(--muted-2);font-size:10px;padding-bottom:4px">'+esc(f.veredicto.texto)+'</td></tr>';
+  }
+  h += '</table>';
+  /* LO QUE HAY QUE SABER PARA LEER LA TABLA, JUNTO A LA TABLA Y NO EN UN DOC:
+     los dos números que salen más redondos son los que más letra pequeña
+     llevan, y esconderla sería el defecto que toda esta fase viene quitando. */
+  h += '<div class="hint" style="font-size:10px;color:var(--muted-2);line-height:1.45;margin-top:6px">'+
+       '<b>Cómo leer esto.</b> El umbral es <code>margen &gt; 0</code>: la sensibilidad pelada, '+
+       'sin reserva de desvanecimiento. Los <b>saltos</b> son el camino más corto sobre TODOS los '+
+       'enlaces viables, o sea una <b>cota inferior</b>: la malla medida de El Burgo da p50 = 4 y '+
+       'p100 = 6, porque Zigbee no enruta por el más corto. Y «<b>sin camino alternativo</b>» sobre '+
+       'un grafo denso habla de redundancia <b>potencial</b>, no de la malla desplegada. '+
+       '<b>No hay puntuación agregada</b>, a propósito: la tabla es el resultado.</div>';
+  return h;
+}
 
 /* ══ EL VEREDICTO DE UN ENLACE, Y POR QUÉ POR DEFECTO NO ES UN dB ═══════════
    (fase 4, punto 5)
@@ -4525,6 +4660,11 @@ window.addEventListener("resize",resize);
 cv.addEventListener("pointercancel",e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2)pinch=null; drag=null; });
 document.getElementById("zoom-in").onclick=()=>zoomBy(1.45);
 document.getElementById("zoom-out").onclick=()=>zoomBy(1/1.45);
+/* El comparador se pinta al arrancar y se recorre a botón. A botón y no al
+   cambiar una casilla porque cada comparación son decenas de miles de enlaces:
+   ver el comentario de `cmpCorrer`. */
+document.getElementById("cmp-run").onclick=cmpCorrer;
+cmpPinta();
 /* ===================== Arranque ===================== */
 S.motors=scenario("compacta");
 resize(); recomputeNewData();

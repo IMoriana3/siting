@@ -402,6 +402,8 @@ jobs:
           # compara a una sola hora
           rojo node tests/test_comparador.js rellenaHueco indiceUnico unaHora unCandidatoBasta \
                                              solapaGana sumaEnVezDeUnion
+          rojo node tests/test_comparador_visor.js huecoMudo huecoSinMotivo noDevuelveVariante \
+                                                   noDevuelveHora sinGuardiaHoras sinLetraPequena
 
           rojo python3 tests/test_paridad_radio.py py_fspl_001 py_refl_pol \
                                                    py_sin_tolerancia js_sin_tolerancia py_punto_duplicado \

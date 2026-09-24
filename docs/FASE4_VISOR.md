@@ -253,7 +253,23 @@ a 22 dBm y un módulo a 14 dBm no dan lo mismo), así que el comparador corre la
 tabla con el **mejor y el peor candidato** de cada tecnología y publica **en qué
 criterios cambia el veredicto**. Si cambia, eso ES el resultado.
 
-**Falta, además:** el selector en el visor. El motor está; la interfaz no.
+**El selector en el visor, HECHO** (2026-09-24). Panel «Comparador de
+tecnologías»: casillas que salen de `radio_params.json` —las pendientes **se
+ofrecen, rotuladas**, que es el punto—, horas UTC editables con mínimo dos, y un
+botón. **A botón y no al mover una casilla**: son decenas de miles de enlaces por
+comparación. La comparación cambia la variante y la hora del sol para poder
+preguntar por cada tecnología, y **las devuelve**: mirar el comparador no puede
+cambiar el mapa de debajo. Un hueco se pinta «**no se puede**» con su motivo en
+el `title`, nunca un cero ni un guion. Y la letra pequeña —umbral en la
+sensibilidad pelada, saltos como cota inferior, redundancia potencial— va **junto
+a la tabla**, no en otro documento.
+
+Banco propio: `tests/test_comparador_visor.js`, que **extrae el bloque del
+`index.html` real** (nunca una copia) y lo corre en un `vm`. 19 comprobaciones,
+6 mutaciones en `rc = 1`.
+
+**Falta:** nada del punto 6 que estuviera definido, salvo los datos de LoRa y
+Wi-SUN, que dependen de los datasheets.
 
 ## 7 · Escenario guardable
 
