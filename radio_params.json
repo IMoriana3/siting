@@ -60,7 +60,7 @@
     },
     "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
   },
-  "version": "1.2.0",
+  "version": "1.2.1",
   "generado": "2026-09-20",
   "geometria": {
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
@@ -669,7 +669,8 @@
             "canal_ref_mhz": 868.3,
             "max_eirp_default_dbm": 16,
             "duty_cycle_ref": "<1%",
-            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/6"
           },
           {
             "id": "type_1sj_296_lora_sf7_bw_125_khz",
@@ -701,7 +702,8 @@
             "canal_ref_mhz": 868.3,
             "max_eirp_default_dbm": 16,
             "duty_cycle_ref": "<1%",
-            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/5"
           },
           {
             "id": "type_1sj_296_lora_sf12_bw_125_khz",
@@ -733,7 +735,8 @@
             "canal_ref_mhz": 868.3,
             "max_eirp_default_dbm": 16,
             "duty_cycle_ref": "<1%",
-            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/5"
           },
           {
             "id": "wio_e5_lora_sf12_bw_125_khz",
@@ -765,7 +768,8 @@
             "canal_ref_mhz": 868.3,
             "max_eirp_default_dbm": 16,
             "duty_cycle_ref": "<1%",
-            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": null
           }
         ]
       },
