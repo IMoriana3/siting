@@ -267,6 +267,16 @@ check('sub-GHz usa una antena propia, no hereda los 3 dBi de Zigbee',
 check('los TI no se renombran Wi-SUN si su hoja no lo declara',
       wcalc.every(v => v.fabricante === 'Silicon Labs'),
       [...new Set(wcalc.map(v => v.fabricante))].join(','));
+check('LoRa SF12 y SF7 llevan las tasas vigentes del RP002-1.0.5',
+      lcalc.filter(v => v.sf === 12).every(v => v.tasa_bps === 250) &&
+      lcalc.filter(v => v.sf === 7).every(v => v.tasa_bps === 5470));
+check('el perfil LoRa de referencia usa 868,3 MHz y 16 dBm EIRP por defecto',
+      TEC.lora_eu868.perfil_referencia.lorawan.canales_por_defecto_mhz.includes(868.3) &&
+      TEC.lora_eu868.perfil_referencia.lorawan.max_eirp_default_dbm === 16);
+check('Wi-SUN EU1 asigna plan 32 a #1a y 33 a #2a/#3',
+      wcalc.every(v => (String(v.modo).includes('#1a') && v.channel_plan_id === 32) ||
+                       ((String(v.modo).includes('#2a') || String(v.modo).includes('#3')) &&
+                        v.channel_plan_id === 33)));
 
 /* ── LAS DOS TASAS, Y QUIÉN MANDA ────────────────────────────────────────
    `tasa_bps` es la capacidad de la RADIO —lo único comparable entre
