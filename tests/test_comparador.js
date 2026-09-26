@@ -251,9 +251,22 @@ check('  y dice por qué eje ordena, y cuál NO entra (consumo, certificación)'
    dicho: un hueco declarado se rellena; uno que no existe, no. */
 for (const t of ['lora_eu868', 'wisun_fan_863']) {
   const c = TEC[t].candidatos;
-  check(t + ' declara su lista de candidatos (hoy vacía, y dicho)',
+  check(t + ' declara su lista de candidatos y su estado',
         c && Array.isArray(c.lista) && typeof c._estado === 'string', JSON.stringify(!!c));
 }
+const lcalc = TEC.lora_eu868.candidatos.variantes_calculables || [];
+const wcalc = TEC.wisun_fan_863.candidatos.variantes_calculables || [];
+check('LoRa ya tiene al menos 3 módulos de datasheet', TEC.lora_eu868.candidatos.lista.length >= 3,
+      TEC.lora_eu868.candidatos.lista.length);
+check('LoRa expande al menos 4 variantes de balance calculables', lcalc.length >= 4, lcalc.length);
+check('Wi-SUN expande al menos 10 variantes FSK calculables', wcalc.length >= 10, wcalc.length);
+check('todas las variantes calculables tienen presupuesto de enlace completo',
+      lcalc.concat(wcalc).every(v => RT.presupuesto(v) != null));
+check('sub-GHz usa una antena propia, no hereda los 3 dBi de Zigbee',
+      lcalc.concat(wcalc).every(v => v.gtx_dbi === 2 && v.grx_dbi === 2));
+check('los TI no se renombran Wi-SUN si su hoja no lo declara',
+      wcalc.every(v => v.fabricante === 'Silicon Labs'),
+      [...new Set(wcalc.map(v => v.fabricante))].join(','));
 
 /* ── LAS DOS TASAS, Y QUIÉN MANDA ────────────────────────────────────────
    `tasa_bps` es la capacidad de la RADIO —lo único comparable entre
