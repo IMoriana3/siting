@@ -57,6 +57,35 @@ jobs:
       - name: la herramienta de malla arranca sobre una planta real
         run: node tools/malla_plantas.mjs --planta BURGO > /dev/null
 
+      - name: simulacion de topologias COMMS sobre El Burgo
+        run: |
+          node tools/simula_topologias.mjs --planta elburgo --horas 8,12,16 --json /tmp/topologias_elburgo.json >/dev/null
+          node - <<'NODE'
+          const r=require('/tmp/topologias_elburgo.json');
+          console.log('SIM_TOPO '+r.planta+' '+r.tcus+' TCU '+r.gatewaysEnPosicionesNcu+' gateways');
+          for(const e of r.escenarios){
+            const d=e.umbrales['8'];
+            const roots=d.horas.map(h=>h.minRaicesExistentes&&h.minRaicesExistentes.n).filter(x=>x!=null);
+            console.log([
+              'SIM_ROW', e.tecnologia, e.topologia,
+              (e.variante.modelo||'-').replace(/\s+/g,'_'),
+              (e.variante.modo||'-').replace(/\s+/g,'_'),
+              'cov='+d.cubiertasMin+'-'+d.cubiertasMax+'/'+r.tcus,
+              'gw2='+(d.redundanciaGwMin==null?'-':d.redundanciaGwMin),
+              'roots='+(roots.length?Math.max(...roots):'-'),
+              'hops='+(d.saltosMax==null?'-':d.saltosMax),
+              'dmax='+(d.maxDistanciaObservadaM==null?'-':d.maxDistanciaObservadaM),
+              'loadMinPct='+(d.cargaMinimaRedPctMax==null?'-':d.cargaMinimaRedPctMax)
+            ].join(' '));
+          }
+          NODE
+
+      - name: guardar simulacion COMMS
+        uses: actions/upload-artifact@v4
+        with:
+          name: topologias-elburgo
+          path: /tmp/topologias_elburgo.json
+
       # EL CAREO CONTRA EL 3D NO PUEDE CORRER AQUI —necesita cobertura-zigbee, y
       # un banco que dependa del repo hermano sale verde en una maquina y rojo
       # en la otra; ya paso en este repo—. Pero SI arranca, y eso es justo lo
