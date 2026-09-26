@@ -64,9 +64,9 @@ function enlaza(key,hora){
   };
 }
 function q(x,n=1){return x==null?null:+x.toFixed(n);}
-function cargaMinimaPct(tasa,hopsMed){
-  if(!(tasa>0)||!(hopsMed>0)) return null;
-  return 100*(44*8*ntcu*hopsMed)/(30*tasa);
+function cargaMinimaPct(tasa,hopsSuma){
+  if(!(tasa>0)||!(hopsSuma>0)) return null;
+  return 100*(44*8*hopsSuma)/(30*tasa);
 }
 function deberMinPct(tasa){
   if(!(tasa>0)) return null;
@@ -82,20 +82,27 @@ function resumeOne(nombre,tech,topologia,variante,key){
         ? TOP.analizaDirecta(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE,
             raizDe:n=>'NCU'+n.ncu})
         : TOP.analizaMalla(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE});
-      const hops=r.saltosMediano||1;
+      const directo=topologia==='mesh'
+        ? TOP.analizaDirecta(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE,raizDe:n=>'NCU'+n.ncu})
+        : r;
       hs.push({hora:h,cubiertas:r.cubiertas,sinRuta:r.sinRuta.length,
+        cubiertasDirectas:directo.cubiertas,
+        sinRutaDirecta:directo.sinRuta.length,
         redundanciaGw:r.conDosOMasGateways,
         asignadaOk:r.asignadaOk==null?null:r.asignadaOk,
         minRaicesExistentes:r.minimoRaicesExistentes,
         saltosMediano:q(r.saltosMediano,2),saltosMax:r.saltosMax,
         maxDistanciaViableM:q(r.maxDistanciaViableM,1),
         margenMinDb:q(r.margenMinDb,1),margenMedianoDb:q(r.margenMedianoDb,1),
-        cargaMinimaRedPct:q(cargaMinimaPct(variante.tasa_bps,hops),2)});
+        saltosMedio:q(r.saltosMedio,3),
+        cargaMinimaRedPct:q(cargaMinimaPct(variante.tasa_bps,r.saltosSuma),2)});
     }
     porUmbral[String(umbral)]={
       cubiertasMin:Math.min(...hs.map(x=>x.cubiertas)),
       cubiertasMax:Math.max(...hs.map(x=>x.cubiertas)),
       sinRutaMax:Math.max(...hs.map(x=>x.sinRuta)),
+      cubiertasDirectasMin:Math.min(...hs.map(x=>x.cubiertasDirectas)),
+      cubiertasDirectasMax:Math.max(...hs.map(x=>x.cubiertasDirectas)),
       redundanciaGwMin:hs.every(x=>x.redundanciaGw!=null)?Math.min(...hs.map(x=>x.redundanciaGw)):null,
       saltosMax:Math.max(...hs.map(x=>x.saltosMax||0))||null,
       maxDistanciaObservadaM:q(Math.max(...hs.map(x=>x.maxDistanciaViableM||0)),1)||null,
