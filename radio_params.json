@@ -60,7 +60,7 @@
     },
     "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
   },
-  "version": "1.1.1",
+  "version": "1.2.0",
   "generado": "2026-09-20",
   "geometria": {
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
@@ -373,7 +373,12 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "Zigbee mesh",
+        "retransmision_tcu": true
+      }
     },
     "zigbee_std_24": {
       "procedencia": "heredado",
@@ -454,7 +459,12 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "Zigbee mesh",
+        "retransmision_tcu": true
+      }
     },
     "_las_dos_de_sub_giga": [
       "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
@@ -947,6 +957,16 @@
           "_fuente": "LoRa Alliance RP002-1.0.5, §3.4.2–3.4.3, tablas 8, 10 y 13. Leído 2026-09-26.",
           "_limite": "El Max EIRP por defecto de LoRaWAN NO sustituye la regulación local; el propio RP002 exige no superar el máximo local."
         }
+      },
+      "topologia": {
+        "tipo": "directa",
+        "retransmision_tcu": false,
+        "escenarios": [
+          "LoRa P2P directo",
+          "LoRaWAN star-of-stars"
+        ],
+        "_fuente": "LoRaWAN Specification v1.1: star-of-stars; end-devices usan single-hop LoRa/FSK hacia uno o varios gateways.",
+        "_ojo": "LoRa P2P propietario comparte la restriccion fisica de enlace directo, pero no es LoRaWAN."
       }
     },
     "wisun_fan_863": {
@@ -2004,6 +2024,13 @@
           "_fuente": "Silicon Labs Wi-SUN PHY Mode Switch documentation, EU regulatory domain, consultada 2026-09-26.",
           "_limite": "Esto fija el plan PHY de referencia, NO la conformidad regulatoria del producto ni la máscara final de canales."
         }
+      },
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "IPv6/RPL",
+        "retransmision_tcu": true,
+        "_fuente": "Wi-SUN FAN: red IP multisalto basada en IPv6/RPL.",
+        "_supuesto_simulacion": "todas las TCU son router-capable; si el hardware final usa leaf nodes hay que repetir el careo con ese rol."
       }
     },
     "_el_protocolo_de_la_tcu": {
