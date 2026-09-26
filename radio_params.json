@@ -60,7 +60,7 @@
     },
     "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "generado": "2026-09-20",
   "geometria": {
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
@@ -642,7 +642,7 @@
             "gtx_dbi": 2,
             "grx_dbi": 2,
             "rx_sens_dbm": -136,
-            "tasa_bps": null,
+            "tasa_bps": 250,
             "tasa_serie_bps": 19200,
             "carga_util_b": 44,
             "periodo_s": 30,
@@ -654,7 +654,12 @@
               "version": "DS70005435B",
               "pagina": 21,
               "leido_el": "2026-09-26"
-            }
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
           },
           {
             "id": "type_1sj_296_lora_sf7_bw_125_khz",
@@ -669,7 +674,7 @@
             "gtx_dbi": 2,
             "grx_dbi": 2,
             "rx_sens_dbm": -124,
-            "tasa_bps": null,
+            "tasa_bps": 5470,
             "tasa_serie_bps": 19200,
             "carga_util_b": 44,
             "periodo_s": 30,
@@ -681,7 +686,12 @@
               "version": "SP-1SJ-296-G",
               "pagina": null,
               "leido_el": "2026-09-26"
-            }
+            },
+            "dr": 5,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
           },
           {
             "id": "type_1sj_296_lora_sf12_bw_125_khz",
@@ -696,7 +706,7 @@
             "gtx_dbi": 2,
             "grx_dbi": 2,
             "rx_sens_dbm": -137,
-            "tasa_bps": null,
+            "tasa_bps": 250,
             "tasa_serie_bps": 19200,
             "carga_util_b": 44,
             "periodo_s": 30,
@@ -708,7 +718,12 @@
               "version": "SP-1SJ-296-G",
               "pagina": null,
               "leido_el": "2026-09-26"
-            }
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
           },
           {
             "id": "wio_e5_lora_sf12_bw_125_khz",
@@ -723,7 +738,7 @@
             "gtx_dbi": 2,
             "grx_dbi": 2,
             "rx_sens_dbm": -135,
-            "tasa_bps": null,
+            "tasa_bps": 250,
             "tasa_serie_bps": 19200,
             "carga_util_b": 44,
             "periodo_s": 30,
@@ -735,7 +750,12 @@
               "version": "V1.1",
               "pagina": 8,
               "leido_el": "2026-09-26"
-            }
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10"
           }
         ]
       },
@@ -902,7 +922,31 @@
           "ciclo_trabajo": null,
           "_motivo": "No se cierra aquí la legalidad completa: falta transcribir la entrada aplicable de ERC/REC 70-03 vigente para el modo/canal elegido. 14 dBm conducidos + antena de 2 dBi se usa como perfil conservador de comparación, no como certificado de conformidad."
         },
-        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue."
+        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue.",
+        "lorawan": {
+          "documento": "LoRaWAN Regional Parameters",
+          "version": "RP002-1.0.5",
+          "fecha": "2025-10",
+          "canales_por_defecto_mhz": [
+            868.1,
+            868.3,
+            868.5
+          ],
+          "duty_cycle_canales_por_defecto": "<1%",
+          "max_eirp_default_dbm": 16,
+          "dr": {
+            "0": {
+              "modo": "SF12 / 125 kHz",
+              "tasa_bps": 250
+            },
+            "5": {
+              "modo": "SF7 / 125 kHz",
+              "tasa_bps": 5470
+            }
+          },
+          "_fuente": "LoRa Alliance RP002-1.0.5, §3.4.2–3.4.3, tablas 8, 10 y 13. Leído 2026-09-26.",
+          "_limite": "El Max EIRP por defecto de LoRaWAN NO sustituye la regulación local; el propio RP002 exige no superar el máximo local."
+        }
       }
     },
     "wisun_fan_863": {
@@ -1495,7 +1539,11 @@
               "version": "Rev. 1.2",
               "pagina": 92,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg25_wi_sun_fsk_2a_0_3_37_mi_0_5_sin_fec",
@@ -1521,7 +1569,11 @@
               "version": "Rev. 1.2",
               "pagina": 92,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg25_wi_sun_fsk_1a_1_1_36_mi_0_5_con_fec",
@@ -1547,7 +1599,11 @@
               "version": "Rev. 1.2",
               "pagina": 92,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg25_wi_sun_fsk_2a_1_3_37_mi_0_5_con_fec",
@@ -1573,7 +1629,11 @@
               "version": "Rev. 1.2",
               "pagina": 92,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg25_wi_sun_fsk_3_1_5_37_mi_0_5_con_fec",
@@ -1599,7 +1659,11 @@
               "version": "Rev. 1.2",
               "pagina": 92,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg28_wi_sun_fsk_1a_0_1_36_mi_0_5_sin_fec",
@@ -1625,7 +1689,11 @@
               "version": "Rev. 1.1",
               "pagina": 81,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg28_wi_sun_fsk_2a_0_3_37_mi_0_5_sin_fec",
@@ -1651,7 +1719,11 @@
               "version": "Rev. 1.1",
               "pagina": 81,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg28_wi_sun_fsk_1a_1_1_36_mi_0_5_con_fec",
@@ -1677,7 +1749,11 @@
               "version": "Rev. 1.1",
               "pagina": 81,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg28_wi_sun_fsk_2a_1_3_37_mi_0_5_con_fec",
@@ -1703,7 +1779,11 @@
               "version": "Rev. 1.1",
               "pagina": 81,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           },
           {
             "id": "efr32fg28_wi_sun_fsk_3_1_5_37_mi_0_5_con_fec",
@@ -1729,7 +1809,11 @@
               "version": "Rev. 1.1",
               "pagina": 81,
               "leido_el": "2026-09-24"
-            }
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
           }
         ]
       },
@@ -1891,7 +1975,35 @@
           "ciclo_trabajo": null,
           "_motivo": "No se cierra aquí la legalidad completa: falta transcribir la entrada aplicable de ERC/REC 70-03 vigente para el modo/canal elegido. 14 dBm conducidos + antena de 2 dBi se usa como perfil conservador de comparación, no como certificado de conformidad."
         },
-        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue."
+        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue.",
+        "wisun_eu1": {
+          "dominio": "EU1",
+          "banda_hz": [
+            863000000,
+            870000000
+          ],
+          "channel_plans": {
+            "32": {
+              "base_hz": 863100000,
+              "spacing_hz": 100000,
+              "phy": [
+                "#1a",
+                "#1a con FEC"
+              ]
+            },
+            "33": {
+              "base_hz": 863100000,
+              "spacing_hz": 200000,
+              "phy": [
+                "#2a",
+                "#2a con FEC",
+                "#3"
+              ]
+            }
+          },
+          "_fuente": "Silicon Labs Wi-SUN PHY Mode Switch documentation, EU regulatory domain, consultada 2026-09-26.",
+          "_limite": "Esto fija el plan PHY de referencia, NO la conformidad regulatoria del producto ni la máscara final de canales."
+        }
       }
     },
     "_el_protocolo_de_la_tcu": {
