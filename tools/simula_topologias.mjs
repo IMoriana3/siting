@@ -79,6 +79,33 @@ function deberMinPct(tasa){
   if(!(tasa>0)) return null;
   return 100*(44*8)/(30*tasa);
 }
+function presupuestoDb(v){
+  if([v.ptx_dbm,v.gtx_dbi,v.grx_dbi,v.rx_sens_dbm].some(x=>x==null)) return null;
+  return v.ptx_dbm+v.gtx_dbi+v.grx_dbi-v.rx_sens_dbm;
+}
+function loraToaMs(sf,payloadBytes,cr=1,bw=125000,preamble=8){
+  if(!(sf>=5&&sf<=12&&payloadBytes>=0&&bw>0)) return null;
+  const de=(sf>=11&&bw===125000)?1:0, ih=0, crc=1;
+  const ts=Math.pow(2,sf)/bw;
+  const n=8*payloadBytes-4*sf+28+16*crc-20*ih;
+  const den=4*(sf-2*de);
+  const payloadSym=8+Math.max(Math.ceil(n/den)*(cr+4),0);
+  return 1000*(preamble+4.25+payloadSym)*ts;
+}
+function loraAirtime(v){
+  if(!v.sf||v.bw_hz!==125000) return null;
+  const crSens=v.sens_coding_rate==='4/6'?2:(v.sens_coding_rate==='4/5'?1:null);
+  const raw=crSens?loraToaMs(v.sf,44,crSens,125000):null;
+  const lw=loraToaMs(v.sf,57,1,125000);
+  return {
+    sensibilidadCodingRate:v.sens_coding_rate||null,
+    p2p44BMs:q(raw,1),
+    lorawan44BAppMs:q(lw,1),
+    lorawanDutyPorTcu30sPct:q(lw/30000*100,3),
+    lorawanOcupacionUnCanal215TcuPct:q(lw*ntcu/30000*100,1),
+    _supuestoLorawan:'44 B de aplicacion -> PHYPayload minimo 57 B, CR 4/5, header explicito, CRC, preambulo 8'
+  };
+}
 function resumeOne(nombre,tech,topologia,variante,key,nodosLocal=nodos,raicesLocal=raices,rootSet='NCU'){
   const porUmbral={};
   for(const umbral of UMBRALES){
@@ -123,8 +150,10 @@ function resumeOne(nombre,tech,topologia,variante,key,nodosLocal=nodos,raicesLoc
       fabricante:variante.fabricante||null,modelo:variante.modelo||null,modo:variante.modo||null,
       f_hz:variante.f_hz,ptx_dbm:variante.ptx_dbm,gtx_dbi:variante.gtx_dbi,
       rx_sens_dbm:variante.rx_sens_dbm,tasa_bps:variante.tasa_bps||null,
-      sf:variante.sf||null,channel_plan_id:variante.channel_plan_id||null
+      sf:variante.sf||null,channel_plan_id:variante.channel_plan_id||null,
+      presupuestoEnlaceDb:q(presupuestoDb(variante),1)
     },
+    loraAirtime:tech==='lora'?loraAirtime(variante):null,
     payload44B30s:{porTcuMinPct:q(deberMinPct(variante.tasa_bps),3),
       nota:'limite inferior: solo payload, sin cabeceras, ACK, contention ni reintentos'},
     umbrales:porUmbral
@@ -163,7 +192,8 @@ const out={
     'LoRa/Wi-SUN usan antena sub-GHz TE 0600-00020 de 2 dBi como referencia, no BOM aprobada',
     'sin campana sub-GHz: es PREDICCION, no calibracion',
     'viable fisico = margen >=0 dB; diseno = margen >=8 dB',
-    'carga de red es un limite inferior con 44 B/TCU/30 s; no incluye overhead ni reintentos'
+    'carga de red por bitrate es un limite inferior con 44 B/TCU/30 s; no incluye overhead ni reintentos',
+    'para LoRa se calcula ademas Time-on-Air: P2P con el coding rate de la sensibilidad si se conoce, y LoRaWAN con PHYPayload minimo de 57 B y CR 4/5'
   ],
   escenarios
 };
