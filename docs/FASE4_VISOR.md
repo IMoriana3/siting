@@ -243,10 +243,16 @@ enlaces**. Lo que no mueve es esta tabla, porque con ~12.000 enlaces viables
 sobre 215 TCU estos criterios están **saturados**. No es lo mismo, y decirlo mal
 habría escondido justo lo que el punto 6 venía a ver.
 
-**No hecho, y por qué:** las columnas de LoRa y Wi-SUN están **declaradas y
-apagadas**. Desde este entorno la red no llega a ninguna web de fabricante ni de
-distribuidor ni a `etsi.org`, así que no hay datasheet que citar. El bloque
-`candidatos` de cada variante está en `radio_params.json`, vacío y con el motivo.
+**Estado 2026-09-26:** las variantes base de LoRa y Wi-SUN siguen **apagadas**
+hasta que exista una selección de producto/modo/canal aprobada, pero la sensibilidad
+al hardware ya se puede calcular. LoRa incorpora tres módulos documentados
+(Microchip WLR089U0, Murata Type 1SJ-296 y Seeed Wio-E5) y cuatro variantes de
+balance; Wi-SUN conserva cuatro candidatos documentados y expande diez variantes
+FSK de los EFR32FG25/FG28, que son los dos cuyas hojas etiquetan esos modos
+explícitamente como Wi-SUN. El careo usa una antena sub-GHz de referencia común
+(TE 0600-00020, 2 dBi) y 868,3 MHz. El plan de canal, duty-cycle y conformidad
+regulatoria siguen pendientes y por eso NO se convierten en un veredicto de
+legalidad.
 
 **Y la elección del módulo NO la hace este repo:** cambia el veredicto (un SX1262
 a 22 dBm y un módulo a 14 dBm no dan lo mismo), así que el comparador corre la
