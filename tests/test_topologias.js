@@ -37,5 +37,18 @@ const rr=TOP.analizaDirecta(nodos,redund,['G1','G2'],{umbralDb:8});
 check('si cada TCU ve ambos gateways, las tres tienen diversidad >=2',rr.conDosOMasGateways===3,rr.conDosOMasGateways);
 check('y un solo gateway existente basta para cubrirlas',rr.minimoRaicesExistentes&&rr.minimoRaicesExistentes.n===1,JSON.stringify(rr.minimoRaicesExistentes));
 
+const dos=(a,b)=>{
+ const k=key(a.id,b.id);
+ const ok=['A\u0000G1','B\u0000G1','C\u0000G2'].includes(k);
+ return {viable:ok,margenDb:ok?15:-30};
+};
+const r2=TOP.analizaDirecta(nodos,dos,['G1','G2'],{umbralDb:8});
+check('el solver encuentra DOS gateways cuando uno solo no basta',
+      r2.minimoRaicesExistentes&&r2.minimoRaicesExistentes.n===2,
+      JSON.stringify(r2.minimoRaicesExistentes));
+const sinAsign=TOP.analizaDirecta(nodos,redund,['G1','G2'],{umbralDb:8});
+check('sin binding previo, asignadaOk es null y no un cero engañoso',
+      sinAsign.asignadaOk===null,JSON.stringify(sinAsign.asignadaOk));
+
 console.log('\n'+(ko?'FALLAN '+ko+' de ':'TODO OK — ')+(ok+ko)+' comprobaciones');
 process.exit(ko?1:0);
