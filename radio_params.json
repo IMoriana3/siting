@@ -60,7 +60,7 @@
     },
     "_hoy": "Los parámetros de radio son `heredado` en bloque —salen de `defaultParams()` del modelo congelado, y el propio `_pendiente_fase_2` dice que no son lectura de datasheet—, así que hoy TODO margen de este repo sale rotulado SIN VERIFICAR. Eso no es un defecto del rótulo: es el estado real, y antes no se veía."
   },
-  "version": "1.0.0",
+  "version": "1.2.1",
   "generado": "2026-09-20",
   "geometria": {
     "_que_es": "Común a TODAS las tecnologías: no depende de la radio, solo del campo.",
@@ -229,7 +229,7 @@
       "_ojo": "solo se usa si el layout de la planta no declara `bifila.cuerda`, que manda sobre esto."
     },
     "pitch_m_defecto": {
-      "valor": 12.0,
+      "valor": 12,
       "procedencia": "heredado",
       "_fuente": "código: Siting/index.html `RF_PITCH_M=12.0`",
       "_ojo": "ídem: el layout manda."
@@ -257,11 +257,11 @@
     "zigbee_pro_24": {
       "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee-PRO",
-      "f_hz": 2450000000.0,
-      "ptx_dbm": 19.0,
-      "gtx_dbi": 3.0,
-      "grx_dbi": 3.0,
-      "rx_sens_dbm": -103.0,
+      "f_hz": 2450000000,
+      "ptx_dbm": 19,
+      "gtx_dbi": 3,
+      "grx_dbi": 3,
+      "rx_sens_dbm": -103,
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` (modelo CONGELADO), cuyo comentario dice: «ptxDbm: XBee-PRO RR. Estándar +8. Canal 26: máx +3. Antena Jinchang 3 dBi».",
       "_citas": {
         "ptx_dbm": {
@@ -373,15 +373,20 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "Zigbee mesh",
+        "retransmision_tcu": true
+      }
     },
     "zigbee_std_24": {
       "procedencia": "heredado",
       "nombre": "Zigbee 2,4 GHz — TODA la planta con XBee estándar (no PRO)",
-      "f_hz": 2450000000.0,
-      "ptx_dbm": 8.0,
-      "gtx_dbi": 3.0,
-      "grx_dbi": 3.0,
+      "f_hz": 2450000000,
+      "ptx_dbm": 8,
+      "gtx_dbi": 3,
+      "grx_dbi": 3,
       "rx_sens_dbm": null,
       "_fuente": "código: el mismo comentario de `defaultParams()` dice «Estándar +8» para la potencia.",
       "_pendiente_fase_2": "La SENSIBILIDAD del estándar NO aparece en el código y no se inventa: `null` hasta leerla del datasheet. Con `null` esta variante no emite margen.",
@@ -454,7 +459,12 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "Zigbee mesh",
+        "retransmision_tcu": true
+      }
     },
     "_las_dos_de_sub_giga": [
       "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
@@ -502,7 +512,7 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "VACÍA. Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_estado": "TRES MÓDULOS LEÍDOS DE DATASHEET y CUATRO variantes de balance calculables con un perfil RF común de 868,3 MHz, 14 dBm conducidos y antena TE 0600-00020 de 2 dBi. NO es una selección de BOM ni una certificación regulatoria.",
         "_la_red_2026_09_24": [
           "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
           "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
@@ -515,13 +525,259 @@
           "sin decir cuándo se probó es lo mismo que no decir nada."
         ],
         "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
-        "lista": []
+        "lista": [
+          {
+            "fabricante": "Microchip",
+            "modelo": "WLR089U0",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              863000000,
+              928000000
+            ],
+            "ptx_hw_dbm_868": 14.17,
+            "rx_sens_por_modo": [
+              {
+                "modo": "LoRa SF12 / BW 125 kHz",
+                "sf": 12,
+                "bw_hz": 125000,
+                "sens_dbm": -136,
+                "criterio": "1% PER; payload 64 B; EC 4/6; CRC on; preámbulo 12",
+                "_cita": {
+                  "documento": "WLR089U0 Low Power LoRa Sub-GHz Module Data Sheet",
+                  "version": "DS70005435B",
+                  "pagina": 21,
+                  "leido_el": "2026-09-26"
+                }
+              }
+            ],
+            "consumo": {
+              "tx_ma_868_14dbm": 41.54,
+              "rx_ma_868_bw125": 12.68,
+              "sleep_ua": 1.608
+            },
+            "_cita_tx": {
+              "documento": "WLR089U0 Low Power LoRa Sub-GHz Module Data Sheet",
+              "version": "DS70005435B",
+              "pagina": 21,
+              "leido_el": "2026-09-26"
+            },
+            "_nota": "La hoja da 14,17 dBm típicos en LoRa a 868 MHz. La variante calculable usa 14,0 dBm como perfil común del careo."
+          },
+          {
+            "fabricante": "Murata",
+            "modelo": "Type 1SJ-296",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              868000000,
+              915000000
+            ],
+            "ptx_hw_dbm_868": 21.5,
+            "rx_sens_por_modo": [
+              {
+                "modo": "LoRa SF7 / BW 125 kHz",
+                "sf": 7,
+                "bw_hz": 125000,
+                "sens_dbm": -124,
+                "criterio": "1% PER; EC 4/5; payload 10 B",
+                "_cita": {
+                  "documento": "Specification Number SP-1SJ-296-G",
+                  "version": "SP-1SJ-296-G",
+                  "pagina": null,
+                  "leido_el": "2026-09-26"
+                }
+              },
+              {
+                "modo": "LoRa SF12 / BW 125 kHz",
+                "sf": 12,
+                "bw_hz": 125000,
+                "sens_dbm": -137,
+                "criterio": "1% PER; EC 4/5; payload 10 B",
+                "_cita": {
+                  "documento": "Specification Number SP-1SJ-296-G",
+                  "version": "SP-1SJ-296-G",
+                  "pagina": null,
+                  "leido_el": "2026-09-26"
+                }
+              }
+            ],
+            "consumo": {
+              "tx_ma_22dbm_868": 124,
+              "rx_ma_bw125": 15.5
+            },
+            "_nota": "El máximo de hardware no se usa como potencia de planta. En el careo se limita a 14,0 dBm conducidos hasta cerrar canal/ERP."
+          },
+          {
+            "fabricante": "Seeed Studio",
+            "modelo": "Wio-E5",
+            "procedencia": "datasheet",
+            "banda_declarada_hz": [
+              868000000,
+              915000000
+            ],
+            "ptx_hw_dbm_868": 14,
+            "rx_sens_por_modo": [
+              {
+                "modo": "LoRa SF12 / BW 125 kHz",
+                "sf": 12,
+                "bw_hz": 125000,
+                "sens_dbm": -135,
+                "criterio": "valor típico de la tabla de módulo; la misma tabla muestra -137 dBm en la otra columna",
+                "_cita": {
+                  "documento": "Wio-E5 LoRa Wireless Module Datasheet",
+                  "version": "V1.1",
+                  "pagina": 8,
+                  "leido_el": "2026-09-26"
+                }
+              }
+            ],
+            "consumo": {
+              "tx_ma_868_14dbm": 26,
+              "rx_ma_868_bw125": 6.7,
+              "sleep_ua": 2.1
+            },
+            "_nota": "Se usa -135 dBm típico, no el valor más favorable de la tabla. La hoja declara EU868."
+          }
+        ],
+        "variantes_calculables": [
+          {
+            "id": "wlr089u0_lora_sf12_bw_125_khz",
+            "fabricante": "Microchip",
+            "modelo": "WLR089U0",
+            "modo": "LoRa SF12 / BW 125 kHz",
+            "sf": 12,
+            "bw_hz": 125000,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.17,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -136,
+            "tasa_bps": 250,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_canal_y_duty_cycle",
+            "_cita_rx": {
+              "documento": "WLR089U0 Low Power LoRa Sub-GHz Module Data Sheet",
+              "version": "DS70005435B",
+              "pagina": 21,
+              "leido_el": "2026-09-26"
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/6"
+          },
+          {
+            "id": "type_1sj_296_lora_sf7_bw_125_khz",
+            "fabricante": "Murata",
+            "modelo": "Type 1SJ-296",
+            "modo": "LoRa SF7 / BW 125 kHz",
+            "sf": 7,
+            "bw_hz": 125000,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 21.5,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -124,
+            "tasa_bps": 5470,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_canal_y_duty_cycle",
+            "_cita_rx": {
+              "documento": "Specification Number SP-1SJ-296-G",
+              "version": "SP-1SJ-296-G",
+              "pagina": null,
+              "leido_el": "2026-09-26"
+            },
+            "dr": 5,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/5"
+          },
+          {
+            "id": "type_1sj_296_lora_sf12_bw_125_khz",
+            "fabricante": "Murata",
+            "modelo": "Type 1SJ-296",
+            "modo": "LoRa SF12 / BW 125 kHz",
+            "sf": 12,
+            "bw_hz": 125000,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 21.5,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -137,
+            "tasa_bps": 250,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_canal_y_duty_cycle",
+            "_cita_rx": {
+              "documento": "Specification Number SP-1SJ-296-G",
+              "version": "SP-1SJ-296-G",
+              "pagina": null,
+              "leido_el": "2026-09-26"
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": "4/5"
+          },
+          {
+            "id": "wio_e5_lora_sf12_bw_125_khz",
+            "fabricante": "Seeed Studio",
+            "modelo": "Wio-E5",
+            "modo": "LoRa SF12 / BW 125 kHz",
+            "sf": 12,
+            "bw_hz": 125000,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -135,
+            "tasa_bps": 250,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_canal_y_duty_cycle",
+            "_cita_rx": {
+              "documento": "Wio-E5 LoRa Wireless Module Datasheet",
+              "version": "V1.1",
+              "pagina": 8,
+              "leido_el": "2026-09-26"
+            },
+            "dr": 0,
+            "canal_ref_mhz": 868.3,
+            "max_eirp_default_dbm": 16,
+            "duty_cycle_ref": "<1%",
+            "_fuente_tasa": "LoRa Alliance RP002-1.0.5 tabla 10",
+            "sens_coding_rate": null
+          }
+        ]
       },
       "_que_falta": {
-        "modulo_de_referencia": "Ninguno elegido. Hace falta UNO, nombrado, no «un módulo LoRa».",
+        "modulo_de_referencia": "Ya hay candidatos reales; sigue sin haber módulo APROBADO. La selección final es una decisión de diseño.",
         "ptx_dbm": "del datasheet del módulo, con la página.",
         "rx_sens_dbm": "del datasheet, Y CON SU SF Y SU ANCHO DE BANDA: en LoRa la sensibilidad no es un número, es una tabla. Sin decir a qué SF se declara, el dato no significa nada.",
-        "plan_de_canal": "sub-bandas de EU868 con su e.r.p. máxima y su ciclo de trabajo, de la norma (ETSI EN 300 220-2 / CEPT ERC REC 70-03), no de memoria.",
+        "plan_de_canal": "Pendiente cerrar el canal/sub-banda final y sus restricciones con ERC/REC 70-03 vigente; el careo usa 868,3 MHz solo como referencia física.",
         "f_hz": "sale del plan de canal, así que depende de lo anterior."
       },
       "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: clase C multicast —el nodo escucha siempre, la orden llega sin esperar ventana— y el ciclo de trabajo del 1 % limita al EMISOR, no al receptor: para una orden de stow (rara, corta, unidireccional) no muerde; para los reintentos sí. Eso es arquitectura, no balance, y no necesita datasheet.",
@@ -638,7 +894,84 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": null
+      "tasa_bps": null,
+      "antena_referencia": {
+        "fabricante": "TE Connectivity",
+        "modelo": "0600-00020",
+        "banda_hz": [
+          863000000,
+          876000000
+        ],
+        "ganancia_dbi": 2,
+        "polarizacion": "vertical",
+        "direccionalidad": "omnidireccional",
+        "procedencia": "datasheet",
+        "_fuente": "TE Connectivity 0600-00020: banda 863–876 MHz, ganancia máx. 2 dB, látigo/dipolo vertical. Leído 2026-09-26.",
+        "_uso": "ANTENA DE REFERENCIA PARA EL CAREO, no BOM aprobada. Se usa igual en LoRa y Wi-SUN para que la comparación no regale ganancia a una tecnología."
+      },
+      "perfil_referencia": {
+        "f_hz": 868300000,
+        "ptx_conducida_ref_dbm": 14,
+        "antena": {
+          "fabricante": "TE Connectivity",
+          "modelo": "0600-00020",
+          "banda_hz": [
+            863000000,
+            876000000
+          ],
+          "ganancia_dbi": 2,
+          "polarizacion": "vertical",
+          "direccionalidad": "omnidireccional",
+          "procedencia": "datasheet",
+          "_fuente": "TE Connectivity 0600-00020: banda 863–876 MHz, ganancia máx. 2 dB, látigo/dipolo vertical. Leído 2026-09-26.",
+          "_uso": "ANTENA DE REFERENCIA PARA EL CAREO, no BOM aprobada. Se usa igual en LoRa y Wi-SUN para que la comparación no regale ganancia a una tecnología."
+        },
+        "regulacion": {
+          "estado": "PARCIAL",
+          "referencias": [
+            "ETSI EN 300 220-2 V3.3.1 (2025-03)",
+            "ERC/REC 70-03, versión vigente consultada 2026-09-26"
+          ],
+          "erp_max_dbm": null,
+          "ciclo_trabajo": null,
+          "_motivo": "No se cierra aquí la legalidad completa: falta transcribir la entrada aplicable de ERC/REC 70-03 vigente para el modo/canal elegido. 14 dBm conducidos + antena de 2 dBi se usa como perfil conservador de comparación, no como certificado de conformidad."
+        },
+        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue.",
+        "lorawan": {
+          "documento": "LoRaWAN Regional Parameters",
+          "version": "RP002-1.0.5",
+          "fecha": "2025-10",
+          "canales_por_defecto_mhz": [
+            868.1,
+            868.3,
+            868.5
+          ],
+          "duty_cycle_canales_por_defecto": "<1%",
+          "max_eirp_default_dbm": 16,
+          "dr": {
+            "0": {
+              "modo": "SF12 / 125 kHz",
+              "tasa_bps": 250
+            },
+            "5": {
+              "modo": "SF7 / 125 kHz",
+              "tasa_bps": 5470
+            }
+          },
+          "_fuente": "LoRa Alliance RP002-1.0.5, §3.4.2–3.4.3, tablas 8, 10 y 13. Leído 2026-09-26.",
+          "_limite": "El Max EIRP por defecto de LoRaWAN NO sustituye la regulación local; el propio RP002 exige no superar el máximo local."
+        }
+      },
+      "topologia": {
+        "tipo": "directa",
+        "retransmision_tcu": false,
+        "escenarios": [
+          "LoRa P2P directo",
+          "LoRaWAN star-of-stars"
+        ],
+        "_fuente": "LoRaWAN Specification v1.1: star-of-stars; end-devices usan single-hop LoRa/FSK hacia uno o varios gateways.",
+        "_ojo": "LoRa P2P propietario comparte la restriccion fisica de enlace directo, pero no es LoRaWAN."
+      }
     },
     "wisun_fan_863": {
       "procedencia": "pendiente",
@@ -667,7 +1000,7 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "CUATRO CANDIDATOS LEIDOS DE SU HOJA el 2026-09-24. Ninguno elegido: la eleccion es del cliente. OJO AL COMPARAR: las sensibilidades NO son homogeneas entre fabricantes ni dentro de la misma tabla de TI. Por eso cada fila lleva `criterio` y `modo_declarado_por_el_fabricante`, y son OBLIGATORIOS.",
+        "_estado": "CUATRO candidatos de hardware documentados; DIEZ variantes Wi-SUN FSK calculables salen de EFR32FG25/FG28, que son los dos cuyos datasheets etiquetan explícitamente los modos como Wi-SUN. Los TI se conservan como referencias 802.15.4 2-GFSK, pero NO se renombran Wi-SUN.",
         "_la_red_2026_09_24": [
           "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
           "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
@@ -686,8 +1019,8 @@
             "modelo": "EFR32FG25",
             "procedencia": "datasheet",
             "banda_declarada_hz": [
-              863000000.0,
-              876000000.0
+              863000000,
+              876000000
             ],
             "ptx_dbm": {
               "typ": 14.6,
@@ -720,7 +1053,7 @@
                 "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
                 "tasa_bps": 100000,
                 "fec": false,
-                "sens_dbm": -108.0,
+                "sens_dbm": -108,
                 "criterio": "10% PER, sin interferente",
                 "_cita": {
                   "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
@@ -850,8 +1183,8 @@
             "modelo": "EFR32FG28",
             "procedencia": "datasheet",
             "banda_declarada_hz": [
-              863000000.0,
-              876000000.0
+              863000000,
+              876000000
             ],
             "ptx_dbm": {
               "_ojo": "DOS VARIANTES QUE NO SON INTERCAMBIABLES, y la de 20 dBm NO cubre la banda general.",
@@ -860,8 +1193,8 @@
                 "min": 13.1,
                 "max": 15.2,
                 "frange_hz": [
-                  863000000.0,
-                  869200000.0
+                  863000000,
+                  869200000
                 ],
                 "condicion": "Tabla 4.18 «868 MHz Band +14 dBm»: PAVDD conectado a la salida del DC-DC. POUT = +14 dBm a 868,3 MHz.",
                 "_cita": {
@@ -876,8 +1209,8 @@
                 "min": 18.6,
                 "max": 21.6,
                 "frange_hz": [
-                  869400000.0,
-                  869650000.0
+                  869400000,
+                  869650000
                 ],
                 "condicion": "Tabla 4.17 «868 MHz Band +20 dBm»: PAVDD = 3,3 V, dispositivos de 20 dBm. POUT = +20 dBm a 869,5 MHz.",
                 "_ojo": "EL RANGO DECLARADO SON 869,4-869,65 MHz, la sub-banda estrecha de alta potencia. NO son 863-870. Aplicar estos 20 dBm a un balance en la banda general se regala ~6 dB que la hoja no da.",
@@ -907,7 +1240,7 @@
                 "modo_declarado_por_el_fabricante": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
                 "tasa_bps": 100000,
                 "fec": false,
-                "sens_dbm": -108.0,
+                "sens_dbm": -108,
                 "criterio": "10% PER, sin interferente",
                 "_cita": {
                   "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
@@ -972,8 +1305,8 @@
             "modelo": "CC1312R7",
             "procedencia": "datasheet",
             "banda_declarada_hz": [
-              861000000.0,
-              1054000000.0
+              861000000,
+              1054000000
             ],
             "_ojo_modo": "ESTA HOJA NO DICE «Wi-SUN» EN NINGUNA DE SUS TABLAS DE RF. Declara modos 802.15.4 2-GFSK por tasa y desviacion. Se parecen a los PHY de Wi-SUN FAN, pero NO estan etiquetados como tales por el fabricante, y eso va en el campo modo_declarado_por_el_fabricante de cada fila.",
             "ptx_dbm": {
@@ -1060,7 +1393,7 @@
               "rx_ma": 5.4,
               "rx_condicion": "Radio receive current, 868 MHz",
               "tx_ma_por_potencia": {
-                "0_dbm": 8.0,
+                "0_dbm": 8,
                 "10_dbm": 14.3,
                 "14_dbm": 24.9
               },
@@ -1087,8 +1420,8 @@
             "modelo": "CC1352P7",
             "procedencia": "datasheet",
             "banda_declarada_hz": [
-              861000000.0,
-              1054000000.0
+              861000000,
+              1054000000
             ],
             "_ojo_modo": "Igual que el CC1312R7: la hoja NO etiqueta sus modos como Wi-SUN.",
             "ptx_dbm": {
@@ -1204,13 +1537,315 @@
           "MODO DECLARADO. «802.15.4 2-GFSK 50 kbps +/-25 kHz» NO es «Wi-SUN FAN #1a» aunque los parametros",
           "coincidan. Silicon Labs etiqueta sus modos FAN con su numero; TI no menciona Wi-SUN en sus tablas",
           "de RF. La ficha tiene que decir CUAL se leyo, no cual se parece."
+        ],
+        "variantes_calculables": [
+          {
+            "id": "efr32fg25_wi_sun_fsk_1a_0_1_36_mi_0_5_sin_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "modo": "Wi-SUN FSK #1a = (0, 1, 36), mi = 0,5, sin FEC",
+            "fec": false,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.6,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -110.8,
+            "tasa_bps": 50000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.2",
+              "pagina": 92,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg25_wi_sun_fsk_2a_0_3_37_mi_0_5_sin_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "modo": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
+            "fec": false,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.6,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -108,
+            "tasa_bps": 100000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.2",
+              "pagina": 92,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg25_wi_sun_fsk_1a_1_1_36_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "modo": "Wi-SUN FSK #1a = (1, 1, 36), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.6,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -114.1,
+            "tasa_bps": 50000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.2",
+              "pagina": 92,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg25_wi_sun_fsk_2a_1_3_37_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "modo": "Wi-SUN FSK #2a = (1, 3, 37), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.6,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -110.2,
+            "tasa_bps": 100000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.2",
+              "pagina": 92,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg25_wi_sun_fsk_3_1_5_37_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG25",
+            "modo": "Wi-SUN FSK #3 = (1, 5, 37), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.6,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -108.8,
+            "tasa_bps": 150000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG25 Gecko Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.2",
+              "pagina": 92,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg28_wi_sun_fsk_1a_0_1_36_mi_0_5_sin_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "modo": "Wi-SUN FSK #1a = (0, 1, 36), mi = 0,5, sin FEC",
+            "fec": false,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.3,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -110.4,
+            "tasa_bps": 50000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.1",
+              "pagina": 81,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg28_wi_sun_fsk_2a_0_3_37_mi_0_5_sin_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "modo": "Wi-SUN FSK #2a = (0, 3, 37), mi = 0,5, sin FEC",
+            "fec": false,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.3,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -108,
+            "tasa_bps": 100000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.1",
+              "pagina": 81,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg28_wi_sun_fsk_1a_1_1_36_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "modo": "Wi-SUN FSK #1a = (1, 1, 36), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.3,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -113.7,
+            "tasa_bps": 50000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.1",
+              "pagina": 81,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 32,
+            "channel_spacing_hz": 100000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg28_wi_sun_fsk_2a_1_3_37_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "modo": "Wi-SUN FSK #2a = (1, 3, 37), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.3,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -110.1,
+            "tasa_bps": 100000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.1",
+              "pagina": 81,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          },
+          {
+            "id": "efr32fg28_wi_sun_fsk_3_1_5_37_mi_0_5_con_fec",
+            "fabricante": "Silicon Labs",
+            "modelo": "EFR32FG28",
+            "modo": "Wi-SUN FSK #3 = (1, 5, 37), mi = 0,5, con FEC",
+            "fec": true,
+            "f_hz": 868300000,
+            "ptx_dbm": 14,
+            "ptx_hw_dbm": 14.3,
+            "gtx_dbi": 2,
+            "grx_dbi": 2,
+            "rx_sens_dbm": -108.4,
+            "tasa_bps": 150000,
+            "tasa_serie_bps": 19200,
+            "carga_util_b": 44,
+            "periodo_s": 30,
+            "antena_ref": "0600-00020",
+            "procedencia": "datasheet+perfil_referencia",
+            "legalidad": "pendiente_cerrar_plan_de_canal",
+            "_cita_rx": {
+              "documento": "EFR32FG28 Wireless SoC Family Data Sheet",
+              "version": "Rev. 1.1",
+              "pagina": 81,
+              "leido_el": "2026-09-24"
+            },
+            "channel_plan_id": 33,
+            "channel_spacing_hz": 200000,
+            "canal_ref_mhz": 868.3,
+            "_fuente_plan": "Silicon Labs: EU1 Channel Plan 32/33"
+          }
         ]
       },
       "_que_falta": {
-        "modulo_de_referencia": "Ninguno elegido.",
+        "modulo_de_referencia": "Ya hay candidatos reales; sigue sin haber módulo/modo APROBADO para producto.",
         "ptx_dbm": "del datasheet del módulo, con la página.",
         "rx_sens_dbm": "del datasheet, Y CON SU MODO PHY: Wi-SUN FAN define varios (distinta tasa y distinto índice de modulación) y la sensibilidad cambia con el modo. Un solo número sin decir el modo no vale.",
-        "plan_de_canal": "el plan de 863-870 MHz con su separación de canales, su e.r.p. máxima y su ciclo de trabajo, de la norma.",
+        "plan_de_canal": "Pendiente cerrar el plan de canal aplicable y sus restricciones con la recomendación/norma vigente. El careo usa 868,3 MHz como referencia física.",
         "f_hz": "sale del plan de canal."
       },
       "_lo_que_si_esta_razonado": "`FASE3_LATENCIA_STOW.md` §3: multicast por MPL, pensado justo para una orden como el stow; y malla multisalto como Zigbee, con la MISMA dependencia de la profundidad — que es el parámetro que hoy no está medido para ninguna de las tres.",
@@ -1322,7 +1957,85 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": null
+      "tasa_bps": null,
+      "antena_referencia": {
+        "fabricante": "TE Connectivity",
+        "modelo": "0600-00020",
+        "banda_hz": [
+          863000000,
+          876000000
+        ],
+        "ganancia_dbi": 2,
+        "polarizacion": "vertical",
+        "direccionalidad": "omnidireccional",
+        "procedencia": "datasheet",
+        "_fuente": "TE Connectivity 0600-00020: banda 863–876 MHz, ganancia máx. 2 dB, látigo/dipolo vertical. Leído 2026-09-26.",
+        "_uso": "ANTENA DE REFERENCIA PARA EL CAREO, no BOM aprobada. Se usa igual en LoRa y Wi-SUN para que la comparación no regale ganancia a una tecnología."
+      },
+      "perfil_referencia": {
+        "f_hz": 868300000,
+        "ptx_conducida_ref_dbm": 14,
+        "antena": {
+          "fabricante": "TE Connectivity",
+          "modelo": "0600-00020",
+          "banda_hz": [
+            863000000,
+            876000000
+          ],
+          "ganancia_dbi": 2,
+          "polarizacion": "vertical",
+          "direccionalidad": "omnidireccional",
+          "procedencia": "datasheet",
+          "_fuente": "TE Connectivity 0600-00020: banda 863–876 MHz, ganancia máx. 2 dB, látigo/dipolo vertical. Leído 2026-09-26.",
+          "_uso": "ANTENA DE REFERENCIA PARA EL CAREO, no BOM aprobada. Se usa igual en LoRa y Wi-SUN para que la comparación no regale ganancia a una tecnología."
+        },
+        "regulacion": {
+          "estado": "PARCIAL",
+          "referencias": [
+            "ETSI EN 300 220-2 V3.3.1 (2025-03)",
+            "ERC/REC 70-03, versión vigente consultada 2026-09-26"
+          ],
+          "erp_max_dbm": null,
+          "ciclo_trabajo": null,
+          "_motivo": "No se cierra aquí la legalidad completa: falta transcribir la entrada aplicable de ERC/REC 70-03 vigente para el modo/canal elegido. 14 dBm conducidos + antena de 2 dBi se usa como perfil conservador de comparación, no como certificado de conformidad."
+        },
+        "_por_que_8683": "868,3 MHz es un punto de referencia dentro de EU868 para comparar la física. El canal final se decidirá con el plan de canal del despliegue.",
+        "wisun_eu1": {
+          "dominio": "EU1",
+          "banda_hz": [
+            863000000,
+            870000000
+          ],
+          "channel_plans": {
+            "32": {
+              "base_hz": 863100000,
+              "spacing_hz": 100000,
+              "phy": [
+                "#1a",
+                "#1a con FEC"
+              ]
+            },
+            "33": {
+              "base_hz": 863100000,
+              "spacing_hz": 200000,
+              "phy": [
+                "#2a",
+                "#2a con FEC",
+                "#3"
+              ]
+            }
+          },
+          "_fuente": "Silicon Labs Wi-SUN PHY Mode Switch documentation, EU regulatory domain, consultada 2026-09-26.",
+          "_limite": "Esto fija el plan PHY de referencia, NO la conformidad regulatoria del producto ni la máscara final de canales."
+        }
+      },
+      "topologia": {
+        "tipo": "mesh",
+        "routing": "IPv6/RPL",
+        "retransmision_tcu": true,
+        "_fuente": "Wi-SUN FAN: red IP multisalto basada en IPv6/RPL.",
+        "_supuesto_simulacion": "todas las TCU son router-capable; si el hardware final usa leaf nodes hay que repetir el careo con ese rol."
+      }
     },
     "_el_protocolo_de_la_tcu": {
       "_que_es": "El protocolo de la TCU no cambia porque cambie la radio, asi que estos tres campos son IGUALES en las cuatro variantes. Estan repetidos en cada una porque el comparador los lee de la variante; esta nota es donde se explica por que coinciden.",
@@ -1347,7 +2060,7 @@
   "propagacion": {
     "_que_es": "Parámetros del medio. Pocos, y con significado físico.",
     "eps_r_suelo": {
-      "valor": 15.0,
+      "valor": 15,
       "procedencia": "heredado",
       "_fuente": "código: zigbee_pv_model.js `defaultParams()` `epsR: 15.0`"
     },

@@ -251,9 +251,32 @@ check('  y dice por qué eje ordena, y cuál NO entra (consumo, certificación)'
    dicho: un hueco declarado se rellena; uno que no existe, no. */
 for (const t of ['lora_eu868', 'wisun_fan_863']) {
   const c = TEC[t].candidatos;
-  check(t + ' declara su lista de candidatos (hoy vacía, y dicho)',
+  check(t + ' declara su lista de candidatos y su estado',
         c && Array.isArray(c.lista) && typeof c._estado === 'string', JSON.stringify(!!c));
 }
+const lcalc = TEC.lora_eu868.candidatos.variantes_calculables || [];
+const wcalc = TEC.wisun_fan_863.candidatos.variantes_calculables || [];
+check('LoRa ya tiene al menos 3 módulos de datasheet', TEC.lora_eu868.candidatos.lista.length >= 3,
+      TEC.lora_eu868.candidatos.lista.length);
+check('LoRa expande al menos 4 variantes de balance calculables', lcalc.length >= 4, lcalc.length);
+check('Wi-SUN expande al menos 10 variantes FSK calculables', wcalc.length >= 10, wcalc.length);
+check('todas las variantes calculables tienen presupuesto de enlace completo',
+      lcalc.concat(wcalc).every(v => RT.presupuesto(v) != null));
+check('sub-GHz usa una antena propia, no hereda los 3 dBi de Zigbee',
+      lcalc.concat(wcalc).every(v => v.gtx_dbi === 2 && v.grx_dbi === 2));
+check('los TI no se renombran Wi-SUN si su hoja no lo declara',
+      wcalc.every(v => v.fabricante === 'Silicon Labs'),
+      [...new Set(wcalc.map(v => v.fabricante))].join(','));
+check('LoRa SF12 y SF7 llevan las tasas vigentes del RP002-1.0.5',
+      lcalc.filter(v => v.sf === 12).every(v => v.tasa_bps === 250) &&
+      lcalc.filter(v => v.sf === 7).every(v => v.tasa_bps === 5470));
+check('el perfil LoRa de referencia usa 868,3 MHz y 16 dBm EIRP por defecto',
+      TEC.lora_eu868.perfil_referencia.lorawan.canales_por_defecto_mhz.includes(868.3) &&
+      TEC.lora_eu868.perfil_referencia.lorawan.max_eirp_default_dbm === 16);
+check('Wi-SUN EU1 asigna plan 32 a #1a y 33 a #2a/#3',
+      wcalc.every(v => (String(v.modo).includes('#1a') && v.channel_plan_id === 32) ||
+                       ((String(v.modo).includes('#2a') || String(v.modo).includes('#3')) &&
+                        v.channel_plan_id === 33)));
 
 /* ── LAS DOS TASAS, Y QUIÉN MANDA ────────────────────────────────────────
    `tasa_bps` es la capacidad de la RADIO —lo único comparable entre
