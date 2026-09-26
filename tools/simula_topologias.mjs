@@ -40,6 +40,13 @@ for(let i=0;i<S.motors.length;i++){
   nodos.push({id:'T'+i,x:m.x,y:m.y,i,ncu:m.ncu,esNcu:false});
 }
 const ntcu=nodos.length-raices.length;
+const ANTENA_HSU_M=P.geometria.antena_hsu_m.valor;
+const tcus=nodos.filter(n=>!n.esNcu);
+const raicesHsu=(L.meteo||[]).map((m,k)=>({
+  id:'HSU'+(k+1),x:m.x,y:m.n,esNcu:true,esEquipo:true,antenaM:ANTENA_HSU_M
+}));
+const nodosHsu=raicesHsu.concat(tcus);
+const idsHsu=raicesHsu.map(r=>r.id);
 
 function instala(baseKey,v,id){
   const key='__sim_'+id;
@@ -72,18 +79,19 @@ function deberMinPct(tasa){
   if(!(tasa>0)) return null;
   return 100*(44*8)/(30*tasa);
 }
-function resumeOne(nombre,tech,topologia,variante,key){
+function resumeOne(nombre,tech,topologia,variante,key,nodosLocal=nodos,raicesLocal=raices,rootSet='NCU'){
   const porUmbral={};
   for(const umbral of UMBRALES){
     const hs=[];
     for(const h of HORAS){
       const e=enlaza(key,h);
       const r=topologia==='directa'
-        ? TOP.analizaDirecta(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE,
-            raizDe:n=>'NCU'+n.ncu})
-        : TOP.analizaMalla(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE});
+        ? TOP.analizaDirecta(nodosLocal,e,raicesLocal,{umbralDb:umbral,alcanceMax:ALCANCE,
+            raizDe:rootSet==='NCU'?(n=>'NCU'+n.ncu):null})
+        : TOP.analizaMalla(nodosLocal,e,raicesLocal,{umbralDb:umbral,alcanceMax:ALCANCE});
       const directo=topologia==='mesh'
-        ? TOP.analizaDirecta(nodos,e,raices,{umbralDb:umbral,alcanceMax:ALCANCE,raizDe:n=>'NCU'+n.ncu})
+        ? TOP.analizaDirecta(nodosLocal,e,raicesLocal,{umbralDb:umbral,alcanceMax:ALCANCE,
+            raizDe:rootSet==='NCU'?(n=>'NCU'+n.ncu):null})
         : r;
       hs.push({hora:h,cubiertas:r.cubiertas,sinRuta:r.sinRuta.length,
         cubiertasDirectas:directo.cubiertas,
@@ -111,7 +119,7 @@ function resumeOne(nombre,tech,topologia,variante,key){
     };
   }
   return {
-    nombre,tecnologia:tech,topologia,variante:{
+    nombre,tecnologia:tech,topologia,rootSet,variante:{
       fabricante:variante.fabricante||null,modelo:variante.modelo||null,modo:variante.modo||null,
       f_hz:variante.f_hz,ptx_dbm:variante.ptx_dbm,gtx_dbi:variante.gtx_dbi,
       rx_sens_dbm:variante.rx_sens_dbm,tasa_bps:variante.tasa_bps||null,
@@ -129,7 +137,9 @@ escenarios.push(resumeOne('Zigbee PRO · mesh','zigbee','mesh',z,'zigbee_pro_24'
 
 for(const v of (P.tecnologias.lora_eu868.candidatos.variantes_calculables||[])){
   const key=instala('lora_eu868',v,'lora_'+v.id);
-  escenarios.push(resumeOne('LoRa directo · '+v.modelo+' · '+v.modo,'lora','directa',v,key));
+  escenarios.push(resumeOne('LoRa directo NCU · '+v.modelo+' · '+v.modo,'lora','directa',v,key));
+  if(idsHsu.length) escenarios.push(resumeOne('LoRa directo HSU · '+v.modelo+' · '+v.modo,
+    'lora','directa',v,key,nodosHsu,idsHsu,'HSU_PROPUESTA'));
 }
 for(const v of (P.tecnologias.wisun_fan_863.candidatos.variantes_calculables||[])){
   const key=instala('wisun_fan_863',v,'wisun_'+v.id);
@@ -147,7 +157,8 @@ const out={
     lorawan:'misma geometria directa que LoRa P2P; star-of-stars permite que cualquier gateway que oiga el uplink lo entregue al servidor'
   },
   supuestos:[
-    'mismas posiciones NCU del layout para los gateways de las tres tecnologias',
+    'mismas posiciones NCU del layout para el careo base de las tres tecnologias',
+    'escenario adicional LoRa-HSU usa las HSU reales como emplazamientos PROPUESTOS de gateway a 6,5 m; no es arquitectura instalada',
     'antena NCU a la cota declarada por el proyecto; TCU en su montaje actual',
     'LoRa/Wi-SUN usan antena sub-GHz TE 0600-00020 de 2 dBi como referencia, no BOM aprobada',
     'sin campana sub-GHz: es PREDICCION, no calibracion',
