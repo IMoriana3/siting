@@ -241,16 +241,17 @@ console.log('  campo PERMITE, no lo que el protocolo HACE.');
 console.log('\n── LA SENSIBILIDAD DEL VEREDICTO AL MÓDULO ──\n');
 const candidatos = {};
 for (const t of tecs) {
-  const c = (P.tecnologias[t].candidatos && P.tecnologias[t].candidatos.lista) || [];
+  const cb = P.tecnologias[t].candidatos || {};
+  const c = (cb.variantes_calculables && cb.variantes_calculables.length)
+    ? cb.variantes_calculables : (cb.lista || []);
   candidatos[t] = c.length ? c.map(m => Object.assign({}, P.tecnologias[t], m)) : [P.tecnologias[t]];
 }
 const sens = RT.sensibilidadAlModulo(PLANTA, nodos, raices, candidatos, HORAS, enlazaDe, ALCANCE_M);
 if (!sens.medible) {
   console.log('  NO SE PUEDE MEDIR: ' + sens.motivo);
-  console.log('\n  Hacen falta AL MENOS DOS candidatos por tecnología, con Ptx, sensibilidad');
-  console.log('  por modo, plan de canal, consumo y certificación EU, CITADOS. Ver el bloque');
-  console.log('  `candidatos` de cada variante en radio_params.json: está declarado y vacío,');
-  console.log('  con el motivo de por qué. En cuanto se rellene, esto se enciende solo.');
+  console.log('\n  Hacen falta AL MENOS DOS variantes calculables por tecnología, con Ptx,');
+  console.log('  sensibilidad por modo y antena de referencia CITADAS. El plan de canal,');
+  console.log('  duty-cycle y certificación siguen siendo criterios aparte y no se inventan.');
 } else {
   for (const f of sens.filas) {
     console.log('  ' + pad(f.rotulo, 42) + (f.cambia ? 'CAMBIA' : 'igual ') +
