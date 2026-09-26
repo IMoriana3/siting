@@ -105,6 +105,8 @@
       minimoRaicesExistentes:minimo,
       saltosMax:sinRuta.length===tcus.length?null:1,
       saltosMediano:sinRuta.length===tcus.length?null:1,
+      saltosSuma:tcus.length-sinRuta.length,
+      saltosMedio:(tcus.length-sinRuta.length)?1:null,
       maxDistanciaViableM:distancias.length?Math.max.apply(null,distancias):null,
       distanciaMedianaViableM:mediana(distancias),
       margenMinDb:margenes.length?Math.min.apply(null,margenes):null,
@@ -146,6 +148,8 @@
     r.conDosOMasGateways=null;
     r.saltosMax=hops.length?Math.max.apply(null,hops):null;
     r.saltosMediano=mediana(hops);
+    r.saltosSuma=hops.length?hops.reduce(function(a,b){return a+b;},0):0;
+    r.saltosMedio=hops.length?r.saltosSuma/hops.length:null;
     r.maxDistanciaViableM=ds.length?Math.max.apply(null,ds):null;
     r.distanciaMedianaViableM=mediana(ds);
     r.margenMinDb=ms.length?Math.min.apply(null,ms):null;
