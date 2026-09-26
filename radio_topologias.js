@@ -24,7 +24,9 @@
     pref = pref || []; ini = ini || 0;
     if (pref.length === k) return cb(pref.slice());
     for (var i=ini; i<=xs.length-(k-pref.length); i++) {
-      pref.push(xs[i]); if (cb(pref) === true) return true; pref.pop();
+      pref.push(xs[i]);
+      if (combinaciones(xs, k, cb, pref, i+1) === true) return true;
+      pref.pop();
     }
     return false;
   }
@@ -83,11 +85,12 @@
     }
 
     var sinRuta=[], una=[], dosOMas=[], asignadaOk=[], asignadaKo=[];
+    var tieneAsignacion = typeof opts.raizDe === "function";
     for (var k=0; k<tcus.length; k++) {
       var nd=tcus[k], v=cobertura.get(nd.id)||[];
       if (!v.length) sinRuta.push(nd.id);
       else if (v.length===1) una.push(nd.id); else dosOMas.push(nd.id);
-      if (typeof opts.raizDe === "function") {
+      if (tieneAsignacion) {
         var rid=opts.raizDe(nd);
         if (rid!=null) {
           if (v.some(function(x){ return x.raiz===rid; })) asignadaOk.push(nd.id);
@@ -101,7 +104,8 @@
       umbralDb:umbral, tcus:tcus.length, raices:roots.length,
       cubiertas:tcus.length-sinRuta.length, sinRuta:sinRuta,
       conUnGateway:una.length, conDosOMasGateways:dosOMas.length,
-      asignadaOk:asignadaOk.length, asignadaKo:asignadaKo,
+      asignadaOk:tieneAsignacion?asignadaOk.length:null,
+      asignadaKo:tieneAsignacion?asignadaKo:null,
       minimoRaicesExistentes:minimo,
       saltosMax:sinRuta.length===tcus.length?null:1,
       saltosMediano:sinRuta.length===tcus.length?null:1,
