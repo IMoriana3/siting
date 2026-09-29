@@ -28,6 +28,9 @@ jobs:
       # con rc = 2 y el censo del final lo publica como NO COMPROBADO, que es
       # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
       # aprobado.
+      - name: Plant Studies JS compila
+        run: node --check plant_studies.js
+
       - name: el repo hermano, al lado (es publico)
         continue-on-error: true
         run: |
