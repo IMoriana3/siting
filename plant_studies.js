@@ -9,8 +9,7 @@ var PS={
   api:null, engineOk:false, activeOverlay:null,
   earthing:{result:null,input:null,uiSig:null},
   cleaning:{result:null,input:null,uiSig:null,approved:new Set()},
-  modal:null, body:null
-};
+  modal:null, body:null,\n  staleCache:{earthing:{t:0,value:false},cleaning:{t:0,value:false}}\n};
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function fmt(v,d){var x=Number(v);return Number.isFinite(x)?x.toLocaleString("es-ES",{maximumFractionDigits:d==null?2:d}):"—";}
@@ -93,11 +92,7 @@ function cleaningStructures(){
 }
 function earthingSig(input){return uiHash({boundary:boundary(),equipment:earthingEquipment(),input:input});}
 function cleaningSig(input){return uiHash({structures:cleaningStructures(),input:input});}
-function stale(kind){
-  var st=kind==="earthing"?PS.earthing:PS.cleaning;
-  if(!st.result||!st.input||!st.uiSig)return false;
-  try{return st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}catch(_){return true;}
-}
+function stale(kind,force){\n  var st=kind==="earthing"?PS.earthing:PS.cleaning, cache=PS.staleCache[kind], now=Date.now();\n  if(!st.result||!st.input||!st.uiSig)return false;\n  if(!force&&now-cache.t<750)return cache.value;\n  try{cache.value=st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}\n  catch(_){cache.value=true;}\n  cache.t=now;return cache.value;\n}
 function statusHtml(kind){
   var st=kind==="earthing"?PS.earthing:PS.cleaning;
   if(!st.result)return '<span style="color:var(--muted-2)">sin calcular</span>';
@@ -173,7 +168,7 @@ async function runEarthing(){
   try{
     var input=earthValues();PS.body.innerHTML='<div class="ps-note">Calculando…</div>';
     var j=await post("/studies/earthing",{boundary:boundary(),equipment:earthingEquipment(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.earthing={result:j,input:input,uiSig:earthingSig(input)};PS.activeOverlay="earthing";renderEarthing();updateStatus();draw();
+    PS.earthing={result:j,input:input,uiSig:earthingSig(input)};PS.staleCache.earthing={t:Date.now(),value:false};PS.activeOverlay="earthing";renderEarthing();updateStatus();draw();
   }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
 }
 function kpi(k,v){return '<div class="ps-kpi"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
@@ -185,7 +180,7 @@ function warnings(ws){return (ws||[]).map(function(x){return '<div class="ps-not
 function actions(kind){return '<div class="ps-actions"><button class="btn btn-ghost btn-sm" data-ps="json" data-kind="'+kind+'">JSON</button><button class="btn btn-ghost btn-sm" data-ps="boq" data-kind="'+kind+'">BoQ CSV</button><button class="btn btn-ghost btn-sm" data-ps="dxf" data-kind="'+kind+'">DXF</button><button class="btn btn-ghost btn-sm" data-ps="print" data-kind="'+kind+'">Informe</button><button class="btn btn-ghost btn-sm" data-ps="overlay" data-kind="'+kind+'">Mostrar en plano</button></div>';}
 function renderEarthing(){
   var r=PS.earthing.result;if(!r){PS.body.innerHTML='<div class="ps-note">Aún no calculado.</div>';return;}
-  var x=r.results||{},st=stale("earthing");
+  var x=r.results||{},st=stale("earthing",true);
   PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: geometría/equipos cambiaron. Recalcula antes de usarlo.</div>':'')+
     '<div class="ps-summary">'+kpi("Rgrid",fmt(x.estimated_grid_resistance_ohm,3)+" Ω")+kpi("Picas",fmt(x.earth_pit_count,0))+kpi("GI 2D",fmt(x.horizontal_grid_length_m,0)+" m")+kpi("GPR",fmt(x.gpr_v,0)+" V")+'</div>'+
     '<div class="ps-note '+(String(r.status).indexOf("FAIL")===0?"ps-err":String(r.status).indexOf("PASS")===0?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Touch permitido: '+fmt(x.allowable_touch_voltage_v,0)+' V · Step permitido: '+fmt(x.allowable_step_voltage_v,0)+' V<br>Touch real de malla: '+esc((r.checks||{}).touch_voltage||"UNKNOWN")+'.</div>'+boqTable(r.boq)+warnings(r.warnings)+actions("earthing");
@@ -207,14 +202,14 @@ async function runCleaning(){
   try{
     var input=cleanValues();PS.body.innerHTML='<div class="ps-note">Calculando líneas y discontinuidades…</div>';
     var j=await post("/studies/robot-cleaning",{structures:cleaningStructures(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.cleaning.result=j;PS.cleaning.input=input;PS.cleaning.uiSig=cleaningSig(input);
+    PS.cleaning.result=j;PS.cleaning.input=input;PS.cleaning.uiSig=cleaningSig(input);PS.staleCache.cleaning={t:Date.now(),value:false};
     var valid=new Set((j.gaps||[]).map(function(g){return g.gap_id;}));PS.cleaning.approved=new Set(Array.from(PS.cleaning.approved).filter(function(x){return valid.has(x);}));
     PS.activeOverlay="cleaning";renderCleaning();updateStatus();draw();
   }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
 }
 function renderCleaning(){
   var r=PS.cleaning.result;if(!r){PS.body.innerHTML='<div class="ps-note">Aún no calculado.</div>';return;}
-  var x=r.results||{},st=stale("cleaning"),cand=(r.gaps||[]).filter(function(g){return g.state==="BRIDGE_CANDIDATE"||g.state==="BRIDGE_APPROVED";});
+  var x=r.results||{},st=stale("cleaning",true),cand=(r.gaps||[]).filter(function(g){return g.state==="BRIDGE_CANDIDATE"||g.state==="BRIDGE_APPROVED";});
   var trs=cand.map(function(g){return '<tr><td><input type="checkbox" class="pc-bridge-cb" data-id="'+esc(g.gap_id)+'" '+(PS.cleaning.approved.has(g.gap_id)?"checked":"")+'></td><td>'+esc(g.from_id)+' → '+esc(g.to_id)+'</td><td>'+fmt(g.gap_m,2)+' m</td><td>'+esc(g.state)+'</td></tr>';}).join("");
   PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: el layout cambió. Recalcula antes de usarlo.</div>':'')+
     '<div class="ps-summary">'+kpi("Robots",fmt(x.robot_count,0))+kpi("Líneas",fmt(x.cleaning_line_count,0))+kpi("Longitud",fmt(x.cleanable_length_m,0)+" m")+kpi("Bridges aprob.",fmt(x.approved_bridge_count,0))+'</div>'+
