@@ -136,15 +136,14 @@ function injectPanel(){
   sec.innerHTML='<h3>Estudios de planta</h3><div class="ps-grid">'+
     '<div class="ps-card"><b>⚡ Puesta a tierra</b><div class="ps-status" id="ps-earthing-status">sin calcular</div><button class="btn btn-ghost btn-sm" id="ps-earthing-open" style="width:100%;margin-top:7px">Abrir estudio</button></div>'+
     '<div class="ps-card"><b>🤖 Limpieza robot</b><div class="ps-status" id="ps-cleaning-status">sin calcular</div><button class="btn btn-ghost btn-sm" id="ps-cleaning-open" style="width:100%;margin-top:7px">Abrir estudio</button></div></div>'+
-    '<button class="btn btn-ghost btn-sm btn-block" id="ps-engine" style="margin-top:8px">Motor SolarGPT · comprobar</button>'+
+    '<button class="btn btn-ghost btn-sm btn-block" id="ps-study-boq" style="margin-top:8px">BoQ de estudios actuales</button><button class="btn btn-ghost btn-sm btn-block" id="ps-engine" style="margin-top:6px">Motor SolarGPT · comprobar</button>'+
     '<div class="hint" style="font-size:10.5px;color:var(--muted-2);margin-top:6px">El HTML solo envía la geometría actual y pinta el resultado; el cálculo vive en SolarGPT.</div>';
   var panel=document.querySelector("aside.panel");if(!panel)return;
   var resultSec=[].slice.call(panel.querySelectorAll(".sec")).find(function(x){var h=x.querySelector("h3");return h&&/^\s*Resultado\s*$/.test(h.textContent||"");});
   panel.insertBefore(sec,resultSec||null);
   document.getElementById("ps-earthing-open").onclick=openEarthing;
   document.getElementById("ps-cleaning-open").onclick=openCleaning;
-  document.getElementById("ps-engine").onclick=setApi;
-}
+  document.getElementById("ps-engine").onclick=setApi;\n  document.getElementById("ps-study-boq").onclick=downloadCombinedBoq;\n}
 function injectModal(){
   var m=document.createElement("div");m.className="ps-modal";m.id="ps-modal";
   m.innerHTML='<div class="ps-box"><div class="ps-head"><h2 id="ps-title">Estudio</h2><span class="ps-pill" id="ps-class">CANONICAL ENGINE</span><button class="ps-x" id="ps-close">×</button></div><div class="ps-body"><div class="ps-form" id="ps-form"></div><div class="ps-results" id="ps-results"></div></div></div>';
@@ -233,6 +232,19 @@ function blockTable(rows){
   return '<h3 style="margin:14px 0 6px">Resumen por bloque</h3><table class="ps-table"><thead><tr><th>Bloque</th><th>Mesas</th><th>Líneas</th><th>Robots</th><th>Longitud</th></tr></thead><tbody>'+
     rows.map(function(x){return '<tr><td>'+esc(x.block_id==null?"sin bloque":x.block_id)+'</td><td>'+fmt(x.structure_count,0)+'</td><td>'+fmt(x.cleaning_line_count,0)+'</td><td>'+fmt(x.robot_count,0)+'</td><td>'+fmt(x.cleanable_length_m,0)+' m</td></tr>';}).join("")+'</tbody></table>';
 }
+function currentStudyBoq(){
+  var out=[];
+  if(PS.earthing.result&&!stale("earthing",true))out=out.concat(PS.earthing.result.boq||[]);
+  if(PS.cleaning.result&&!stale("cleaning",true))out=out.concat(PS.cleaning.result.boq||[]);
+  return out;
+}
+function downloadCombinedBoq(){
+  var rows=currentStudyBoq();
+  if(!rows.length){alert("No hay estudios vigentes para incorporar al BoQ.");return;}
+  var lines=["code,description,quantity,unit,source"];
+  rows.forEach(function(x){var cells=[x.code,x.description,x.quantity,x.unit,x.source].map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';});lines.push(cells.join(","));});
+  dl((S.sc||"plant")+"_plant_studies_boq.csv",lines.join("\n"),"text/csv");
+}
 function resultOf(kind){return kind==="earthing"?PS.earthing.result:PS.cleaning.result;}
 function dl(name,text,type){var b=new Blob([text],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}
 function downloadJson(kind){var r=resultOf(kind);if(r)dl((S.sc||"plant")+"_"+kind+".json",JSON.stringify(r,null,2),"application/json");}
@@ -304,5 +316,5 @@ function wrapDraw(){
 }
 function init(){injectCss();injectPanel();injectModal();wrapDraw();checkEngine();updateStatus();}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
-window.PlantStudies={state:PS,checkEngine:checkEngine,openEarthing:openEarthing,openCleaning:openCleaning,isStale:stale};
+window.PlantStudies={state:PS,checkEngine:checkEngine,openEarthing:openEarthing,openCleaning:openCleaning,isStale:stale,currentBoq:currentStudyBoq};
 })();
