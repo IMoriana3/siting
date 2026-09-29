@@ -14,6 +14,8 @@ ok(js.includes('Estudios de planta'),"inyecta un único bloque Estudios de plant
 ok(js.includes('No se crea un ID por índice'),"una mesa sin id falla cerrado");
 ok(!/id\s*:\s*["']T["']\s*\+\s*i/.test(js)&&!js.includes("index+1"),"no fabrica identidad desde índice");
 ok(js.includes("standard_bridge_max_m:0"),"bridge capability arranca UNKNOWN, no inventada");
+ok(js.includes("default_azimuth_deg:valOpt"),"el azimut fallback solo sale de un input explícito");
+ok(js.includes("block_id:(m.pb==null?null:String(m.pb))"),"conserva el power block explícito de cada mesa");
 ok(js.includes("approved_bridge_ids:Array.from(PS.cleaning.approved)"),"solo manda bridges aprobados explícitamente");
 ok(!js.includes("Math.log(")&&!js.includes("soil_resistivity_ohm_m *")&&!js.includes("rod_group_efficiency *"),"el HTML no contiene física de puesta a tierra");
 ok(js.includes("isStale:stale")&&js.includes("⚠ Desactualizado"),"marca resultados stale cuando cambia geometría o inputs");
