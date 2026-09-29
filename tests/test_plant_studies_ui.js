@@ -31,4 +31,9 @@ ok(js.includes("PS.activeOverlay")&&js.includes("paintEarthing")&&js.includes("p
 ok(js.includes("if(!PS.engineOk)")||js.includes("if(PS.engineOk)return true"),"sin motor no cae a un cálculo local aproximado");
 
 if(process.exitCode)process.exit(process.exitCode);
-console.log("TODO OK — "+n+" comprobaciones");
+require("./plant_studies_runtime.cjs")().then(function(runtimeCount){
+  console.log("TODO OK — "+(n+runtimeCount)+" comprobaciones");
+}).catch(function(error){
+  console.error(error.stack||error);
+  process.exitCode=1;
+});
