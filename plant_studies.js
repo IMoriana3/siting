@@ -7,8 +7,8 @@
 var API_KEY="solargptApiUrl", DEFAULT_API="http://localhost:8765";
 var PS={
   api:null, engineOk:false, activeOverlay:null,
-  earthing:{result:null,input:null,uiSig:null},
-  cleaning:{result:null,input:null,uiSig:null,approved:new Set()},
+  earthing:{result:null,input:null,uiSig:null,dirty:false},
+  cleaning:{result:null,input:null,uiSig:null,approved:new Set(),dirty:false},
   modal:null, body:null,
   staleCache:{earthing:{t:0,value:false},cleaning:{t:0,value:false}}
 };
@@ -173,7 +173,7 @@ function openEarthing(){
   var d=PS.earthing.input||EARTH_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Confirmar con resistividad medida, modelo multicapa y estudio de cortocircuito antes de IFC.</div>'+
     field("pe-rho","Resistividad suelo (Ω·m)",d.soil_resistivity_ohm_m)+field("pe-season","Factor estacional",d.season_factor,.05)+field("pe-gravel","Resistividad grava (Ω·m)",d.gravel_resistivity_ohm_m)+field("pe-gravel-h","Espesor grava (m)",d.gravel_thickness_m,.01)+field("pe-if","Corriente defecto (kA)",d.fault_current_a/1000,.1)+field("pe-tf","Tiempo defecto (s)",d.fault_time_s,.01)+field("pe-target","Objetivo Rgrid (Ω)",d.target_grid_resistance_ohm,.05)+field("pe-spacing","Paso malla preliminar (m)",d.grid_spacing_m,1)+field("pe-grid-az","Azimut malla (° N→E)",d.grid_azimuth_deg,1)+field("pe-depth","Profundidad malla (m)",d.grid_depth_m,.05)+field("pe-rod","Longitud pica (m)",d.rod_length_m,.1)+field("pe-eff","Eficiencia grupo picas",d.rod_group_efficiency,.05)+field("pe-w","Pletina GI ancho (mm)",d.main_strip_width_mm,1)+field("pe-t","Pletina GI espesor (mm)",d.main_strip_thickness_mm,.5)+field("pe-corr","Sobreespesor corrosión (%)",d.corrosion_allowance_pct,1)+field("pe-cu","Conductor Cu equipos (mm²)",d.bond_conductor_area_mm2,1)+'<button class="btn btn-primary btn-block" id="pe-run">Calcular con SolarGPT</button>';
-  document.getElementById("pe-run").onclick=runEarthing;renderEarthing();
+  document.getElementById("pe-run").onclick=runEarthing;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){PS.earthing.dirty=true;updateStatus();renderEarthing();});});renderEarthing();
 }
 async function runEarthing(){
   if(!requireEngine())return;
@@ -207,14 +207,14 @@ function openCleaning(){
   var d=PS.cleaning.input||CLEAN_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Ningún hueco se puentea automáticamente. Bridge máximo = 0 significa capacidad del fabricante desconocida.</div>'+
     field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-defaz","Azimut por defecto (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"solo para mesas sin azimut; vacío = fail-closed")+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+field("pc-default-az","Azimut por defecto si falta en la mesa (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"vacío = fallar, no inferir")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
-  document.getElementById("pc-run").onclick=runCleaning;renderCleaning();
+  document.getElementById("pc-run").onclick=runCleaning;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){PS.cleaning.dirty=true;updateStatus();renderCleaning();});});renderCleaning();
 }
 async function runCleaning(){
   if(!requireEngine())return;
   try{
     var input=cleanValues();PS.body.innerHTML='<div class="ps-note">Calculando líneas y discontinuidades…</div>';
     var j=await post("/studies/robot-cleaning",{structures:cleaningStructures(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.cleaning.result=j;PS.cleaning.input=input;PS.cleaning.uiSig=cleaningSig(input);PS.staleCache.cleaning={t:Date.now(),value:false};
+    PS.cleaning.result=j;PS.cleaning.input=input;PS.cleaning.uiSig=cleaningSig(input);PS.cleaning.dirty=false;PS.staleCache.cleaning={t:Date.now(),value:false};
     var valid=new Set((j.gaps||[]).map(function(g){return g.gap_id;}));PS.cleaning.approved=new Set(Array.from(PS.cleaning.approved).filter(function(x){return valid.has(x);}));
     PS.activeOverlay="cleaning";renderCleaning();updateStatus();draw();
   }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
@@ -228,7 +228,7 @@ function renderCleaning(){
     '<div class="ps-note '+(r.status==="OK"?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Candidatos: '+fmt(x.bridge_candidate_count,0)+' · Bloqueados: '+fmt(x.blocked_gap_count,0)+' · Capacidad desconocida: '+fmt(x.unknown_bridge_gap_count,0)+' · Robots ahorrados: '+fmt(x.robots_saved_by_approved_bridges,0)+'</div>'+
     (cand.length?'<h3 style="margin:12px 0 6px">Bridges candidatos</h3><table class="ps-table"><thead><tr><th>Aprobar</th><th>Gap</th><th>Longitud</th><th>Estado</th></tr></thead><tbody>'+trs+'</tbody></table><button class="btn btn-primary btn-sm" id="pc-rerun" style="margin-top:8px">Recalcular con selección</button>':'')+
     '<div class="hint">Plano: azul = línea de limpieza · amarillo = bridge candidato · verde = bridge aprobado · rojo = gap bloqueado.</div>'+blockTable(r.blocks)+boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
-  [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);};});
+  [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);PS.cleaning.dirty=true;updateStatus();};});
   var rr=document.getElementById("pc-rerun");if(rr)rr.onclick=runCleaning;bindActions("cleaning");
 }
 function blockTable(rows){
