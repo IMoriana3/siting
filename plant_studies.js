@@ -97,6 +97,7 @@ function cleaningSig(input){return uiHash({structures:cleaningStructures(),input
 function stale(kind,force){
   var st=kind==="earthing"?PS.earthing:PS.cleaning, cache=PS.staleCache[kind], now=Date.now();
   if(!st.result||!st.input||!st.uiSig)return false;
+  if(st.dirty){cache.value=true;cache.t=now;return true;}
   if(!force&&now-cache.t<750)return cache.value;
   try{cache.value=st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}
   catch(_){cache.value=true;}
@@ -180,7 +181,7 @@ async function runEarthing(){
   try{
     var input=earthValues();PS.body.innerHTML='<div class="ps-note">Calculando…</div>';
     var j=await post("/studies/earthing",{boundary:boundary(),equipment:earthingEquipment(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.earthing={result:j,input:input,uiSig:earthingSig(input)};PS.staleCache.earthing={t:Date.now(),value:false};PS.activeOverlay="earthing";renderEarthing();updateStatus();draw();
+    PS.earthing={result:j,input:input,uiSig:earthingSig(input),dirty:false};PS.staleCache.earthing={t:Date.now(),value:false};PS.activeOverlay="earthing";renderEarthing();updateStatus();draw();
   }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
 }
 function kpi(k,v){return '<div class="ps-kpi"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
