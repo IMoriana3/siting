@@ -192,7 +192,7 @@ function renderEarthing(){
   var x=r.results||{},st=stale("earthing",true);
   PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: geometría/equipos cambiaron. Recalcula antes de usarlo.</div>':'')+
     '<div class="ps-summary">'+kpi("Rgrid",fmt(x.estimated_grid_resistance_ohm,3)+" Ω")+kpi("Picas",fmt(x.earth_pit_count,0))+kpi("GI 2D",fmt(x.horizontal_grid_length_m,0)+" m")+kpi("GPR",fmt(x.gpr_v,0)+" V")+'</div>'+
-    '<div class="ps-note '+(String(r.status).indexOf("FAIL")===0?"ps-err":String(r.status).indexOf("PASS")===0?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Touch permitido: '+fmt(x.allowable_touch_voltage_v,0)+' V · Step permitido: '+fmt(x.allowable_step_voltage_v,0)+' V<br>Touch real de malla: '+esc((r.checks||{}).touch_voltage||"UNKNOWN")+'.</div>'+boqTable(r.boq)+warnings(r.warnings)+actions("earthing");
+    '<div class="ps-note '+(String(r.status).indexOf("FAIL")===0?"ps-err":String(r.status).indexOf("PASS")===0?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Touch permitido: '+fmt(x.allowable_touch_voltage_v,0)+' V · Step permitido: '+fmt(x.allowable_step_voltage_v,0)+' V<br>Touch real de malla: '+esc((r.checks||{}).touch_voltage||"UNKNOWN")+'.</div><div class="hint">Plano: naranja = malla/picas · verde discontinuo = bonds de equipos explícitos.</div>'+boqTable(r.boq)+warnings(r.warnings)+actions("earthing");
   bindActions("earthing");
 }
 var CLEAN_DEFAULT={row_transverse_tolerance_m:1.5,azimuth_tolerance_deg:3,native_gap_max_m:0,standard_bridge_max_m:0,max_robot_travel_m:0,max_longitudinal_slope_pct:0,default_azimuth_deg:null};
@@ -224,7 +224,7 @@ function renderCleaning(){
     '<div class="ps-summary">'+kpi("Robots",fmt(x.robot_count,0))+kpi("Líneas",fmt(x.cleaning_line_count,0))+kpi("Longitud",fmt(x.cleanable_length_m,0)+" m")+kpi("Bridges aprob.",fmt(x.approved_bridge_count,0))+'</div>'+
     '<div class="ps-note '+(r.status==="OK"?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Candidatos: '+fmt(x.bridge_candidate_count,0)+' · Bloqueados: '+fmt(x.blocked_gap_count,0)+' · Capacidad desconocida: '+fmt(x.unknown_bridge_gap_count,0)+' · Robots ahorrados: '+fmt(x.robots_saved_by_approved_bridges,0)+'</div>'+
     (cand.length?'<h3 style="margin:12px 0 6px">Bridges candidatos</h3><table class="ps-table"><thead><tr><th>Aprobar</th><th>Gap</th><th>Longitud</th><th>Estado</th></tr></thead><tbody>'+trs+'</tbody></table><button class="btn btn-primary btn-sm" id="pc-rerun" style="margin-top:8px">Recalcular con selección</button>':'')+
-    blockTable(r.blocks)+boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
+    '<div class="hint">Plano: azul = línea de limpieza · amarillo = bridge candidato · verde = bridge aprobado · rojo = gap bloqueado.</div>'+blockTable(r.blocks)+boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
   [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);};});
   var rr=document.getElementById("pc-rerun");if(rr)rr.onclick=runCleaning;bindActions("cleaning");
 }
@@ -256,10 +256,17 @@ function downloadDxf(kind){
   dl((S.sc||"plant")+"_"+kind+".dxf",out+"0\nENDSEC\n0\nEOF\n","application/dxf");
 }
 function printReport(kind){
-  var r=resultOf(kind);if(!r)return,w=window.open("","_blank");if(!w)return;
+  var r=resultOf(kind);if(!r)return;
+  var previous=PS.activeOverlay, image="";
+  try{
+    PS.activeOverlay=kind;draw();
+    if(typeof cv!=="undefined"&&cv&&cv.toDataURL)image=cv.toDataURL("image/png");
+  }catch(_){}
+  PS.activeOverlay=previous;try{draw();}catch(_){}
+  var w=window.open("","_blank");if(!w)return;
   var title=kind==="earthing"?"Puesta a tierra · preliminar":"Limpieza robot";
-  var html='<!doctype html><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:13px Arial;margin:28px;color:#17202a}h1{font-size:20px}pre{white-space:pre-wrap;background:#f4f6f7;padding:12px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.warn{padding:10px;background:#fff4d6}</style><h1>'+esc(title)+' · '+esc(S.projName||S.sc||"planta")+'</h1><p><b>Estado:</b> '+esc(r.status)+'</p><p><b>Fingerprint:</b> '+esc(r.fingerprint)+'</p>'+(r.warnings||[]).map(function(x){return '<div class="warn">'+esc(x)+'</div>';}).join("")+boqTable(r.boq)+'<h2>Resultados</h2><pre>'+esc(JSON.stringify(r.results,null,2))+'</pre>';
-  w.document.write(html);w.document.close();setTimeout(function(){w.print();},250);
+  var html='<!doctype html><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:13px Arial;margin:28px;color:#17202a}h1{font-size:20px}pre{white-space:pre-wrap;background:#f4f6f7;padding:12px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}.warn{padding:10px;background:#fff4d6}.map{width:100%;max-height:560px;object-fit:contain;border:1px solid #ddd;margin:12px 0}</style><h1>'+esc(title)+' · '+esc(S.projName||S.sc||"planta")+'</h1><p><b>Estado:</b> '+esc(r.status)+'</p><p><b>Fingerprint:</b> '+esc(r.fingerprint)+'</p>'+(image?'<img class="map" src="'+image+'">':'')+(r.warnings||[]).map(function(x){return '<div class="warn">'+esc(x)+'</div>';}).join("")+boqTable(r.boq)+'<h2>Resultados</h2><pre>'+esc(JSON.stringify(r.results,null,2))+'</pre>';
+  w.document.write(html);w.document.close();setTimeout(function(){w.print();},350);
 }
 function bindActions(kind){
   [].slice.call(document.querySelectorAll('[data-kind="'+kind+'"][data-ps]')).forEach(function(b){
