@@ -143,7 +143,9 @@ function injectPanel(){
   panel.insertBefore(sec,resultSec||null);
   document.getElementById("ps-earthing-open").onclick=openEarthing;
   document.getElementById("ps-cleaning-open").onclick=openCleaning;
-  document.getElementById("ps-engine").onclick=setApi;\n  document.getElementById("ps-study-boq").onclick=downloadCombinedBoq;\n}
+  document.getElementById("ps-engine").onclick=setApi;
+  document.getElementById("ps-study-boq").onclick=downloadCombinedBoq;
+}
 function injectModal(){
   var m=document.createElement("div");m.className="ps-modal";m.id="ps-modal";
   m.innerHTML='<div class="ps-box"><div class="ps-head"><h2 id="ps-title">Estudio</h2><span class="ps-pill" id="ps-class">CANONICAL ENGINE</span><button class="ps-x" id="ps-close">×</button></div><div class="ps-body"><div class="ps-form" id="ps-form"></div><div class="ps-results" id="ps-results"></div></div></div>';
@@ -154,7 +156,9 @@ function injectModal(){
 function field(id,label,value,step,hint){
   return '<div class="ps-field"><label for="'+id+'">'+esc(label)+(hint?' · <span style="color:var(--muted-2)">'+esc(hint)+'</span>':'')+'</label><input id="'+id+'" type="number" step="'+(step==null?"any":step)+'" value="'+esc(value)+'"></div>';
 }
-function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction requireEngine(){
+function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
+function valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
+function requireEngine(){
   if(PS.engineOk)return true;
   PS.body.innerHTML='<div class="ps-note ps-err"><b>Motor SolarGPT no disponible.</b><br>Arranca el servicio local en '+esc(apiUrl())+' o cambia la URL desde el panel. No se usa un cálculo aproximado en navegador.</div>';
   return false;
@@ -260,7 +264,8 @@ function downloadDxf(kind){
   if(kind==="earthing"){
     var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");
     (o.earth_pits||[]).forEach(function(x){out+=dxfCircle(x,.6,"EARTH_PIT");});
-    (o.internal_grid_lines||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_GRID_INTERNAL");});\n    (o.equipment_bonds||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_BOND");});
+    (o.internal_grid_lines||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_GRID_INTERNAL");});
+    (o.equipment_bonds||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_BOND");});
   }else{
     (o.lines||[]).forEach(function(x){out+=dxfLine(x.start,x.end,"CLEAN_LINE");});
     (o.gaps||[]).forEach(function(x){out+=dxfCircle(x.point,.4,x.state==="BRIDGE_APPROVED"?"CLEAN_BRIDGE":"CLEAN_GAP");});
@@ -294,7 +299,8 @@ function path(points,color,width,dash){
   ctx.strokeStyle=color;ctx.lineWidth=width*DPR;if(dash)ctx.setLineDash(dash.map(function(x){return x*DPR;}));ctx.stroke();ctx.setLineDash([]);
 }
 function paintEarthing(r){
-  var o=r.overlay||{};path(o.perimeter_grid,"#d45d22",2,[8,4]);\n  (o.internal_grid_lines||[]).forEach(function(g){path([g.from,g.to],"rgba(212,93,34,.65)",1);});
+  var o=r.overlay||{};path(o.perimeter_grid,"#d45d22",2,[8,4]);
+  (o.internal_grid_lines||[]).forEach(function(g){path([g.from,g.to],"rgba(212,93,34,.65)",1);});
   (o.equipment_bonds||[]).forEach(function(b){path([b.from,b.to],"#1f9d57",1,[4,4]);});
   (o.earth_pits||[]).forEach(function(p){var q=w2s(p);ctx.beginPath();ctx.arc(q.x,q.y,5*DPR,0,Math.PI*2);ctx.fillStyle="#d45d22";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=DPR;ctx.stroke();});
 }
