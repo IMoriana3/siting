@@ -156,8 +156,7 @@ function injectModal(){
 function field(id,label,value,step,hint){
   return '<div class="ps-field"><label for="'+id+'">'+esc(label)+(hint?' · <span style="color:var(--muted-2)">'+esc(hint)+'</span>':'')+'</label><input id="'+id+'" type="number" step="'+(step==null?"any":step)+'" value="'+esc(value)+'"></div>';
 }
-function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction optVal(id){var e=document.getElementById(id),raw=e?String(e.value).trim():"";if(raw==="")return null;var x=Number(raw);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
-function valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
+function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
 function requireEngine(){
   if(PS.engineOk)return true;
   PS.body.innerHTML='<div class="ps-note ps-err"><b>Motor SolarGPT no disponible.</b><br>Arranca el servicio local en '+esc(apiUrl())+' o cambia la URL desde el panel. No se usa un cálculo aproximado en navegador.</div>';
@@ -206,7 +205,7 @@ function openCleaning(){
   PS.modal.classList.add("open");document.getElementById("ps-title").textContent="Limpieza robot · fleet & gaps";document.getElementById("ps-class").textContent="NO AUTO-BRIDGING";
   var d=PS.cleaning.input||CLEAN_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Ningún hueco se puentea automáticamente. Bridge máximo = 0 significa capacidad del fabricante desconocida.</div>'+
-    field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-defaz","Azimut por defecto (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"solo para mesas sin azimut; vacío = fail-closed")+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+field("pc-default-az","Azimut por defecto si falta en la mesa (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"vacío = fallar, no inferir")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
+    field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+field("pc-default-az","Azimut por defecto si falta en la mesa (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"vacío = fallar, no inferir")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
   document.getElementById("pc-run").onclick=runCleaning;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){PS.cleaning.dirty=true;updateStatus();renderCleaning();});});renderCleaning();
 }
 async function runCleaning(){
@@ -262,7 +261,7 @@ function dxfCircle(p,r,layer){return "0\nCIRCLE\n8\n"+layer+"\n10\n"+p.x+"\n20\n
 function downloadDxf(kind){
   var r=resultOf(kind);if(!r)return;var out="0\nSECTION\n2\nENTITIES\n",o=r.overlay||{};
   if(kind==="earthing"){
-    var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");\n    (o.internal_grid_lines||[]).forEach(function(g){out+=dxfLine(g.from,g.to,"EARTH_GRID");});
+    var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");
     (o.earth_pits||[]).forEach(function(x){out+=dxfCircle(x,.6,"EARTH_PIT");});
     (o.internal_grid_lines||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_GRID_INTERNAL");});
     (o.equipment_bonds||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_BOND");});
