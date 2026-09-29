@@ -9,7 +9,9 @@ var PS={
   api:null, engineOk:false, activeOverlay:null,
   earthing:{result:null,input:null,uiSig:null},
   cleaning:{result:null,input:null,uiSig:null,approved:new Set()},
-  modal:null, body:null,\n  staleCache:{earthing:{t:0,value:false},cleaning:{t:0,value:false}}\n};
+  modal:null, body:null,
+  staleCache:{earthing:{t:0,value:false},cleaning:{t:0,value:false}}
+};
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function fmt(v,d){var x=Number(v);return Number.isFinite(x)?x.toLocaleString("es-ES",{maximumFractionDigits:d==null?2:d}):"—";}
@@ -92,7 +94,14 @@ function cleaningStructures(){
 }
 function earthingSig(input){return uiHash({boundary:boundary(),equipment:earthingEquipment(),input:input});}
 function cleaningSig(input){return uiHash({structures:cleaningStructures(),input:input});}
-function stale(kind,force){\n  var st=kind==="earthing"?PS.earthing:PS.cleaning, cache=PS.staleCache[kind], now=Date.now();\n  if(!st.result||!st.input||!st.uiSig)return false;\n  if(!force&&now-cache.t<750)return cache.value;\n  try{cache.value=st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}\n  catch(_){cache.value=true;}\n  cache.t=now;return cache.value;\n}
+function stale(kind,force){
+  var st=kind==="earthing"?PS.earthing:PS.cleaning, cache=PS.staleCache[kind], now=Date.now();
+  if(!st.result||!st.input||!st.uiSig)return false;
+  if(!force&&now-cache.t<750)return cache.value;
+  try{cache.value=st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}
+  catch(_){cache.value=true;}
+  cache.t=now;return cache.value;
+}
 function statusHtml(kind){
   var st=kind==="earthing"?PS.earthing:PS.cleaning;
   if(!st.result)return '<span style="color:var(--muted-2)">sin calcular</span>';
