@@ -88,7 +88,7 @@ function earthingEquipment(){
 }
 function cleaningStructures(){
   return (S.motors||[]).map(function(m){
-    return {id:motorId(m),x:+m.x,y:+m.y,z:m.z==null?null:+m.z,length_m:tableLength(m),azimuth_deg:(m.az==null?null:+m.az)};
+    return {id:motorId(m),x:+m.x,y:+m.y,z:m.z==null?null:+m.z,length_m:tableLength(m),azimuth_deg:(m.az==null?null:+m.az),block_id:(m.pb==null?null:String(m.pb))};
   }).sort(function(a,b){return a.id.localeCompare(b.id);});
 }
 function earthingSig(input){return uiHash({boundary:boundary(),equipment:earthingEquipment(),input:input});}
@@ -220,9 +220,14 @@ function renderCleaning(){
     '<div class="ps-summary">'+kpi("Robots",fmt(x.robot_count,0))+kpi("Líneas",fmt(x.cleaning_line_count,0))+kpi("Longitud",fmt(x.cleanable_length_m,0)+" m")+kpi("Bridges aprob.",fmt(x.approved_bridge_count,0))+'</div>'+
     '<div class="ps-note '+(r.status==="OK"?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Candidatos: '+fmt(x.bridge_candidate_count,0)+' · Bloqueados: '+fmt(x.blocked_gap_count,0)+' · Capacidad desconocida: '+fmt(x.unknown_bridge_gap_count,0)+' · Robots ahorrados: '+fmt(x.robots_saved_by_approved_bridges,0)+'</div>'+
     (cand.length?'<h3 style="margin:12px 0 6px">Bridges candidatos</h3><table class="ps-table"><thead><tr><th>Aprobar</th><th>Gap</th><th>Longitud</th><th>Estado</th></tr></thead><tbody>'+trs+'</tbody></table><button class="btn btn-primary btn-sm" id="pc-rerun" style="margin-top:8px">Recalcular con selección</button>':'')+
-    boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
+    blockTable(r.blocks)+boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
   [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);};});
   var rr=document.getElementById("pc-rerun");if(rr)rr.onclick=runCleaning;bindActions("cleaning");
+}
+function blockTable(rows){
+  if(!rows||!rows.length)return "";
+  return '<h3 style="margin:14px 0 6px">Resumen por bloque</h3><table class="ps-table"><thead><tr><th>Bloque</th><th>Mesas</th><th>Líneas</th><th>Robots</th><th>Longitud</th></tr></thead><tbody>'+
+    rows.map(function(x){return '<tr><td>'+esc(x.block_id==null?"sin bloque":x.block_id)+'</td><td>'+fmt(x.structure_count,0)+'</td><td>'+fmt(x.cleaning_line_count,0)+'</td><td>'+fmt(x.robot_count,0)+'</td><td>'+fmt(x.cleanable_length_m,0)+' m</td></tr>';}).join("")+'</tbody></table>';
 }
 function resultOf(kind){return kind==="earthing"?PS.earthing.result:PS.cleaning.result;}
 function dl(name,text,type){var b=new Blob([text],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}
