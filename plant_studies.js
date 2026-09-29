@@ -9,12 +9,12 @@ var PS={
   api:null, engineOk:false, activeOverlay:null,
   earthing:{result:null,input:null,uiSig:null,dirty:false},
   cleaning:{result:null,input:null,uiSig:null,approved:new Set(),dirty:false},
-  modal:null, body:null,
-  staleCache:{earthing:{t:0,value:false},cleaning:{t:0,value:false}}
+  modal:null, body:null, modalKind:null,
+  requestSeq:{earthing:0,cleaning:0}, editSeq:{earthing:0,cleaning:0}
 };
 
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
-function fmt(v,d){var x=Number(v);return Number.isFinite(x)?x.toLocaleString("es-ES",{maximumFractionDigits:d==null?2:d}):"—";}
+function fmt(v,d){if(v==null||String(v).trim()==="")return "—";var x=Number(v);return Number.isFinite(x)?x.toLocaleString("es-ES",{maximumFractionDigits:d==null?2:d}):"—";}
 function apiUrl(){
   if(PS.api)return PS.api;
   try{PS.api=localStorage.getItem(API_KEY)||DEFAULT_API;}catch(_){PS.api=DEFAULT_API;}
@@ -57,10 +57,30 @@ function stable(v){
   if(v&&typeof v==="object"){var o={};Object.keys(v).sort().forEach(function(k){o[k]=stable(v[k]);});return o;}
   return v;
 }
-function uiHash(v){
-  var s=JSON.stringify(stable(v)),h=2166136261;
-  for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
-  return (h>>>0).toString(16).padStart(8,"0");
+// Exact session comparison, NOT a substitute for the core SHA-256 fingerprint.
+function uiSignature(v){return JSON.stringify(stable(v));}
+function sourceRevisions(){
+  var out=Object.assign({},S.source_revisions||{});
+  ["layout_revision","terrain_revision","tracker_model_revision","electrical_revision"].forEach(function(k){
+    if(S[k]!=null)out[k]=S[k];
+    if(out[k]==null)out[k]=null; // Unknown stays unknown; never use a scene name as a revision.
+  });
+  out.surface="siting/index.html";return out;
+}
+function studyContext(){
+  // scene/project isolate session results; they do not create canonical asset identity.
+  return {plant_id:S.plant_id==null?null:S.plant_id,scene:S.sc||null,project:S.projName||null,engine_url:apiUrl()};
+}
+function studyPayload(kind,input){
+  var p={inputs:input,geometry_revision:geomRev(),source_revisions:sourceRevisions()};
+  if(kind==="earthing"){p.boundary=boundary();p.equipment=earthingEquipment();}
+  else p.structures=cleaningStructures();
+  return JSON.parse(JSON.stringify(p)); // Detached snapshot actually sent to the core.
+}
+function studySignature(kind,input){return uiSignature({payload:studyPayload(kind,input),context:studyContext()});}
+function markDirty(kind){PS[kind].dirty=true;PS.editSeq[kind]++;}
+function approvalSignature(input){
+  return studySignature("cleaning",Object.assign({},input,{approved_bridge_ids:[]}));
 }
 function motorId(m){
   var id=String(m&&m.id||"").trim();
@@ -92,16 +112,12 @@ function cleaningStructures(){
     return {id:motorId(m),x:+m.x,y:+m.y,z:m.z==null?null:+m.z,length_m:tableLength(m),azimuth_deg:(m.az==null?null:+m.az),block_id:(m.pb==null?null:String(m.pb))};
   }).sort(function(a,b){return a.id.localeCompare(b.id);});
 }
-function earthingSig(input){return uiHash({boundary:boundary(),equipment:earthingEquipment(),input:input});}
-function cleaningSig(input){return uiHash({structures:cleaningStructures(),input:input});}
 function stale(kind,force){
-  var st=kind==="earthing"?PS.earthing:PS.cleaning, cache=PS.staleCache[kind], now=Date.now();
-  if(!st.result||!st.input||!st.uiSig)return false;
-  if(st.dirty){cache.value=true;cache.t=now;return true;}
-  if(!force&&now-cache.t<750)return cache.value;
-  try{cache.value=st.uiSig!==(kind==="earthing"?earthingSig(st.input):cleaningSig(st.input));}
-  catch(_){cache.value=true;}
-  cache.t=now;return cache.value;
+  var st=PS[kind];
+  if(!st||!st.result)return false;
+  if(!st.input||!st.uiSig||st.dirty)return true;
+  // No time cache: exports and draw must see changes in this very event turn.
+  try{return st.uiSig!==studySignature(kind,st.input);}catch(_){return true;}
 }
 function statusHtml(kind){
   var st=kind==="earthing"?PS.earthing:PS.cleaning;
@@ -157,32 +173,63 @@ function injectModal(){
 function field(id,label,value,step,hint){
   return '<div class="ps-field"><label for="'+id+'">'+esc(label)+(hint?' · <span style="color:var(--muted-2)">'+esc(hint)+'</span>':'')+'</label><input id="'+id+'" type="number" step="'+(step==null?"any":step)+'" value="'+esc(value)+'"></div>';
 }
-function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
+function val(id){var e=document.getElementById(id),x=e&&String(e.value).trim()!==""?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
 function valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
 function requireEngine(){
   if(PS.engineOk)return true;
   PS.body.innerHTML='<div class="ps-note ps-err"><b>Motor SolarGPT no disponible.</b><br>Arranca el servicio local en '+esc(apiUrl())+' o cambia la URL desde el panel. No se usa un cálculo aproximado en navegador.</div>';
   return false;
 }
-function geomRev(){return String(S.sc||S.projName||"layout");}
+function geomRev(){var r=S.geometry_revision==null?sourceRevisions().layout_revision:S.geometry_revision;return r==null?null:String(r);}
 var EARTH_DEFAULT={soil_resistivity_ohm_m:100,season_factor:1.5,gravel_resistivity_ohm_m:3000,gravel_thickness_m:.10,fault_current_a:5000,fault_time_s:1,target_grid_resistance_ohm:1,grid_spacing_m:20,grid_azimuth_deg:0,grid_depth_m:.6,rod_length_m:3,rod_group_efficiency:.60,main_strip_width_mm:50,main_strip_thickness_mm:10,corrosion_allowance_pct:25,bond_conductor_area_mm2:35};
 function earthValues(){
   return {soil_resistivity_ohm_m:val("pe-rho"),season_factor:val("pe-season"),gravel_resistivity_ohm_m:val("pe-gravel"),gravel_thickness_m:val("pe-gravel-h"),fault_current_a:val("pe-if")*1000,fault_time_s:val("pe-tf"),target_grid_resistance_ohm:val("pe-target"),grid_spacing_m:val("pe-spacing"),grid_azimuth_deg:val("pe-grid-az"),grid_depth_m:val("pe-depth"),rod_length_m:val("pe-rod"),rod_group_efficiency:val("pe-eff"),main_strip_width_mm:val("pe-w"),main_strip_thickness_mm:val("pe-t"),corrosion_allowance_pct:val("pe-corr"),bond_conductor_area_mm2:val("pe-cu")};
 }
 function openEarthing(){
+  PS.modalKind="earthing";
   PS.modal.classList.add("open");document.getElementById("ps-title").textContent="Puesta a tierra · preliminar";document.getElementById("ps-class").textContent="PRELIMINARY · NO IFC";
   var d=PS.earthing.input||EARTH_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Confirmar con resistividad medida, modelo multicapa y estudio de cortocircuito antes de IFC.</div>'+
     field("pe-rho","Resistividad suelo (Ω·m)",d.soil_resistivity_ohm_m)+field("pe-season","Factor estacional",d.season_factor,.05)+field("pe-gravel","Resistividad grava (Ω·m)",d.gravel_resistivity_ohm_m)+field("pe-gravel-h","Espesor grava (m)",d.gravel_thickness_m,.01)+field("pe-if","Corriente defecto (kA)",d.fault_current_a/1000,.1)+field("pe-tf","Tiempo defecto (s)",d.fault_time_s,.01)+field("pe-target","Objetivo Rgrid (Ω)",d.target_grid_resistance_ohm,.05)+field("pe-spacing","Paso malla preliminar (m)",d.grid_spacing_m,1)+field("pe-grid-az","Azimut malla (° N→E)",d.grid_azimuth_deg,1)+field("pe-depth","Profundidad malla (m)",d.grid_depth_m,.05)+field("pe-rod","Longitud pica (m)",d.rod_length_m,.1)+field("pe-eff","Eficiencia grupo picas",d.rod_group_efficiency,.05)+field("pe-w","Pletina GI ancho (mm)",d.main_strip_width_mm,1)+field("pe-t","Pletina GI espesor (mm)",d.main_strip_thickness_mm,.5)+field("pe-corr","Sobreespesor corrosión (%)",d.corrosion_allowance_pct,1)+field("pe-cu","Conductor Cu equipos (mm²)",d.bond_conductor_area_mm2,1)+'<button class="btn btn-primary btn-block" id="pe-run">Calcular con SolarGPT</button>';
-  document.getElementById("pe-run").onclick=runEarthing;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){PS.earthing.dirty=true;updateStatus();renderEarthing();});});renderEarthing();
+  document.getElementById("pe-run").onclick=runEarthing;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){markDirty("earthing");updateStatus();renderEarthing();});});renderEarthing();
 }
-async function runEarthing(){
+async function runEarthing(){return runStudy("earthing");}
+async function runStudy(kind){
   if(!requireEngine())return;
+  var seq=++PS.requestSeq[kind];
   try{
-    var input=earthValues();PS.body.innerHTML='<div class="ps-note">Calculando…</div>';
-    var j=await post("/studies/earthing",{boundary:boundary(),equipment:earthingEquipment(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.earthing={result:j,input:input,uiSig:earthingSig(input),dirty:false};PS.staleCache.earthing={t:Date.now(),value:false};PS.activeOverlay="earthing";renderEarthing();updateStatus();draw();
-  }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
+    var readValues=kind==="earthing"?earthValues:cleanValues, input=readValues();
+    if(kind==="cleaning"&&PS.cleaning.approved.size&&PS.cleaning.approvalSig!==approvalSignature(input)){
+      // Approval belongs to the exact geometry/model, not merely a reusable gap ID.
+      PS.cleaning.approved.clear();input.approved_bridge_ids=[];
+    }
+    var payload=studyPayload(kind,input), context=studyContext();
+    var sig=uiSignature({payload:payload,context:context}), edit=PS.editSeq[kind];
+    var approvalSig=kind==="cleaning"?approvalSignature(input):null;
+    PS.body.innerHTML='<div class="ps-note">Calculando…</div>';
+    var j=await post(kind==="earthing"?"/studies/earthing":"/studies/robot-cleaning",payload);
+    if(seq!==PS.requestSeq[kind])return; // A late response cannot replace a newer run.
+    if(!j||typeof j!=="object"||Array.isArray(j)||!j.results||typeof j.status!=="string")throw new Error("Respuesta de estudio inválida.");
+    var changed=edit!==PS.editSeq[kind];
+    try{
+      changed=changed||sig!==studySignature(kind,input);
+      if(PS.modalKind===kind)changed=changed||uiSignature(readValues())!==uiSignature(input);
+    }catch(_){changed=true;}
+    var st=PS[kind];
+    st.result=j;st.input=payload.inputs;st.uiSig=sig;st.dirty=changed;
+    st.requestPayload=payload;st.requestContext=context;
+    if(kind==="cleaning"&&!changed){
+      st.approvalSig=approvalSig;
+      var valid=new Set((j.gaps||[]).map(function(g){return g.gap_id;}));
+      st.approved=new Set(Array.from(st.approved).filter(function(x){return valid.has(x);}));
+      if(uiSignature(Array.from(st.approved).sort())!==uiSignature(input.approved_bridge_ids))markDirty(kind);
+    }
+    // A background response must not repaint the other study's open form.
+    if(PS.modalKind===kind){PS.activeOverlay=kind;if(kind==="earthing")renderEarthing();else renderCleaning();}
+    updateStatus();draw();
+  }catch(err){
+    if(seq===PS.requestSeq[kind]&&PS.modalKind===kind)PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';
+  }
 }
 function kpi(k,v){return '<div class="ps-kpi"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
 function boqTable(rows){
@@ -192,9 +239,10 @@ function boqTable(rows){
 function warnings(ws){return (ws||[]).map(function(x){return '<div class="ps-note">'+esc(x)+'</div>';}).join("");}
 function actions(kind){return '<div class="ps-actions"><button class="btn btn-ghost btn-sm" data-ps="json" data-kind="'+kind+'">JSON</button><button class="btn btn-ghost btn-sm" data-ps="boq" data-kind="'+kind+'">BoQ CSV</button><button class="btn btn-ghost btn-sm" data-ps="dxf" data-kind="'+kind+'">DXF</button><button class="btn btn-ghost btn-sm" data-ps="print" data-kind="'+kind+'">Informe</button><button class="btn btn-ghost btn-sm" data-ps="overlay" data-kind="'+kind+'">Mostrar en plano</button></div>';}
 function renderEarthing(){
+  if(PS.modalKind!=="earthing")return;
   var r=PS.earthing.result;if(!r){PS.body.innerHTML='<div class="ps-note">Aún no calculado.</div>';return;}
   var x=r.results||{},st=stale("earthing",true);
-  PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: geometría/equipos cambiaron. Recalcula antes de usarlo.</div>':'')+
+  PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: cambiaron la geometría, los inputs o las revisiones de origen. Recalcula antes de usarlo.</div>':'')+
     '<div class="ps-summary">'+kpi("Rgrid",fmt(x.estimated_grid_resistance_ohm,3)+" Ω")+kpi("Picas",fmt(x.earth_pit_count,0))+kpi("GI 2D",fmt(x.horizontal_grid_length_m,0)+" m")+kpi("GPR",fmt(x.gpr_v,0)+" V")+'</div>'+
     '<div class="ps-note '+(String(r.status).indexOf("FAIL")===0?"ps-err":String(r.status).indexOf("PASS")===0?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Touch permitido: '+fmt(x.allowable_touch_voltage_v,0)+' V · Step permitido: '+fmt(x.allowable_step_voltage_v,0)+' V<br>Touch real de malla: '+esc((r.checks||{}).touch_voltage||"UNKNOWN")+'.</div><div class="hint">Plano: naranja = malla/picas · verde discontinuo = bonds de equipos explícitos.</div>'+boqTable(r.boq)+warnings(r.warnings)+actions("earthing");
   bindActions("earthing");
@@ -204,32 +252,30 @@ function cleanValues(){
   return {row_transverse_tolerance_m:val("pc-row"),azimuth_tolerance_deg:val("pc-az"),native_gap_max_m:val("pc-native"),standard_bridge_max_m:val("pc-bridge"),max_robot_travel_m:val("pc-travel"),max_longitudinal_slope_pct:val("pc-slope"),default_azimuth_deg:valOpt("pc-default-az"),approved_bridge_ids:Array.from(PS.cleaning.approved).sort()};
 }
 function openCleaning(){
+  PS.modalKind="cleaning";
   PS.modal.classList.add("open");document.getElementById("ps-title").textContent="Limpieza robot · fleet & gaps";document.getElementById("ps-class").textContent="NO AUTO-BRIDGING";
   var d=PS.cleaning.input||CLEAN_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Ningún hueco se puentea automáticamente. Bridge máximo = 0 significa capacidad del fabricante desconocida.</div>'+
     field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+field("pc-default-az","Azimut por defecto si falta en la mesa (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"vacío = fallar, no inferir")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
-  document.getElementById("pc-run").onclick=runCleaning;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){PS.cleaning.dirty=true;updateStatus();renderCleaning();});});renderCleaning();
+  document.getElementById("pc-run").onclick=runCleaning;[].slice.call(document.querySelectorAll("#ps-form input")).forEach(function(x){x.addEventListener("input",function(){markDirty("cleaning");updateStatus();renderCleaning();});});renderCleaning();
 }
-async function runCleaning(){
-  if(!requireEngine())return;
-  try{
-    var input=cleanValues();PS.body.innerHTML='<div class="ps-note">Calculando líneas y discontinuidades…</div>';
-    var j=await post("/studies/robot-cleaning",{structures:cleaningStructures(),inputs:input,geometry_revision:geomRev(),source_revisions:{surface:"siting/index.html"}});
-    PS.cleaning.result=j;PS.cleaning.input=input;PS.cleaning.uiSig=cleaningSig(input);PS.cleaning.dirty=false;PS.staleCache.cleaning={t:Date.now(),value:false};
-    var valid=new Set((j.gaps||[]).map(function(g){return g.gap_id;}));PS.cleaning.approved=new Set(Array.from(PS.cleaning.approved).filter(function(x){return valid.has(x);}));
-    PS.activeOverlay="cleaning";renderCleaning();updateStatus();draw();
-  }catch(err){PS.body.innerHTML='<div class="ps-note ps-err">'+esc(err.message)+'</div>';}
-}
+async function runCleaning(){return runStudy("cleaning");}
 function renderCleaning(){
+  if(PS.modalKind!=="cleaning")return;
   var r=PS.cleaning.result;if(!r){PS.body.innerHTML='<div class="ps-note">Aún no calculado.</div>';return;}
   var x=r.results||{},st=stale("cleaning",true),cand=(r.gaps||[]).filter(function(g){return g.state==="BRIDGE_CANDIDATE"||g.state==="BRIDGE_APPROVED";});
   var trs=cand.map(function(g){return '<tr><td><input type="checkbox" class="pc-bridge-cb" data-id="'+esc(g.gap_id)+'" '+(PS.cleaning.approved.has(g.gap_id)?"checked":"")+'></td><td>'+esc(g.from_id)+' → '+esc(g.to_id)+'</td><td>'+fmt(g.gap_m,2)+' m</td><td>'+esc(g.state)+'</td></tr>';}).join("");
-  PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: el layout cambió. Recalcula antes de usarlo.</div>':'')+
+  PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: cambiaron el layout, los inputs o las revisiones de origen. Recalcula antes de usarlo.</div>':'')+
     '<div class="ps-summary">'+kpi("Robots",fmt(x.robot_count,0))+kpi("Líneas",fmt(x.cleaning_line_count,0))+kpi("Longitud",fmt(x.cleanable_length_m,0)+" m")+kpi("Bridges aprob.",fmt(x.approved_bridge_count,0))+'</div>'+
     '<div class="ps-note '+(r.status==="OK"?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Candidatos: '+fmt(x.bridge_candidate_count,0)+' · Bloqueados: '+fmt(x.blocked_gap_count,0)+' · Capacidad desconocida: '+fmt(x.unknown_bridge_gap_count,0)+' · Robots ahorrados: '+fmt(x.robots_saved_by_approved_bridges,0)+'</div>'+
     (cand.length?'<h3 style="margin:12px 0 6px">Bridges candidatos</h3><table class="ps-table"><thead><tr><th>Aprobar</th><th>Gap</th><th>Longitud</th><th>Estado</th></tr></thead><tbody>'+trs+'</tbody></table><button class="btn btn-primary btn-sm" id="pc-rerun" style="margin-top:8px">Recalcular con selección</button>':'')+
     '<div class="hint">Plano: azul = línea de limpieza · amarillo = bridge candidato · verde = bridge aprobado · rojo = gap bloqueado.</div>'+blockTable(r.blocks)+boqTable(r.boq)+warnings(r.warnings)+actions("cleaning");
-  [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);PS.cleaning.dirty=true;updateStatus();};});
+  [].slice.call(document.querySelectorAll(".pc-bridge-cb")).forEach(function(cb){cb.onchange=function(){
+    var same=false;try{same=PS.cleaning.approvalSig===approvalSignature(cleanValues());}catch(_){}
+    if(!same){cb.checked=false;alert("Recalcula antes de aprobar bridges: cambió la geometría o el modelo de robot.");return;}
+    if(cb.checked)PS.cleaning.approved.add(cb.dataset.id);else PS.cleaning.approved.delete(cb.dataset.id);
+    markDirty("cleaning");updateStatus();
+  };});
   var rr=document.getElementById("pc-rerun");if(rr)rr.onclick=runCleaning;bindActions("cleaning");
 }
 function blockTable(rows){
@@ -244,6 +290,7 @@ function currentStudyBoq(){
   return out;
 }
 function downloadCombinedBoq(){
+  if(["earthing","cleaning"].some(function(k){return PS[k].result&&stale(k,true);})){alert("Hay estudios desactualizados. Recalcula antes de exportar el BoQ conjunto; no se genera un total parcial.");return;}
   var rows=currentStudyBoq();
   if(!rows.length){alert("No hay estudios vigentes para incorporar al BoQ.");return;}
   var lines=["code,description,quantity,unit,source"];
@@ -252,16 +299,29 @@ function downloadCombinedBoq(){
 }
 function resultOf(kind){return kind==="earthing"?PS.earthing.result:PS.cleaning.result;}
 function dl(name,text,type){var b=new Blob([text],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}
-function downloadJson(kind){var r=resultOf(kind);if(r)dl((S.sc||"plant")+"_"+kind+".json",JSON.stringify(r,null,2),"application/json");}
+function currentResult(kind){
+  var r=resultOf(kind);if(!r)return null;
+  if(stale(kind,true)){alert("Estudio desactualizado. Recalcula antes de exportar o mostrar como vigente.");return null;}
+  return r;
+}
+function downloadJson(kind){
+  var r=resultOf(kind);if(!r)return;
+  var st=PS[kind], outdated=stale(kind,true);
+  // Historical evidence is allowed, but never disguised as a current core result.
+  var envelope={schema:"plant_studies_export_v1",validity:outdated?"STALE":"CURRENT_SESSION",
+    checked_at:new Date().toISOString(),warning:outdated?"DESACTUALIZADO: no usar para ingeniería vigente.":null,
+    source_snapshot:st.requestPayload||null,source_context:st.requestContext||null,result:r};
+  dl((S.sc||"plant")+"_"+kind+(outdated?"_STALE":"")+".json",JSON.stringify(envelope,null,2),"application/json");
+}
 function downloadBoq(kind){
-  var r=resultOf(kind);if(!r)return;var lines=["code,description,quantity,unit,source"];
+  var r=currentResult(kind);if(!r)return;var lines=["code,description,quantity,unit,source"];
   (r.boq||[]).forEach(function(x){var cells=[x.code,x.description,x.quantity,x.unit,x.source].map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';});lines.push(cells.join(","));});
   dl((S.sc||"plant")+"_"+kind+"_boq.csv",lines.join("\n"),"text/csv");
 }
 function dxfLine(a,b,layer){return "0\nLINE\n8\n"+layer+"\n10\n"+a.x+"\n20\n"+a.y+"\n30\n0\n11\n"+b.x+"\n21\n"+b.y+"\n31\n0\n";}
 function dxfCircle(p,r,layer){return "0\nCIRCLE\n8\n"+layer+"\n10\n"+p.x+"\n20\n"+p.y+"\n30\n0\n40\n"+r+"\n";}
 function downloadDxf(kind){
-  var r=resultOf(kind);if(!r)return;var out="0\nSECTION\n2\nENTITIES\n",o=r.overlay||{};
+  var r=currentResult(kind);if(!r)return;var out="0\nSECTION\n2\nENTITIES\n",o=r.overlay||{};
   if(kind==="earthing"){
     var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");
     (o.earth_pits||[]).forEach(function(x){out+=dxfCircle(x,.6,"EARTH_PIT");});
@@ -274,7 +334,7 @@ function downloadDxf(kind){
   dl((S.sc||"plant")+"_"+kind+".dxf",out+"0\nENDSEC\n0\nEOF\n","application/dxf");
 }
 function printReport(kind){
-  var r=resultOf(kind);if(!r)return;
+  var r=currentResult(kind);if(!r)return;
   var previous=PS.activeOverlay, image="";
   try{
     PS.activeOverlay=kind;draw();
@@ -290,7 +350,7 @@ function bindActions(kind){
   [].slice.call(document.querySelectorAll('[data-kind="'+kind+'"][data-ps]')).forEach(function(b){
     b.onclick=function(){
       var a=b.dataset.ps;
-      if(a==="json")downloadJson(kind);else if(a==="boq")downloadBoq(kind);else if(a==="dxf")downloadDxf(kind);else if(a==="print")printReport(kind);else if(a==="overlay"){PS.activeOverlay=kind;draw();}
+      if(a==="json")downloadJson(kind);else if(a==="boq")downloadBoq(kind);else if(a==="dxf")downloadDxf(kind);else if(a==="print")printReport(kind);else if(a==="overlay"&&currentResult(kind)){PS.activeOverlay=kind;draw();}
     };
   });
 }
