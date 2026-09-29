@@ -73,7 +73,7 @@ declare -A PISO=(
   [test_vis_importadores.js]=42
   # el careo de los dos motores, que es Python
   [test_paridad_radio.py]=30
-  [test_plant_studies_ui.js]=15
+  [test_plant_studies_ui.js]=18
 )
 
 # ── LO QUE NO CORRE AQUÍ, CON DUEÑO Y MOTIVO ─────────────────────────────
