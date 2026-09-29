@@ -88,7 +88,7 @@ function earthingEquipment(){
 }
 function cleaningStructures(){
   return (S.motors||[]).map(function(m){
-    return {id:motorId(m),x:+m.x,y:+m.y,z:m.z==null?null:+m.z,length_m:tableLength(m),azimuth_deg:Number.isFinite(+m.az)?+m.az:0};
+    return {id:motorId(m),x:+m.x,y:+m.y,z:m.z==null?null:+m.z,length_m:tableLength(m),azimuth_deg:(m.az==null?null:+m.az)};
   }).sort(function(a,b){return a.id.localeCompare(b.id);});
 }
 function earthingSig(input){return uiHash({boundary:boundary(),equipment:earthingEquipment(),input:input});}
@@ -151,22 +151,21 @@ function injectModal(){
 function field(id,label,value,step,hint){
   return '<div class="ps-field"><label for="'+id+'">'+esc(label)+(hint?' · <span style="color:var(--muted-2)">'+esc(hint)+'</span>':'')+'</label><input id="'+id+'" type="number" step="'+(step==null?"any":step)+'" value="'+esc(value)+'"></div>';
 }
-function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}
-function requireEngine(){
+function val(id){var e=document.getElementById(id),x=e?Number(e.value):NaN;if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction valOpt(id){var e=document.getElementById(id);if(!e||String(e.value).trim()==="")return null;var x=Number(e.value);if(!Number.isFinite(x))throw new Error("Valor inválido: "+id);return x;}\nfunction requireEngine(){
   if(PS.engineOk)return true;
   PS.body.innerHTML='<div class="ps-note ps-err"><b>Motor SolarGPT no disponible.</b><br>Arranca el servicio local en '+esc(apiUrl())+' o cambia la URL desde el panel. No se usa un cálculo aproximado en navegador.</div>';
   return false;
 }
 function geomRev(){return String(S.sc||S.projName||"layout");}
-var EARTH_DEFAULT={soil_resistivity_ohm_m:100,season_factor:1.5,gravel_resistivity_ohm_m:3000,gravel_thickness_m:.10,fault_current_a:5000,fault_time_s:1,target_grid_resistance_ohm:1,grid_spacing_m:20,grid_depth_m:.6,rod_length_m:3,rod_group_efficiency:.60,main_strip_width_mm:50,main_strip_thickness_mm:10,corrosion_allowance_pct:25,bond_conductor_area_mm2:35};
+var EARTH_DEFAULT={soil_resistivity_ohm_m:100,season_factor:1.5,gravel_resistivity_ohm_m:3000,gravel_thickness_m:.10,fault_current_a:5000,fault_time_s:1,target_grid_resistance_ohm:1,grid_spacing_m:20,grid_azimuth_deg:0,grid_depth_m:.6,rod_length_m:3,rod_group_efficiency:.60,main_strip_width_mm:50,main_strip_thickness_mm:10,corrosion_allowance_pct:25,bond_conductor_area_mm2:35};
 function earthValues(){
-  return {soil_resistivity_ohm_m:val("pe-rho"),season_factor:val("pe-season"),gravel_resistivity_ohm_m:val("pe-gravel"),gravel_thickness_m:val("pe-gravel-h"),fault_current_a:val("pe-if")*1000,fault_time_s:val("pe-tf"),target_grid_resistance_ohm:val("pe-target"),grid_spacing_m:val("pe-spacing"),grid_depth_m:val("pe-depth"),rod_length_m:val("pe-rod"),rod_group_efficiency:val("pe-eff"),main_strip_width_mm:val("pe-w"),main_strip_thickness_mm:val("pe-t"),corrosion_allowance_pct:val("pe-corr"),bond_conductor_area_mm2:val("pe-cu")};
+  return {soil_resistivity_ohm_m:val("pe-rho"),season_factor:val("pe-season"),gravel_resistivity_ohm_m:val("pe-gravel"),gravel_thickness_m:val("pe-gravel-h"),fault_current_a:val("pe-if")*1000,fault_time_s:val("pe-tf"),target_grid_resistance_ohm:val("pe-target"),grid_spacing_m:val("pe-spacing"),grid_azimuth_deg:val("pe-grid-az"),grid_depth_m:val("pe-depth"),rod_length_m:val("pe-rod"),rod_group_efficiency:val("pe-eff"),main_strip_width_mm:val("pe-w"),main_strip_thickness_mm:val("pe-t"),corrosion_allowance_pct:val("pe-corr"),bond_conductor_area_mm2:val("pe-cu")};
 }
 function openEarthing(){
   PS.modal.classList.add("open");document.getElementById("ps-title").textContent="Puesta a tierra · preliminar";document.getElementById("ps-class").textContent="PRELIMINARY · NO IFC";
   var d=PS.earthing.input||EARTH_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Confirmar con resistividad medida, modelo multicapa y estudio de cortocircuito antes de IFC.</div>'+
-    field("pe-rho","Resistividad suelo (Ω·m)",d.soil_resistivity_ohm_m)+field("pe-season","Factor estacional",d.season_factor,.05)+field("pe-gravel","Resistividad grava (Ω·m)",d.gravel_resistivity_ohm_m)+field("pe-gravel-h","Espesor grava (m)",d.gravel_thickness_m,.01)+field("pe-if","Corriente defecto (kA)",d.fault_current_a/1000,.1)+field("pe-tf","Tiempo defecto (s)",d.fault_time_s,.01)+field("pe-target","Objetivo Rgrid (Ω)",d.target_grid_resistance_ohm,.05)+field("pe-spacing","Paso malla preliminar (m)",d.grid_spacing_m,1)+field("pe-depth","Profundidad malla (m)",d.grid_depth_m,.05)+field("pe-rod","Longitud pica (m)",d.rod_length_m,.1)+field("pe-eff","Eficiencia grupo picas",d.rod_group_efficiency,.05)+field("pe-w","Pletina GI ancho (mm)",d.main_strip_width_mm,1)+field("pe-t","Pletina GI espesor (mm)",d.main_strip_thickness_mm,.5)+field("pe-corr","Sobreespesor corrosión (%)",d.corrosion_allowance_pct,1)+field("pe-cu","Conductor Cu equipos (mm²)",d.bond_conductor_area_mm2,1)+'<button class="btn btn-primary btn-block" id="pe-run">Calcular con SolarGPT</button>';
+    field("pe-rho","Resistividad suelo (Ω·m)",d.soil_resistivity_ohm_m)+field("pe-season","Factor estacional",d.season_factor,.05)+field("pe-gravel","Resistividad grava (Ω·m)",d.gravel_resistivity_ohm_m)+field("pe-gravel-h","Espesor grava (m)",d.gravel_thickness_m,.01)+field("pe-if","Corriente defecto (kA)",d.fault_current_a/1000,.1)+field("pe-tf","Tiempo defecto (s)",d.fault_time_s,.01)+field("pe-target","Objetivo Rgrid (Ω)",d.target_grid_resistance_ohm,.05)+field("pe-spacing","Paso malla preliminar (m)",d.grid_spacing_m,1)+field("pe-grid-az","Azimut malla (° N→E)",d.grid_azimuth_deg,1)+field("pe-depth","Profundidad malla (m)",d.grid_depth_m,.05)+field("pe-rod","Longitud pica (m)",d.rod_length_m,.1)+field("pe-eff","Eficiencia grupo picas",d.rod_group_efficiency,.05)+field("pe-w","Pletina GI ancho (mm)",d.main_strip_width_mm,1)+field("pe-t","Pletina GI espesor (mm)",d.main_strip_thickness_mm,.5)+field("pe-corr","Sobreespesor corrosión (%)",d.corrosion_allowance_pct,1)+field("pe-cu","Conductor Cu equipos (mm²)",d.bond_conductor_area_mm2,1)+'<button class="btn btn-primary btn-block" id="pe-run">Calcular con SolarGPT</button>';
   document.getElementById("pe-run").onclick=runEarthing;renderEarthing();
 }
 async function runEarthing(){
@@ -188,19 +187,19 @@ function renderEarthing(){
   var r=PS.earthing.result;if(!r){PS.body.innerHTML='<div class="ps-note">Aún no calculado.</div>';return;}
   var x=r.results||{},st=stale("earthing");
   PS.body.innerHTML=(st?'<div class="ps-note">⚠ Desactualizado: geometría/equipos cambiaron. Recalcula antes de usarlo.</div>':'')+
-    '<div class="ps-summary">'+kpi("Rgrid",fmt(x.estimated_grid_resistance_ohm,3)+" Ω")+kpi("Picas",fmt(x.earth_pit_count,0))+kpi("GI estimado",fmt(x.horizontal_grid_length_est_m,0)+" m")+kpi("GPR",fmt(x.gpr_v,0)+" V")+'</div>'+
+    '<div class="ps-summary">'+kpi("Rgrid",fmt(x.estimated_grid_resistance_ohm,3)+" Ω")+kpi("Picas",fmt(x.earth_pit_count,0))+kpi("GI 2D",fmt(x.horizontal_grid_length_m,0)+" m")+kpi("GPR",fmt(x.gpr_v,0)+" V")+'</div>'+
     '<div class="ps-note '+(String(r.status).indexOf("FAIL")===0?"ps-err":String(r.status).indexOf("PASS")===0?"ps-ok":"")+'"><b>'+esc(r.status)+'</b><br>Touch permitido: '+fmt(x.allowable_touch_voltage_v,0)+' V · Step permitido: '+fmt(x.allowable_step_voltage_v,0)+' V<br>Touch real de malla: '+esc((r.checks||{}).touch_voltage||"UNKNOWN")+'.</div>'+boqTable(r.boq)+warnings(r.warnings)+actions("earthing");
   bindActions("earthing");
 }
-var CLEAN_DEFAULT={row_transverse_tolerance_m:1.5,azimuth_tolerance_deg:3,native_gap_max_m:0,standard_bridge_max_m:0,max_robot_travel_m:0,max_longitudinal_slope_pct:0};
+var CLEAN_DEFAULT={row_transverse_tolerance_m:1.5,azimuth_tolerance_deg:3,native_gap_max_m:0,standard_bridge_max_m:0,max_robot_travel_m:0,max_longitudinal_slope_pct:0,default_azimuth_deg:null};
 function cleanValues(){
-  return {row_transverse_tolerance_m:val("pc-row"),azimuth_tolerance_deg:val("pc-az"),native_gap_max_m:val("pc-native"),standard_bridge_max_m:val("pc-bridge"),max_robot_travel_m:val("pc-travel"),max_longitudinal_slope_pct:val("pc-slope"),approved_bridge_ids:Array.from(PS.cleaning.approved).sort()};
+  return {row_transverse_tolerance_m:val("pc-row"),azimuth_tolerance_deg:val("pc-az"),native_gap_max_m:val("pc-native"),standard_bridge_max_m:val("pc-bridge"),max_robot_travel_m:val("pc-travel"),max_longitudinal_slope_pct:val("pc-slope"),default_azimuth_deg:valOpt("pc-default-az"),approved_bridge_ids:Array.from(PS.cleaning.approved).sort()};
 }
 function openCleaning(){
   PS.modal.classList.add("open");document.getElementById("ps-title").textContent="Limpieza robot · fleet & gaps";document.getElementById("ps-class").textContent="NO AUTO-BRIDGING";
   var d=PS.cleaning.input||CLEAN_DEFAULT;
   document.getElementById("ps-form").innerHTML='<div class="ps-note">Ningún hueco se puentea automáticamente. Bridge máximo = 0 significa capacidad del fabricante desconocida.</div>'+
-    field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
+    field("pc-row","Tolerancia transversal fila (m)",d.row_transverse_tolerance_m,.1)+field("pc-az","Tolerancia azimut (°)",d.azimuth_tolerance_deg,.5)+field("pc-native","Gap nativo máximo (m)",d.native_gap_max_m,.1)+field("pc-bridge","Bridge estándar máximo (m)",d.standard_bridge_max_m,.1)+field("pc-travel","Recorrido máximo robot (m)",d.max_robot_travel_m,1,"0 = sin límite declarado")+field("pc-slope","Pendiente longitudinal máxima (%)",d.max_longitudinal_slope_pct,.1,"0 = sin límite declarado")+field("pc-default-az","Azimut por defecto si falta en la mesa (°)",d.default_azimuth_deg==null?"":d.default_azimuth_deg,1,"vacío = fallar, no inferir")+'<button class="btn btn-primary btn-block" id="pc-run">Calcular con SolarGPT</button>';
   document.getElementById("pc-run").onclick=runCleaning;renderCleaning();
 }
 async function runCleaning(){
@@ -240,7 +239,7 @@ function downloadDxf(kind){
   if(kind==="earthing"){
     var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");
     (o.earth_pits||[]).forEach(function(x){out+=dxfCircle(x,.6,"EARTH_PIT");});
-    (o.equipment_bonds||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_BOND");});
+    (o.internal_grid_lines||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_GRID_INTERNAL");});\n    (o.equipment_bonds||[]).forEach(function(x){out+=dxfLine(x.from,x.to,"EARTH_BOND");});
   }else{
     (o.lines||[]).forEach(function(x){out+=dxfLine(x.start,x.end,"CLEAN_LINE");});
     (o.gaps||[]).forEach(function(x){out+=dxfCircle(x.point,.4,x.state==="BRIDGE_APPROVED"?"CLEAN_BRIDGE":"CLEAN_GAP");});
@@ -267,7 +266,7 @@ function path(points,color,width,dash){
   ctx.strokeStyle=color;ctx.lineWidth=width*DPR;if(dash)ctx.setLineDash(dash.map(function(x){return x*DPR;}));ctx.stroke();ctx.setLineDash([]);
 }
 function paintEarthing(r){
-  var o=r.overlay||{};path(o.perimeter_grid,"#d45d22",2,[8,4]);
+  var o=r.overlay||{};path(o.perimeter_grid,"#d45d22",2,[8,4]);\n  (o.internal_grid_lines||[]).forEach(function(g){path([g.from,g.to],"rgba(212,93,34,.65)",1);});
   (o.equipment_bonds||[]).forEach(function(b){path([b.from,b.to],"#1f9d57",1,[4,4]);});
   (o.earth_pits||[]).forEach(function(p){var q=w2s(p);ctx.beginPath();ctx.arc(q.x,q.y,5*DPR,0,Math.PI*2);ctx.fillStyle="#d45d22";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=DPR;ctx.stroke();});
 }
