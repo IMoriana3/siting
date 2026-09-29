@@ -6,6 +6,7 @@ let n=0;
 function ok(cond,msg){n++;if(!cond){console.error("MAL "+msg);process.exitCode=1;}else console.log("OK "+msg);}
 
 ok(html.includes('<script src="plant_studies.js"></script>'),"el HTML canónico carga Plant Studies");
+ok(!html.includes('</script>\\n<footer'),"el HTML no deja secuencias de escape literales en el DOM");
 var syntaxOk=true;try{new Function(js);}catch(e){syntaxOk=false;console.error(e.stack||e);}
 ok(syntaxOk,"plant_studies.js compila como JavaScript real");
 ok(html.includes("b78</span>"),"el build visible cambió con la integración");
