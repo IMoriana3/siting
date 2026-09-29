@@ -179,7 +179,7 @@ async function runEarthing(){
 function kpi(k,v){return '<div class="ps-kpi"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
 function boqTable(rows){
   if(!rows||!rows.length)return "";
-  return '<h3 style="margin:14px 0 6px">BoQ del estudio</h3><table class="ps-table"><thead><tr><th>Código</th><th>Partida</th><th>Cantidad</th><th>Ud.</th></tr></thead><tbody>'+rows.map(function(x){return '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.description)+'</td><td>'+fmt(x.quantity,2)+'</td><td>'+esc(x.unit)+'</td></tr>';}).join("")+'</tbody></table>';
+  return '<h3 style="margin:14px 0 6px">BoQ del estudio</h3><table class="ps-table"><thead><tr><th>Código</th><th>Partida</th><th>Cantidad</th><th>Ud.</th><th>Fuente</th></tr></thead><tbody>'+rows.map(function(x){return '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.description)+'</td><td>'+fmt(x.quantity,2)+'</td><td>'+esc(x.unit)+'</td><td>'+esc(x.source||'')+'</td></tr>';}).join("")+'</tbody></table>';
 }
 function warnings(ws){return (ws||[]).map(function(x){return '<div class="ps-note">'+esc(x)+'</div>';}).join("");}
 function actions(kind){return '<div class="ps-actions"><button class="btn btn-ghost btn-sm" data-ps="json" data-kind="'+kind+'">JSON</button><button class="btn btn-ghost btn-sm" data-ps="boq" data-kind="'+kind+'">BoQ CSV</button><button class="btn btn-ghost btn-sm" data-ps="dxf" data-kind="'+kind+'">DXF</button><button class="btn btn-ghost btn-sm" data-ps="print" data-kind="'+kind+'">Informe</button><button class="btn btn-ghost btn-sm" data-ps="overlay" data-kind="'+kind+'">Mostrar en plano</button></div>';}
@@ -233,8 +233,8 @@ function resultOf(kind){return kind==="earthing"?PS.earthing.result:PS.cleaning.
 function dl(name,text,type){var b=new Blob([text],{type:type||"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);}
 function downloadJson(kind){var r=resultOf(kind);if(r)dl((S.sc||"plant")+"_"+kind+".json",JSON.stringify(r,null,2),"application/json");}
 function downloadBoq(kind){
-  var r=resultOf(kind);if(!r)return;var lines=["code,description,quantity,unit"];
-  (r.boq||[]).forEach(function(x){var cells=[x.code,x.description,x.quantity,x.unit].map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';});lines.push(cells.join(","));});
+  var r=resultOf(kind);if(!r)return;var lines=["code,description,quantity,unit,source"];
+  (r.boq||[]).forEach(function(x){var cells=[x.code,x.description,x.quantity,x.unit,x.source].map(function(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"';});lines.push(cells.join(","));});
   dl((S.sc||"plant")+"_"+kind+"_boq.csv",lines.join("\n"),"text/csv");
 }
 function dxfLine(a,b,layer){return "0\nLINE\n8\n"+layer+"\n10\n"+a.x+"\n20\n"+a.y+"\n30\n0\n11\n"+b.x+"\n21\n"+b.y+"\n31\n0\n";}
