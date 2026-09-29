@@ -260,7 +260,7 @@ function downloadBoq(kind){
 function dxfLine(a,b,layer){return "0\nLINE\n8\n"+layer+"\n10\n"+a.x+"\n20\n"+a.y+"\n30\n0\n11\n"+b.x+"\n21\n"+b.y+"\n31\n0\n";}
 function dxfCircle(p,r,layer){return "0\nCIRCLE\n8\n"+layer+"\n10\n"+p.x+"\n20\n"+p.y+"\n30\n0\n40\n"+r+"\n";}
 function downloadDxf(kind){
-  var r=resultOf(kind);if(!r)return,out="0\nSECTION\n2\nENTITIES\n",o=r.overlay||{};
+  var r=resultOf(kind);if(!r)return;var out="0\nSECTION\n2\nENTITIES\n",o=r.overlay||{};
   if(kind==="earthing"){
     var p=o.perimeter_grid||[];for(var i=1;i<p.length;i++)out+=dxfLine(p[i-1],p[i],"EARTH_GRID");
     (o.earth_pits||[]).forEach(function(x){out+=dxfCircle(x,.6,"EARTH_PIT");});
