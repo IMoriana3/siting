@@ -524,11 +524,88 @@ adivinarlo por el número, que es exactamente lo que este documento no hace.
 **Queda pendiente y se pide: el reparto TCU → gateway de esa NCU.** Con él, el
 §2.4 ter se recalcula en una tarde.
 
-#### El cruce con RSSI y saltos tampoco se puede hacer
+#### LA EXPORTACIÓN DE TCU NO CONTIENE NINGÚN OBSERVABLE DE RADIO
 
-`elburgo_real.geojson` **sí** trae `rssi_med_dbm`, `hop_tipico` y
-`ack_failures` por nodo. No se cruza, por dos motivos, y los dos son de
-identidad del dato:
+**Y esto no es una impresión: es el inventario de las 27 columnas.**
+
+```
+ 1 datetime                      15 motor_current
+ 2 main_state                    16 motor_current_peak
+ 3 backtracking                  17 motor_state
+ 4 wind_from_east                18 motor_pwm
+ 5 active_security_position      19 daily_motor_power_consumption
+ 6 angle                         20 pcb_temp
+ 7 target_angle                  21 battery_temp
+ 8 soc                           22 alarms_1
+ 9 remaining_capacity            23 alarms_2
+10 ps_voltage                    24 hw_alarms
+11 ps_current                    25 system_monitor_status
+12 voltage                       26 system_monitor_flags
+13 current                       27 power_section_alarms
+14 motor_voltage
+```
+
+Y el `NCU_*.csv`, ocho: `datetime`, `mqtt_online`, `gw1_online`, `gw2_online`,
+`ups_power_ok`, `ups_battery_low`, `stop_button`, `bluetooth_enabled`.
+
+**Ni RSSI, ni LQI, ni SNR, ni número de saltos, ni contador de reintentos o de
+ACK fallidos, ni canal, ni PAN.** Nada de radio, en ninguno de los dos ficheros.
+
+**La consecuencia, y es la que decide cómo se lee todo el apartado:** la única
+magnitud con la que se podría razonar sobre radio es **«¿llegó el sondeo?»**, y
+eso **mezcla** propagación con firmware del gateway, con el enlace NCU↔gateway,
+con la configuración de sondeo y con el estado de alta de cada TCU. Así que
+**este fichero no puede decidir si el gateway 1 va mal por RADIO o por EQUIPO**,
+se mire como se mire — y por tanto **no puede valer como medida de cobertura
+degradada**, que sería su uso más valioso si la causa fuera radio.
+
+**Las huellas que sí hay apuntan a los dos lados, y se dejan escritas sin
+concluir:**
+
+| hacia RADIO | hacia EQUIPO o CONFIGURACIÓN |
+|---|---|
+| dentro del bloque B la degradación es **graduada**: 21, 24, 25 … 117, 175 filas/día, factor **8,3** repartido suave. Una avería de equipo suele ser un interruptor; un presupuesto de enlace da un continuo | la separación **entre** bloques es bimodal **sin solape**: la mediana del A es **19,3×** el máximo del B. La propagación da un continuo, no un corte limpio entre la TCU 38 y la 39 |
+| y el gradiente **no sigue el número de TCU**: correlación índice ↔ filas/día en el bloque B, **r = 0,29** | `gw1_online` y los 228 reinicios de hilo miden el enlace **NCU↔gateway**, que no es propagación a las TCU |
+| las 38 son **intermitentes** tras aparecer: mediana de **9 huecos de más de 10 min** por TCU | la avería es un **escalón**: se acaba a las 09:48:58, con un único pico aislado de 17 s a las 11:40:38–11:40:54, y nada más. La propagación no se cura a una hora y se queda curada |
+| **ninguna alarma distingue** al bloque B: las que reportan publican la misma combinación que el A. Su problema es que las alcancen, no su propia salud | **cuatro horas sin explicación**: de 09:48 a 13:47 el enlace del gateway 1 estuvo al 100 % y el bloque B produjo **cero filas** |
+
+Y el contraste más limpio del fichero, que vale para las dos columnas: en las 9
+horas en que el enlace del gateway 1 se caía el 15–23 % del tiempo, el **bloque
+A promedió 1.783 filas por TCU** —el **165 %** de lo que daría una rejilla de
+30 s— y el **bloque B produjo 0, las 38**.
+
+**Lectura, dicha como lectura:** son probablemente **dos capas y dos causas** —
+un fallo de equipo o de enlace en el gateway, que es lo que `gw1_online` mide y
+es un escalón que se cura; y un gradiente por TCU dentro del bloque B que
+parece calidad de enlace. No se pueden separar con esto, y las cuatro horas de
+enlace sano con bloque B mudo dicen que hay **al menos un tercer factor**.
+
+#### LO QUE ZANJARÍA LA PREGUNTA, y es barato — **PEDIDO AL PROPIETARIO**
+
+Pedido explícitamente por Iñaki el 2026-10-01. Los útiles ya existen en la
+cartera; lo que falta es el volcado.
+
+| qué | de dónde | para qué |
+|---|---|---|
+| **volcado del inventario Zigbee** | `Cobertura-Zigbee/zigbee_inventario.ps1` (bloque 8a) | trae **RSSI y LQI por nodo**, que es exactamente el observable que falta arriba |
+| **o el registro de rutas** | `Cobertura-Zigbee/zigbee_routes_logger.ps1` | trae **rutas y saltos**, el otro observable |
+| **el mapa TCU → gateway** | de esa NCU, declarado | sin él no se puede separar lo que falla de lo que no |
+
+Los dos `.ps1` corren en el PC de planta con **Windows PowerShell 5.1, sin
+instalar nada y sin admin**, que es la restricción de campo ya fijada.
+
+**Y qué cambia si llegan.** Con el mapa, el §2.4 ter se recalcula separado por
+gateway en una tarde. Con RSSI o saltos, la pregunta «radio o equipo» se
+contesta; y **si sale radio, este fichero deja de ser inservible y pasa a ser
+una medida de cobertura degradada con 38 nodos**, que es un dato que la cartera
+no tiene por ningún otro sitio. Sin ellos, la pregunta no es contestable y la
+latencia no vuelve.
+
+#### El cruce con RSSI y saltos del inventario que SÍ existe, tampoco sirve
+
+`Cobertura-Zigbee/elburgo_real.geojson` **sí** trae `rssi_med_dbm`,
+`hop_tipico` y `ack_failures` por nodo. No se cruza, por dos motivos, y los dos
+son de identidad del dato:
 
 1. **Cubre etiquetas 57–108**, o sea **ninguna del bloque B** — justo el bloque
    cuyo retraso habría que explicar.
@@ -845,8 +922,20 @@ Ordenadas por lo que se puede decir de ellas hoy.
 > reparto, el p100 y la tasa de fallo. El D.2 sigue haciendo falta sólo para
 > partir la cota de radio en saltos.
 >
-> **Y una cosa que se pide con él:** el **reparto TCU → gateway** de la NCU de
-> la que salga, porque sin él no se puede separar lo que falla de lo que no.
+> **Y tres cosas que se piden con él**, pedidas por Iñaki el 2026-10-01 y
+> detalladas en el §2.4 ter:
+>
+> 1. el **reparto TCU → gateway** de la NCU de la que salga, porque sin él no se
+>    puede separar lo que falla de lo que no;
+> 2. un volcado de **`zigbee_inventario.ps1`** (bloque 8a) de esa NCU — trae
+>    **RSSI y LQI por nodo**;
+> 3. o de **`zigbee_routes_logger.ps1`** — trae **rutas y saltos**.
+>
+> Los dos últimos son el observable que **la exportación de TCU no tiene**: sus
+> 27 columnas no incluyen ni una magnitud de radio (§2.4 ter), así que hoy no se
+> puede decidir si el gateway 1 va mal por **radio** o por **equipo**. Y eso
+> decide cuánto vale el fichero: si es radio, pasa a ser una medida de cobertura
+> degradada con 38 nodos que esta cartera no tiene por otro lado.
 
 **Es el árbitro para el tramo de radio, y hoy no existe.** Sin él, el §6 sería
 un ranking de valores de catálogo.
