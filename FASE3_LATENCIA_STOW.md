@@ -1233,7 +1233,27 @@ Ordenadas por lo que se puede decir de ellas hoy.
 > detalladas en el §2.4 ter:
 >
 > 1. el **reparto TCU → gateway** de la NCU de la que salga, porque sin él no se
->    puede separar lo que falla de lo que no;
+>    puede separar lo que falla de lo que no.
+>
+>    **CORRECCIÓN DEL 2026-10-03, y la hago porque este documento y yo dijimos
+>    que ese reparto «no existe en ningún repo»:** el reparto **TCU → NCU** SÍ
+>    existe, completo, en `Cobertura-Zigbee/config_tcu_sanjose.csv` (2.184 TCU
+>    repartidas en 21 NCU, las 2.184 con NCU asignada) y en
+>    `config_tcu_ayora.csv` (751 en 16). Lo que sigue sin existir es otra cosa, y
+>    hay que decir cuál:
+>
+>    · **ese reparto no cubre la planta del stow**, porque este documento NUNCA
+>      NOMBRA de qué planta salió el evento del 24-09 — dice «una planta, una NCU
+>      con incidencia declarada» y nada más. Si fuera San José o Ayora, el mapa
+>      ya está aquí;
+>    · y **NCU no es necesariamente lo mismo que gateway**. El encargo habla de
+>      «en esa NCU el primer gateway funciona mal», o sea de varios gateways
+>      DENTRO de una NCU; si es así, `config_tcu_*.csv` da una granularidad más
+>      gruesa que la que hace falta y no sirve para separar el gateway 1.
+>
+>    Las dos preguntas van al §5. Hasta contestarlas, lo honesto no es «no
+>    existe» ni «ya está»: es que **existe un mapa, de dos plantas, a un nivel
+>    que puede no ser el que se pide**;
 > 2. un volcado de **`zigbee_inventario.ps1`** (bloque 8a) de esa NCU — trae
 >    **RSSI y LQI por nodo**;
 > 3. o de **`zigbee_routes_logger.ps1`** — trae **rutas y saltos**.
@@ -1273,6 +1293,34 @@ es una marca de tiempo por transacción.
    expone**: sus 22 registros por TCU son estado, ángulos, alarmas y batería.
    `radio_params.json` tenía razón — el canal sale del volcado del inventario
    (`zigbee_inventario.ps1`, bloque 8a) y de ningún otro sitio.
+
+   **EL CANAL LO MARCA EL GATEWAY ZIGBEE** — dicho por Iñaki el 2026-10-03, y
+   encaja con lo de arriba: si el coordinador forma la red y fija el canal, es
+   coherente que la TCU lo tenga en vivo y la NCU no lo publique. Tres cosas que
+   cambia, y la tercera es la que importa:
+
+   · **para leerlo basta preguntar al coordinador**, no hay que recorrer la
+     flota. Eso acota el bloque 8a a una consulta por gateway;
+   · **el script ya lo captura.** Comprobado línea a línea el 2026-10-03:
+     `zigbee_inventario.ps1` manda `query_setting` al gateway y vuelca la
+     respuesta EN CRUDO (líneas 108-113), con `CH` e `ID` dentro; y de cada nodo
+     aplana el XML a columnas con un recorrido genérico (`Aplana`, línea 82), así
+     que `ajuste_ch` saldría sin nombrarlo. **Lo que falta no es código: es una
+     ejecución** — en el repo hermano no hay ningún volcado de inventario;
+   · **hay un canal POR GATEWAY, no uno por planta.** Medido en los layouts el
+     2026-10-03: San José declara **21** NCU, Ayora 16, Panbianco 12, Benante 6,
+     Páramo 4, El Burgo 2, Polvorín 2, y Bagnarelli, Fayón y Túnez 1. Así que el
+     golpe de 16 dB del canal 26 caería sobre la **subred de ese gateway**, no
+     sobre la planta entera, y **el veredicto de legalidad es por gateway**: en
+     una planta de 21 coordinadores puede haber gateways que cumplen y gateways
+     que no, a la vez. Donde este documento y `radio_params.json` decían «en toda
+     la planta», estaba mal planteado.
+
+   Y de ahí, **lo que sigue sin saberse y hay que preguntar**: si los gateways de
+   una planta están fijados a un canal COMÚN o cada coordinador elige el suyo. En
+   Zigbee puede ser lo segundo, y eso decide si el canal es un campo o son
+   veintiuno. Las NCU de los layouts traen `x`, `n` y `name` y nada más: hoy no
+   hay dónde guardar un canal por gateway.
 
 ---
 
