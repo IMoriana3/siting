@@ -502,7 +502,7 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "VACÍA. Cualquier cifra que hubiera aquí saldría de la memoria y no de un documento.",
+        "_estado": "UN CANDIDATO, Y ES DE MODULO, NO DE CHIP. Leida el 2026-10-03 la hoja del modulo RF-LoRa de RF Solutions (DS-RF-LoRa-5, 10 paginas). NO trae tabla de sensibilidad: la rejilla SF x BW sigue PENDIENTE y con ella el balance de enlace. La hoja del Semtech SX1272/73 no se ha podido leer (403 del proxy en semtech.my.salesforce.com). Ninguno elegido: la eleccion es del cliente.",
         "_la_red_2026_09_24": [
           "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
           "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
@@ -515,7 +515,198 @@
           "sin decir cuándo se probó es lo mismo que no decir nada."
         ],
         "_quien_elige": "El módulo lo elige el cliente, no este repo: hay que simular lo que se montaría de verdad. Aquí van los candidatos con sus números; la elección es suya.",
-        "lista": []
+        "lista": [
+          {
+            "fabricante": "RF Solutions",
+            "modelo": "RF-LoRa (RF-LoRa-868-SO / RF-LoRa-868 / RF-LoRa-915-SO)",
+            "procedencia": "datasheet_de_MODULO",
+            "_ESTO_ES_UN_MODULO_NO_EL_CHIP": [
+              "Esta ficha sale de la hoja del MODULO de RF Solutions, no de la del chip.",
+              "El modulo integra un Semtech SX1272 (p. 1 y p. 4). La hoja del SX1272/73",
+              "NO se ha leido: el proxy deniega semtech.my.salesforce.com con 403 en el",
+              "CONNECT, y el enlace que trae esta misma hoja acaba en un formulario.",
+              "",
+              "Y EL PROPIO FABRICANTE DEL MODULO AVISA DE POR QUE NO SON LO MISMO,",
+              "literal, p. 4: «Many RF Module manufacturers simply reproduce the IC",
+              "manufacturers data characteristics where in practice the Module RF",
+              "performance is considerably lower.»",
+              "",
+              "Asi que ninguna cifra de aqui se puede presentar como medida del chip, ni",
+              "al reves. Si algun dia entra una ficha del SX1272, va APARTE."
+            ],
+            "referencias": [
+              {
+                "parte": "RF-LoRa-868-SO",
+                "descripcion": "868 MHz, encapsulado SMT",
+                "_cita": {
+                  "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                  "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                  "pagina": 2,
+                  "leido_el": "2026-10-03"
+                }
+              },
+              {
+                "parte": "RF-LoRa-868",
+                "descripcion": "868 MHz, encapsulado DIP",
+                "_cita": {
+                  "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                  "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                  "pagina": 2,
+                  "leido_el": "2026-10-03"
+                }
+              },
+              {
+                "parte": "RF-LoRa-915-SO",
+                "descripcion": "915 MHz",
+                "_cita": {
+                  "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                  "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                  "pagina": 2,
+                  "leido_el": "2026-10-03"
+                }
+              }
+            ],
+            "banda_declarada_hz": null,
+            "_banda_motivo": "La hoja NO trae tabla de rango de frecuencia. Solo referencias preajustadas a 868 y 915 MHz (p. 2). Un preajuste de referencia no es un rango declarado, y no se convierte en uno aqui.",
+            "ptx_dbm": {
+              "pa_boost_dbm": 20,
+              "pa_boost_condicion": "«+20 dBm at 100 mW constant RF output vs. V supply», vineta de portada.",
+              "pa_alta_eficiencia_dbm": 14,
+              "pa_alta_eficiencia_condicion": "«+14 dBm high efficiency PA», vineta de portada.",
+              "_ojo": "Son VINETAS DE PORTADA, no una tabla de caracterizacion con min/typ/max ni temperatura. Lo unico tabulado que las respalda son las corrientes de Tx por nivel de potencia (ver consumo).",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                "pagina": 1,
+                "leido_el": "2026-10-03"
+              }
+            },
+            "rx_sens_por_modo": [],
+            "_sensibilidad_estado": {
+              "hay_tabla": false,
+              "motivo": "LA HOJA DEL MODULO NO TRAE NINGUNA TABLA DE SENSIBILIDAD. Ni una rejilla SF x BW, ni una sola fila con su criterio. Las 10 paginas se han leido enteras.",
+              "unico_numero_de_portada": -130,
+              "unidad": "dBm",
+              "literal": "«High sensitivity: down to -130 dBm»",
+              "por_que_NO_se_usa": "Un numero sin SF, sin ancho de banda y sin criterio de medida no entra en un balance de enlace: es justo lo que la regla de este fichero prohibe. Queda anotado como titular, no como parametro.",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                "pagina": 1,
+                "leido_el": "2026-10-03"
+              }
+            },
+            "consumo": {
+              "_condiciones_lora": "Vcc 3,3 V; 25 degC; Fxosc 32 MHz; Frf = 915 MHz; SF 12; CR 4/6; PER 1 % con CRC; Pout +13 dBm; carga util 10 octetos; preambulo 12 simbolos. OJO: 915 MHz, NO 868.",
+              "rx_lora_ma": [
+                {
+                  "lna_boost": false,
+                  "bw_hz": 125000,
+                  "ma": 9.7
+                },
+                {
+                  "lna_boost": false,
+                  "bw_hz": 250000,
+                  "ma": 10.5
+                },
+                {
+                  "lna_boost": false,
+                  "bw_hz": 500000,
+                  "ma": 12
+                },
+                {
+                  "lna_boost": true,
+                  "bw_hz": 125000,
+                  "ma": 10.8
+                },
+                {
+                  "lna_boost": true,
+                  "bw_hz": 250000,
+                  "ma": 11.6
+                },
+                {
+                  "lna_boost": true,
+                  "bw_hz": 500000,
+                  "ma": 13
+                }
+              ],
+              "_lna_boost": "La hoja SI distingue LnaBoost, y cuesta ~1,1 mA. Lo que NO dice es cuanta sensibilidad compra: no hay tabla de sensibilidad con la que cruzarlo.",
+              "tx_lora_ma": [
+                {
+                  "dbm": 13,
+                  "ma": 28,
+                  "pin": "RFO"
+                },
+                {
+                  "dbm": 7,
+                  "ma": 18,
+                  "pin": "RFO"
+                },
+                {
+                  "dbm": 17,
+                  "ma": 90,
+                  "pin": "PA_BOOST"
+                }
+              ],
+              "tx_dc_ma": [
+                {
+                  "dbm": 20,
+                  "ma": 125,
+                  "pin": "PA_BOOST"
+                },
+                {
+                  "dbm": 17,
+                  "ma": 90,
+                  "pin": "PA_BOOST"
+                },
+                {
+                  "dbm": 13,
+                  "ma": 28,
+                  "pin": "PA_BOOST"
+                },
+                {
+                  "dbm": 7,
+                  "ma": 18,
+                  "pin": "PA_BOOST"
+                }
+              ],
+              "rx_ma": 10,
+              "reposo": {
+                "shutdown_na": 30,
+                "standby_na": 50,
+                "ready_ma": 2,
+                "spi_activo_ma": 1.35,
+                "tune_rx_ma": 6.5,
+                "tune_tx_ma": 6.9,
+                "_nota": "De la tabla DC (p. 6). La tabla FSK (p. 7) da ademas sleep 0,1 uA e idle 1,5 uA, con SUS condiciones, que no son las de LoRa."
+              },
+              "_ERRATA_DE_LA_HOJA": "En la tabla FSK de la p. 7, las cuatro filas de IDDT dicen todas «RFOP=+20dBm» para 125/90/28/18 mA. La tabla DC de la p. 6 da esas mismas cuatro corrientes a +20/+17/+13/+7 dBm. Es una errata del documento. Se anota; no se corrige en silencio.",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                "pagina": 6,
+                "leido_el": "2026-10-03"
+              }
+            },
+            "alcance_medido_por_el_fabricante": {
+              "los_km": 12,
+              "nlos_km": 3,
+              "condiciones": "Brighton-Shoreham Seafront, linea de vista. Transmisor sobre contenedor de plastico a 4 pies; receptor en el salpicadero de un vehiculo a 5 pies. Antena: un simple trozo de hilo, SIN plano de masa. 25 degC, 3,3 Vdc, seco, HR 45 %.",
+              "literal_del_limite": "«we ran out of land to test a LOS beyond 12Km, so the maximum range is further than tested here»",
+              "_por_que_NO_es_un_parametro": "Es un ensayo de campo del fabricante con su propio montaje, no una cifra de hoja. No alimenta el motor; sirve de orden de magnitud y de contraste.",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
+                "pagina": 8,
+                "leido_el": "2026-10-03"
+              }
+            },
+            "plan_de_canal": null,
+            "_plan_de_canal_motivo": "Sale de ETSI EN 300 220-2 y CEPT/ERC 70-03, que siguen sin leerse. La hoja no da plan de canal.",
+            "certificacion_eu": null,
+            "_certificacion_motivo": "La hoja dice «The RF-LoRa Module is CE compliant. Providing that certain procedures are followed» (p. 1), sin numero de norma ni informe. Una frase condicional no es una declaracion de conformidad, asi que el campo queda a null."
+          }
+        ]
       },
       "_que_falta": {
         "modulo_de_referencia": "Ninguno elegido. Hace falta UNO, nombrado, no «un módulo LoRa».",
