@@ -432,6 +432,14 @@ jobs:
           rojo node tests/test_comparador_visor.js huecoMudo huecoSinMotivo noDevuelveVariante \
                                                    noDevuelveHora sinGuardiaHoras sinLetraPequena
 
+          # CÓMO SE ESCRIBE UN NÚMERO EN UNA COLUMNA ESTRECHA. La fila de
+          # telemetría publicaba "111111111111111" en vez de 0,0611 %: el
+          # `slice(-n)` del alineado se quedaba la COLA y decapitaba la cifra.
+          # Las dos primeras mutaciones son las que se quedaron VERDES a la
+          # primera, porque el redondeo tapaba a `pd`; sólo se ven midiendo
+          # `pd` a pelo con algo que no cabe.
+          rojo node tests/test_render_tabla.js decapita recortaSinMarcar sinRedondeo
+
           # el escenario guardable: un sha que falta NO compara igual, y nada
           # se guarda en el navegador
           rojo node tests/test_escenario.js huecoEsIgual sinRecalcular sinFormato textoInestable \
