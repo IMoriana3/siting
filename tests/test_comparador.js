@@ -28,7 +28,11 @@ const check = (n, cond, extra) => {
 const MUTACIONES = {
   // un hueco se rellena con un valor por defecto: la avería que convierte
   // «no lo sé» en «lo he calculado»
-  rellenaHueco: ['radio_tecnologias.js', 'if (v == null) f.push(exige[i]);', 'if (false) f.push(exige[i]);'],
+  // El ancla cambió el 2026-10-03: `loQueFalta` ya no mira una sola clave, sino
+  // varias rutas alternativas por requisito (el régimen regulatorio vive bajo
+  // dos nombres según la banda). La avería que esta mutación reproduce es la
+  // misma —dejar de reportar el hueco—, en la línea que ahora lo decide.
+  rellenaHueco: ['radio_tecnologias.js', 'if (!hay) f.push(req);', 'if (false) f.push(req);'],
   // vuelve el índice único
   indiceUnico: ['radio_tecnologias.js', '_sin_indice_unico: "no hay',
                 'puntuacion: 7.4, _sin_indice_unico: "no hay'],

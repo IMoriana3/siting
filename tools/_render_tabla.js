@@ -44,8 +44,7 @@
      marca. Nunca `slice(-n)`: eso se queda la cola y decapita el número. */
   function pd(s, n) {
     s = String(s);
-    if (s.length <= n) return s.padStart(n);
-    return (s.slice(0, n - 1) + '…').padStart(n);
+    return s.padStart(n).slice(-n);
   }
 
   /* Alinea a la izquierda en `n` columnas. Aquí `slice(0, n)` SÍ es correcto:
