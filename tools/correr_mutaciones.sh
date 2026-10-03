@@ -30,6 +30,29 @@
 #
 set -o pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# ═══ LA MARCA, Y POR QUÉ HACE FALTA ═══
+#
+# ESTE SCRIPT REESCRIBE FICHEROS FUENTE. Cada mutación rompe un fuente a
+# propósito, corre el banco y lo restaura. Durante esos segundos el árbol de
+# trabajo contiene código DELIBERADAMENTE AVERIADO.
+#
+# Pasó el 2026-10-03: con este corredor en marcha en segundo plano, un
+# `git add -A && git commit` capturó `tools/_render_tabla.js` en mitad de la
+# mutación `decapita` y empujó a la rama el renderizador roto —el mismo que
+# publicaba «111111111111111»—. La CI salió roja con los 8 FAIL de esa
+# mutación, y costó un rato entender por qué el banco fallaba en la CI y pasaba
+# en local: en local el fichero ya estaba restaurado.
+#
+# Así que mientras esto corre deja una MARCA en el árbol. `tests/correr.sh` la
+# mira y se niega a medir, porque medir sobre un fuente mutado da un resultado
+# que no es de nadie. Y si la marca sobrevive al script —un kill -9, un
+# contenedor que se cae— queda ahí como aviso de que algún fuente puede estar
+# a medias: la repara `git checkout -- .` después de comprobar el diff.
+MARCA="$RAIZ/.mutaciones-en-curso"
+printf 'mutaciones en curso desde %s (pid %s)\nNO midas ni commitees mientras esto exista.\n' \
+       "$(date -Is)" "$$" > "$MARCA"
+trap 'rm -f "$MARCA"' EXIT INT TERM
 cd "$RAIZ" || exit 2
 WF="$RAIZ/.github/workflows/tests.yml"
 [ -f "$WF" ] || { echo "SIN ALCANCE: no encuentro $WF"; exit 2; }
