@@ -818,12 +818,12 @@
           "_de_donde": "de ERC 70-03, anexo de 863-870 MHz. Es normativa, no módulo."
         },
         "ciclo_trabajo": {
-          "clase": "pendiente",
-          "documento": null,
-          "version": null,
-          "pagina": null,
-          "leido_el": null,
-          "_de_donde": "de ERC 70-03: el ciclo de trabajo depende de la sub-banda, no del módulo."
+          "clase": "leido",
+          "documento": "ETSI EN 300 220-2 V3.2.1 (2018-06), Tabla B.1 (normativa) + EN 300 220-1 V3.1.1, 5.4.1 y Tabla 48",
+          "version": "V3.2.1 (2018-06) y V3.1.1 (2017-02)",
+          "pagina": "21-22, 28, 58",
+          "leido_el": "2026-10-03",
+          "_de_donde": "Resuelto. Depende de la sub-banda --cinco regimenes-- y admite acceso educado como alternativa. Ver `ciclo_trabajo_eu`."
         },
         "norma": {
           "clase": "pendiente",
@@ -1148,7 +1148,156 @@
         "certificacion_eu": null,
         "_alcance_de_la_tabla": "SOLO LOS EXTREMOS. La Rev. 3.1 publica SF6 y SF12 de cada ancho de banda, no una fila por SF. LOS SF 7 A 11 NO ESTAN PUBLICADOS y NO SE INTERPOLAN: una interpolacion aqui seria un numero inventado con pinta de medido.",
         "_criterio_ausente_en_la_hoja": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER)."
-      }
+      },
+      "ciclo_trabajo_eu": {
+        "_RESUELTO_EL": "2026-10-03, con la norma en la mano. Antes estaba a null por falta de documento.",
+        "_NO_HAY_UN_SOLO_VALOR": [
+          "NO existe «el ciclo de trabajo de 868». La Tabla B.1 (NORMATIVA) de EN 300 220-2",
+          "da CINCO regimenes distintos entre 863 y 870 MHz: 0,1 %, 1 %, 10 %, sin requisito,",
+          "y en todos ellos la ALTERNATIVA del acceso educado. Cualquier calculo que suponga",
+          "«el 1 %» sin decir en que sub-banda esta suponiendo de mas."
+        ],
+        "sub_bandas": [
+          {
+            "banda": "K",
+            "rango": "863 MHz a 865 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "46a",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "L",
+            "rango": "865 MHz a 868 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "47",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "M",
+            "rango": "868,000 MHz a 868,600 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "48",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "N",
+            "rango": "868,700 MHz a 869,200 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "50",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "P",
+            "rango": "869,400 MHz a 869,650 MHz",
+            "erp_max_mw": 500,
+            "acceso_al_canal": "<= 10 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "54",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "P",
+            "rango": "869,700 MHz a 870,000 MHz",
+            "erp_max_mw": 5,
+            "acceso_al_canal": "sin requisito",
+            "banda_decision_2017_1483_UE": "56a",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "Q",
+            "rango": "869,700 MHz a 870,000 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "56b",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          }
+        ],
+        "tobs_s": 3600,
+        "_tobs": "«Unless otherwise specified, Tobs is 1 hour and the observation bandwidth Fobs is the operational frequency band.» EN 300 220-1, 5.4.1. O sea: 1 % = 36 s de aire por hora; 0,1 % = 3,6 s/h; 10 % = 360 s/h.",
+        "_cita_definicion": {
+          "documento": "ETSI EN 300 220-1 — SRD 25 MHz a 1 000 MHz, Parte 1: parametros tecnicos y metodos de medida",
+          "version": "V3.1.1 (2017-02)",
+          "pagina": 28,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "42e0b9924e63c64f4e0606b716635946e2b36f7c5ced5dbf128222d02c022178"
+        },
+        "acceso_educado": {
+          "_que_es": "LBT + AFA. SUSTITUYE al ciclo de trabajo, no se suma: EN 300 220-2, 4.3.3.0, literal: «Duty cycle applies to all transmitters EXCEPT EUT with polite spectrum access (described in clause 4.5) where permitted in annex B, table B.1». Y 4.5.2.0: «...instead of duty cycle where permitted by table B.1».",
+          "cca_min_us": 160,
+          "dead_time_max_ms": 5,
+          "ton_max_s_transmision_unica": 1,
+          "ton_max_s_dialogo_o_sondeo": 4,
+          "tcum_on_max_s_por_hora": 100,
+          "tcum_on_ancho_hz": 200000,
+          "toff_min_misma_frecuencia_ms": 100,
+          "_nota_3_de_la_norma": "«Longer accumulated transmission time is possible by implementing more AFA channels.» O sea que el presupuesto escala con canales.",
+          "_LO_QUE_ESTO_PROHIBE": "Ton Max = 1 s para una transmision unica EXCLUYE los modos LoRa mas largos: con 44 octetos y CR 4/5, SF12/BW125 (2.138 ms), SF12/BW250 (1.069 ms) y SF11/BW125 (1.151 ms) NO son legales bajo acceso educado. Bajo ciclo de trabajo si lo son, pero a 17, 34 y 31 mensajes por hora.",
+          "_cita": {
+            "documento": "ETSI EN 300 220-1 — SRD 25 MHz a 1 000 MHz, Parte 1: parametros tecnicos y metodos de medida",
+            "version": "V3.1.1 (2017-02)",
+            "pagina": 58,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "42e0b9924e63c64f4e0606b716635946e2b36f7c5ced5dbf128222d02c022178"
+          }
+        },
+        "_LIMITE_QUE_NO_SE_RESUELVE": "El presupuesto educado es «por cada 200 kHz de espectro». Una senal LoRa de 250 o 500 kHz ocupa MAS de una de esas porciones, y la norma no dice como se reparte. No se interpreta aqui.",
+        "_LO_QUE_SIGUE_FALTANDO": "CEPT/ERC 70-03, que da el estado de implementacion por pais y es referencia informativa del Anexo C. ecodocdb.dk devuelve 403 en el CONNECT del proxy."
+      },
+      "_plan_de_canal_sigue_pendiente": "La Tabla B.1 da SUB-BANDAS, potencia maxima y ancho ocupado maximo. Eso NO es un plan de canal: faltan la rejilla y las frecuencias centrales. `plan_de_canal` sigue a null a proposito, y lo que se ha llenado es `ciclo_trabajo_eu`, que es otra cosa."
     },
     "wisun_fan_863": {
       "procedencia": "pendiente",
@@ -1781,12 +1930,12 @@
           "_de_donde": "de ERC 70-03, anexo 863-870 MHz."
         },
         "ciclo_trabajo": {
-          "clase": "pendiente",
-          "documento": null,
-          "version": null,
-          "pagina": null,
-          "leido_el": null,
-          "_de_donde": "de ERC 70-03, por sub-banda."
+          "clase": "leido",
+          "documento": "ETSI EN 300 220-2 V3.2.1 (2018-06), Tabla B.1 (normativa) + EN 300 220-1 V3.1.1, 5.4.1 y Tabla 48",
+          "version": "V3.2.1 (2018-06) y V3.1.1 (2017-02)",
+          "pagina": "21-22, 28, 58",
+          "leido_el": "2026-10-03",
+          "_de_donde": "Resuelto. Depende de la sub-banda --cinco regimenes-- y admite acceso educado como alternativa. Ver `ciclo_trabajo_eu`."
         },
         "norma": {
           "clase": "pendiente",
@@ -1832,7 +1981,156 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": null
+      "tasa_bps": null,
+      "ciclo_trabajo_eu": {
+        "_RESUELTO_EL": "2026-10-03, con la norma en la mano. Antes estaba a null por falta de documento.",
+        "_NO_HAY_UN_SOLO_VALOR": [
+          "NO existe «el ciclo de trabajo de 868». La Tabla B.1 (NORMATIVA) de EN 300 220-2",
+          "da CINCO regimenes distintos entre 863 y 870 MHz: 0,1 %, 1 %, 10 %, sin requisito,",
+          "y en todos ellos la ALTERNATIVA del acceso educado. Cualquier calculo que suponga",
+          "«el 1 %» sin decir en que sub-banda esta suponiendo de mas."
+        ],
+        "sub_bandas": [
+          {
+            "banda": "K",
+            "rango": "863 MHz a 865 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "46a",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "L",
+            "rango": "865 MHz a 868 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "47",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "M",
+            "rango": "868,000 MHz a 868,600 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "48",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 21,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "N",
+            "rango": "868,700 MHz a 869,200 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "50",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "P",
+            "rango": "869,400 MHz a 869,650 MHz",
+            "erp_max_mw": 500,
+            "acceso_al_canal": "<= 10 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "54",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "P",
+            "rango": "869,700 MHz a 870,000 MHz",
+            "erp_max_mw": 5,
+            "acceso_al_canal": "sin requisito",
+            "banda_decision_2017_1483_UE": "56a",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          },
+          {
+            "banda": "Q",
+            "rango": "869,700 MHz a 870,000 MHz",
+            "erp_max_mw": 25,
+            "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
+            "banda_decision_2017_1483_UE": "56b",
+            "_cita": {
+              "documento": "ETSI EN 300 220-2 — SRD 25 MHz a 1 000 MHz, Parte 2: norma armonizada para equipo no especifico",
+              "version": "V3.2.1 (2018-06), REN/ERM-TG28-535",
+              "pagina": 22,
+              "leido_el": "2026-10-03",
+              "leido_por": "esta sesion, del PDF de etsi.org",
+              "sha256_del_pdf": "df54e88af3879f143d1d22cfbe3cc90657b0fecd85c2afb054f1ba79c67ec2e3"
+            }
+          }
+        ],
+        "tobs_s": 3600,
+        "_tobs": "«Unless otherwise specified, Tobs is 1 hour and the observation bandwidth Fobs is the operational frequency band.» EN 300 220-1, 5.4.1. O sea: 1 % = 36 s de aire por hora; 0,1 % = 3,6 s/h; 10 % = 360 s/h.",
+        "_cita_definicion": {
+          "documento": "ETSI EN 300 220-1 — SRD 25 MHz a 1 000 MHz, Parte 1: parametros tecnicos y metodos de medida",
+          "version": "V3.1.1 (2017-02)",
+          "pagina": 28,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "42e0b9924e63c64f4e0606b716635946e2b36f7c5ced5dbf128222d02c022178"
+        },
+        "acceso_educado": {
+          "_que_es": "LBT + AFA. SUSTITUYE al ciclo de trabajo, no se suma: EN 300 220-2, 4.3.3.0, literal: «Duty cycle applies to all transmitters EXCEPT EUT with polite spectrum access (described in clause 4.5) where permitted in annex B, table B.1». Y 4.5.2.0: «...instead of duty cycle where permitted by table B.1».",
+          "cca_min_us": 160,
+          "dead_time_max_ms": 5,
+          "ton_max_s_transmision_unica": 1,
+          "ton_max_s_dialogo_o_sondeo": 4,
+          "tcum_on_max_s_por_hora": 100,
+          "tcum_on_ancho_hz": 200000,
+          "toff_min_misma_frecuencia_ms": 100,
+          "_nota_3_de_la_norma": "«Longer accumulated transmission time is possible by implementing more AFA channels.» O sea que el presupuesto escala con canales.",
+          "_LO_QUE_ESTO_PROHIBE": "Ton Max = 1 s para una transmision unica EXCLUYE los modos LoRa mas largos: con 44 octetos y CR 4/5, SF12/BW125 (2.138 ms), SF12/BW250 (1.069 ms) y SF11/BW125 (1.151 ms) NO son legales bajo acceso educado. Bajo ciclo de trabajo si lo son, pero a 17, 34 y 31 mensajes por hora.",
+          "_cita": {
+            "documento": "ETSI EN 300 220-1 — SRD 25 MHz a 1 000 MHz, Parte 1: parametros tecnicos y metodos de medida",
+            "version": "V3.1.1 (2017-02)",
+            "pagina": 58,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "42e0b9924e63c64f4e0606b716635946e2b36f7c5ced5dbf128222d02c022178"
+          }
+        },
+        "_LIMITE_QUE_NO_SE_RESUELVE": "El presupuesto educado es «por cada 200 kHz de espectro». Una senal LoRa de 250 o 500 kHz ocupa MAS de una de esas porciones, y la norma no dice como se reparte. No se interpreta aqui.",
+        "_LO_QUE_SIGUE_FALTANDO": "CEPT/ERC 70-03, que da el estado de implementacion por pais y es referencia informativa del Anexo C. ecodocdb.dk devuelve 403 en el CONNECT del proxy."
+      },
+      "_plan_de_canal_sigue_pendiente": "La Tabla B.1 da SUB-BANDAS, potencia maxima y ancho ocupado maximo. Eso NO es un plan de canal: faltan la rejilla y las frecuencias centrales. `plan_de_canal` sigue a null a proposito, y lo que se ha llenado es `ciclo_trabajo_eu`, que es otra cosa."
     },
     "_el_protocolo_de_la_tcu": {
       "_que_es": "El protocolo de la TCU no cambia porque cambie la radio, asi que estos tres campos son IGUALES en las cuatro variantes. Estan repetidos en cada una porque el comparador los lee de la variante; esta nota es donde se explica por que coinciden.",
