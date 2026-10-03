@@ -13,12 +13,39 @@
 > **Lo más accionable no está en el ranking, está en el §4.1**: el stow autónomo
 > de la TCU por pérdida de comunicación existe y viene configurado en **10
 > minutos**. Eso son 600 s dominando una cadena cuyo siguiente término mayor son
-> los **310 s** de giro. Es el único punto donde un cambio de configuración —sin
+> los **303 s** de giro. Es el único punto donde un cambio de configuración —sin
 > tecnología nueva— mueve la aguja en centenares de segundos.
 >
-> **LA PREGUNTA DEL GIRO YA ESTÁ CONTESTADA** (2026-09-24, §2.4). 75 stows
-> ajustados uno a uno sobre un evento real: **0,1774 °/s de mediana**, R²
-> mediano 0,9987, o sea **310 s para 55°**. El rango 275–825 s que daba la
+> **LA PREGUNTA DEL GIRO YA ESTÁ CONTESTADA** (2026-09-24, §2.4), y la cifra
+> **queda corregida el 2026-10-03**. 75 stows ajustados uno a uno sobre un evento
+> real: **0,1816 °/s de mediana**, R² mediano **0,9984** (mínimo 0,9958), o sea
+> **303 s para 55°**.
+>
+> **LO QUE DECÍA ANTES ERA 0,1774 °/s Y 310 s, Y NO REPRODUCE.** Corrido el útil
+> que este documento cita —y también la versión exacta de #101, por si había
+> cambiado— sobre los mismos ficheros, la mediana sale 0,1816. El 0,1774 **no es
+> la mediana de este conjunto bajo ninguna lectura**: cae en el **percentil 21**
+> (16 de los 75 valores están por debajo). Lo que sí coincide casi exactamente es
+> la **MEDIA de los 76 ajustes incluyendo uno con velocidad NEGATIVA** —0,1772—,
+> así que el número publicado parece venir de promediar en vez de ordenar, y de
+> contar como stow un ajuste que describe movimiento en sentido contrario. El R²
+> publicado tampoco reproduce: 0,9987 / 0,9898 contra 0,9984 / 0,9958 medidos.
+> La conclusión de fondo no cambia —el giro son ~5 minutos y los 600 s del stow
+> autónomo siguen dominando—, pero la cifra sí.
+>
+> **Y LO QUE DEJA MAL PARADO A ESTE DOCUMENTO, no a quien le dio el dato.** El
+> 2026-09-24 Iñaki cerró la velocidad así: **«0,181 °/s de mediana, R² 0,9984,
+> sobre 47 stows»**. Medido hoy: **0,1816 °/s y R² 0,9984 sobre 75 stows**. O sea
+> que **su velocidad acertaba y su R² acertaba EXACTO**; lo único equivocado era
+> el recuento, y el 47 salía de un filtro de amplitud implícito
+> (`grados_movimiento = 60`), que es lo que se diagnosticó bien.
+>
+> Lo que pasó es que al corregir el recuento se «corrigió» de paso la velocidad a
+> 0,1774 y el R² a 0,9987, que no venían de ninguna medida. **Se tocó un número
+> bueno al arreglar uno malo que venía al lado**, y el número bueno se rompió y
+> se propagó a seis sitios del documento. La lección, para el documento de
+> puertas: cuando un dato llega con dos cifras y una está mal, hay que volver a
+> MEDIR las dos, no arrastrar la que parecía acompañar al error. El rango 275–825 s que daba la
 > versión anterior de este documento **queda retirado**, y la lectura de 0,0667
 > °/s queda descartada como velocidad de giro en stow.
 >
@@ -261,14 +288,29 @@ la pendiente de la segunda.
 
 | | °/s | 55° de recorrido |
 |---|---:|---:|
-| medido, mínimo de 75 | 0,1627 | 338 s |
-| medido, p05 | 0,1667 | 330 s |
-| **medido, MEDIANA de 75** | **0,1774** | **310 s** |
-| medido, p95 | 0,1893 | 291 s |
+| medido, mínimo de 75 | 0,1718 | 320 s |
+| medido, p05 | 0,1746 | 315 s |
+| **medido, MEDIANA de 75** | **0,1816** | **303 s** |
+| medido, p95 | 0,1896 | 290 s |
 | medido, máximo | 0,2221 | 248 s |
 
+> **TODA ESTA COLUMNA QUEDA CORREGIDA EL 2026-10-03.** La versión anterior daba
+> mínimo 0,1627 (338 s), p05 0,1667 (330 s), mediana 0,1774 (310 s) y p95 0,1893
+> (291 s). Ninguno de esos cuatro reproduce. Se corrió el útil que este documento
+> cita, y además **la versión exacta de #101** por si había cambiado —no cambió
+> ni una línea de lógica—, y se barrieron **144 combinaciones** de los tres
+> parámetros (`min_muestras_racha`, `grados_movimiento`, `r2_min`): **ninguna**
+> da 0,1774 de mediana ni 0,1627 de mínimo. El **máximo sí coincide exacto**
+> (0,2221), así que los ficheros son los mismos y el desacuerdo no es de datos.
+>
+> El origen más probable está medido: el 0,1774 cae en el **percentil 21** del
+> conjunto, y coincide casi exactamente con la **media de los 76 ajustes
+> incluyendo uno de velocidad NEGATIVA** (0,1772). O sea promediar en vez de
+> ordenar, y contar como stow un ajuste que describe movimiento en sentido
+> contrario. Reproducible: `node tools/stow_desde_scada.mjs <carpeta>`.
+
 ```
-R² del ajuste        mediana 0,9987 · mínimo 0,9898   (75 de 75 por encima de 0,98)
+R² del ajuste        mediana 0,9984 · mínimo 0,9958   (75 de 75 por encima de 0,98)
 sigma del arranque   mediana 2,66 s · p95 4,24 s · máximo 13,93 s
 muestras por ajuste  mediana 14 · mínimo 5
 recorrido del giro   40,3° a 86,4°, mediana 84,5°  (los objetivos de stow vistos
@@ -283,12 +325,12 @@ dos:**
   0,200 °/s   275 s   techo declarado por la TCU SIN CARGA (`41067`)
                       -> queda JUSTO POR ENCIMA del maximo medido (0,2221 lo
                          roza por arriba; ver el reparo de abajo)
-  0,1893°/s   291 s   p95 medido
-  0,1774°/s   310 s   MEDIANA MEDIDA, 75 stows          <-- el numero
+  0,1896°/s   290 s   p95 medido
+  0,1816°/s   303 s   MEDIANA MEDIDA, 75 stows          <-- el numero
   0,17  °/s   324 s   catalogo Sunner, el que usa el codigo
-                      -> esta esencialmente en el SUELO de lo medido (p05 0,1667)
+                      -> esta por DEBAJO del minimo de las 75 (0,1718)
   0,1538°/s   358 s   mediana de la validacion de campo anterior
-                      -> por DEBAJO del minimo de las 75 (0,1627)
+                      -> por DEBAJO del minimo de las 75 (0,1718)
   0,0667°/s   825 s   segunda lectura de aquel dia      <-- NO ES ESTA MAGNITUD
 ```
 
@@ -309,7 +351,7 @@ explicarse.
 
 **Lo que NO cambia:** el 55° sigue siendo `west_sw_limit`, un límite de
 software, y el recorrido real de cada TCU depende de dónde estuviera siguiendo
-al sol. Los 310 s son «55° a la velocidad mediana medida», no «lo que tardó una
+al sol. Los 303 s son «55° a la velocidad mediana medida», no «lo que tardó una
 TCU concreta».
 
 **Y ESTO SE PUEDE ZANJAR SIN INSTRUMENTAR NADA — pero no por donde yo dije.**
@@ -468,6 +510,70 @@ es exacto:**
 |---|---|---|---|---|
 | **bloque A** | **39 – 122** (84) | 1.049 – **3.381** – 3.384 | **75 de 84** | **0** |
 | **bloque B** | **1 – 38** (38) | 21 – **64** – 175 | **0 de 38** | **13 de 13** |
+
+> ## LOS DOS BLOQUES SON LOS DOS GATEWAYS. Resuelto el 2026-10-03.
+>
+> Este corte se encontró MIDIENDO, sin saber qué lo causaba. Iñaki dijo el
+> 2026-10-03 que **el reparto TCU → GW → NCU ya está en los repos**, y está:
+>
+> ```
+> SCADA/tools/tcu-toolbox/plantas/24019-san-jose.json
+>
+> {"nombre": "San Jose NCU18 GW1", "puerto": 503, "tcu_ini":  1, "tcu_fin":  38}
+> {"nombre": "San Jose NCU18 GW2", "puerto": 504, "tcu_ini": 39, "tcu_fin": 122}
+> ```
+>
+> **El corte del bloque A/B es exactamente el borde entre los dos gateways.** Y
+> con él, el reparto que se pidió el 2026-10-01 ya se puede hacer:
+>
+> ```
+> node tools/stow_desde_scada.mjs <carpeta> \
+>      --mapa SCADA/tools/tcu-toolbox/plantas/24019-san-jose.json --ncu 18
+>
+>   gateway  TCU  stows  vel med °/s  55°(s)   B· pet→sec5   C· AUTO→arranque   fallos
+>   GW1       38      0           —       —   —             —                  13 sobre 11 TCU
+>   GW2       84     75      0,1816     303   39,0 (34–45)  0,5 (−17,2–51,6)    0 sobre 0 TCU
+> ```
+>
+> **LOS 13 FALLOS ESTÁN TODOS EN GW1. LOS 75 STOWS VÁLIDOS, TODOS EN GW2.** Ni una
+> excepción en ninguno de los dos sentidos. Eso contesta el punto 2 del encargo
+> del 01-10 —«comprueba si los fallos caen en el gateway 1»— y habilita el 3: **el
+> número publicable es el del gateway sano.**
+>
+> **TRES COSAS QUE EL FICHERO DE REPARTO ENSEÑA**, y que no estaban escritas:
+>
+> * son **TRES niveles**, TCU → GW → NCU. Una NCU tiene VARIOS gateways, así que
+>   «gateway» y «NCU» **no son sinónimos**: en San José hay 21 NCU y 34 parejas
+>   NCU+GW nombradas. Donde este documento usaba los dos términos como uno,
+>   estaba mal;
+> * el gateway se distingue por el **PUERTO MODBUS** sobre la misma IP: 503 es
+>   GW1 y 504 GW2. La IP identifica la NCU, el puerto el gateway;
+> * el reparto es por **rango contiguo** de número de TCU, no por una lista.
+>
+> **DE QUÉ NCU SALE EL FICHERO, dicho con su condicional.** El volcado trae TCU 1
+> a 122 sin huecos. Dos NCU de San José tienen GW1 = 1–38: la **11** y la **18**.
+> Sólo la 18 tiene GW2 llegando a **122** (la 11 acaba en 118), así que el único
+> candidato compatible con los tres números —122 en total, corte en 38, bloque
+> sano de 84— es **San José NCU 18**. Es una **identificación por coincidencia
+> numérica, no un dato recibido**, y por eso va dicha así y hay que confirmarla.
+> **Lo que NO depende de confirmarla**: las dos candidatas coinciden en que
+> **TCU 1–38 es el primer gateway**, así que la atribución «bloque B = GW1» vale
+> igual cuál de las dos sea.
+>
+> **UN AJUSTE DESCARTADO POR SENTIDO.** De los 76 ajustes que pasan las guardas,
+> uno tiene velocidad **negativa**: la **TCU 16** (GW1), −0,1932 °/s con R²
+> 0,9992. Un ajuste excelente a un movimiento **en el sentido contrario al stow**.
+> Las guardas de racha miran AMPLITUD y AJUSTE, que son magnitudes sin signo, así
+> que un tramo que se mueve al revés las pasa. Ahora se filtra y **se publica el
+> descarte** en vez de tirarlo callando. Que el único ajuste no físico esté en el
+> gateway averiado no es casualidad que este documento vaya a explicar.
+>
+> **Y LO QUE ESTO SIGUE SIN DECIDIR, que es el punto 4 del encargo:** POR QUÉ
+> falla GW1. La exportación de TCU **no trae ni una magnitud de radio**, así que
+> cruzar el retardo de cada TCU con su RSSI y sus saltos **sigue siendo
+> imposible** y radio-contra-equipo sigue abierto. Para eso hace falta el volcado
+> del inventario (`zigbee_inventario.ps1`, bloque 8a), que trae RSSI y LQI por
+> nodo — y que, comprobado el 2026-10-03, **nadie ha ejecutado todavía**.
 
 Ni una sola excepción en ninguna de las cuatro columnas: **cero TCU del bloque A
 por debajo de 1.000 filas, cero del B por encima**, las 75 medidas en A y los 13
@@ -756,8 +862,8 @@ buscaba.
                               sondeo siguiente, en una ventana de 41 s. Por
                               debajo de un periodo de sondeo no se resuelve.
                               NO es la latencia de la planta: ver el §2.4 ter.
-  giro             310 s      MEDIDO, mediana de 75 stows (55 grados a
-                              0,1774 deg/s). Rango p05-p95: 291-330 s.
+  giro             303 s      MEDIDO, mediana de 75 stows (55 grados a
+                              0,1816 deg/s). Rango p05-p95: 290-315 s.
                               Es el unico termino que no depende del estado
                               de la instalacion.
   ---- LO QUE SIGUE SIN MEDIR, y no por falta de fichero ----
@@ -768,7 +874,7 @@ buscaba.
 
 **El rango 275–825 s del giro queda RETIRADO** (§2.4). No era una horquilla
 física: era la distancia entre dos lecturas que no declaraban su definición.
-Con 75 ajustes sobre el mismo evento, el término vale 310 s y su dispersión
+Con 75 ajustes sobre el mismo evento, el término vale 303 s y su dispersión
 real es de ±6 %.
 
 **Y lo que este apartado NO puede decir todavía.** Una versión anterior
@@ -1160,7 +1266,7 @@ Ordenadas por lo que se puede decir de ellas hoy.
    cubre: que la NCU esté caída.
 
    **Y su defecto la deja inútil como stow rápido.** 10 minutos son **600 s**,
-   contra un giro **medido de 310 s** (§2.4) y una radio de segundos: si el
+   contra un giro **medido de 303 s** (§2.4) y una radio de segundos: si el
    camino autónomo
    es el que actúa, domina la cadena entera él solo. Bajarlo es **puro cambio
    de configuración**, sin tecnología nueva ni obra: de 10 min a 1 min quita
@@ -1216,7 +1322,7 @@ Ordenadas por lo que se puede decir de ellas hoy.
 ## 5. Anclaje a campo: el cronómetro D.2
 
 > **Al día 2026-09-24.** La exportación del SCADA del §2.4 contestó **la mitad**
-> de lo que este cronómetro venía a contestar: el giro ya está medido (310 s,
+> de lo que este cronómetro venía a contestar: el giro ya está medido (303 s,
 > 75 stows) y la radio tiene **cota** (menos de un periodo de sondeo). Lo que
 > sigue sin resolverse es el **reparto por saltos** dentro de esa cota, que es
 > lo único para lo que el D.2 sigue haciendo falta.
@@ -1337,7 +1443,7 @@ centenares:
 | **detección** | **1 – 60 s** según cuál de los tres caminos dispare | DECLARADO (defectos de fábrica) |
 | **decisión de la NCU** | ? | NO MEDIDO |
 | **radio hasta la última TCU** | **< 30 s**, y sólo sobre el bloque sano de **un** evento | COTA, §2.3 — **no es la cifra de la planta** |
-| **giro** | **310 s** (p05–p95: 291–330) | **MEDIDO**, 75 stows, §2.4 — no depende del estado de la instalación |
+| **giro** | **303 s** (p05–p95: 290–315) | **MEDIDO**, 75 stows, §2.4 — no depende del estado de la instalación |
 | **latencia de reparto real** | ? | **NO MEDIDO** — falta el mapa TCU → gateway, §2.4 ter |
 | **p100 hasta la última TCU** | ? | **NO MEDIDO** — ídem |
 | **tasa de fallo de orden** | ? | **NO MEDIDO** — ídem |
@@ -1363,8 +1469,8 @@ hoy, y es lo que este documento aporta:
   por NCU**.
 * La detección puede costar **1 s o 60 s** según el camino que dispare, y eso
   es configuración, no radio.
-* **El giro está MEDIDO y vale 310 s** para 55°: 75 stows de un evento real,
-  mediana **0,1774 °/s**, p05–p95 0,1667–0,1893, R² mediano 0,9987 (§2.4). Se
+* **El giro está MEDIDO y vale 303 s** para 55°: 75 stows de un evento real,
+  mediana **0,1816 °/s**, p05–p95 0,1746–0,1896, R² mediano 0,9984 (§2.4). Se
   zanjó con lo que el SCADA ya guardaba —`30506` por TCU sobre su ciclo de
   30 s—, sin cronómetro y sin instrumentar nada. El rango **275–825 s queda
   retirado** y la lectura de **0,0667 °/s queda descartada**: está 2,7 veces por

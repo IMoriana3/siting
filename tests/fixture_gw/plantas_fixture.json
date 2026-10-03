@@ -1,0 +1,14 @@
+{
+  "_comentario": "FIXTURE DEL BANCO, no es dato de planta. Reproduce la FORMA del fichero real de SCADA/tools/tcu-toolbox/plantas/ para poder medir el parseo del reparto TCU->GW->NCU sin depender de otro repositorio: un banco que necesita un repo hermano sale verde en una maquina y rojo en la otra, y en este repo ya paso. Los numeros son los del caso que se midio el 2026-10-03 (NCU18 de San Jose) mas dos casos construidos a proposito: una NCU que el fichero NO desglosa por gateway, y una con tres gateways.",
+  "version": 1,
+  "plantas": [
+    { "nombre": "Fixture NCU18 GW1", "ip": "10.0.0.1", "puerto": 503, "tcu_ini": 1, "tcu_fin": 38 },
+    { "nombre": "Fixture NCU18 GW2", "ip": "10.0.0.1", "puerto": 504, "tcu_ini": 39, "tcu_fin": 122 },
+    { "nombre": "Fixture NCU11 GW1", "ip": "10.0.0.2", "puerto": 503, "tcu_ini": 1, "tcu_fin": 38 },
+    { "nombre": "Fixture NCU11 GW2", "ip": "10.0.0.2", "puerto": 504, "tcu_ini": 39, "tcu_fin": 118 },
+    { "nombre": "Fixture NCU7 GW1", "ip": "10.0.0.3", "puerto": 503, "tcu_ini": 1, "tcu_fin": 20 },
+    { "nombre": "Fixture NCU7 GW2 (TCU 32-37)", "ip": "10.0.0.3", "puerto": 504, "tcu_ini": 32, "tcu_fin": 37 },
+    { "nombre": "Fixture NCU7 GW3", "ip": "10.0.0.3", "puerto": 505, "tcu_ini": 38, "tcu_fin": 60 },
+    { "nombre": "Fixture NCU4", "ip": "10.0.0.4", "puerto": 503, "tcu_ini": 1, "tcu_fin": 30 }
+  ]
+}

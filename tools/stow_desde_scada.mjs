@@ -280,11 +280,75 @@ export function analiza(dir, { desde, hasta, ...opc } = {}) {
 }
 
 /* ── CLI ───────────────────────────────────────────────────────────────────── */
+/* ── EL REPARTO TCU → GATEWAY, LEÍDO Y NO TECLEADO ────────────────────────
+ *
+ * La orden de stow se manda POR GRUPOS y cada gateway sirve un RANGO de TCU, así
+ * que un número agregado sobre toda la NCU mezcla gateways que pueden estar en
+ * estados distintos. Eso lo pidió Iñaki el 2026-10-01 y hasta hoy no se podía
+ * hacer porque faltaba el reparto. YA ESTÁ EN LOS REPOS, dicho por él el
+ * 2026-10-03 y localizado el mismo día:
+ *
+ *     SCADA/tools/tcu-toolbox/plantas/*.json
+ *
+ *     {"nombre": "San Jose NCU18 GW1", "puerto": 503, "tcu_ini": 1, "tcu_fin": 38}
+ *     {"nombre": "San Jose NCU18 GW2", "puerto": 504, "tcu_ini": 39, "tcu_fin": 122}
+ *
+ * TRES COSAS QUE ESE FICHERO ENSEÑA, y que no estaban escritas en ningún sitio:
+ *
+ *   · son TRES niveles, TCU → GW → NCU: una NCU tiene VARIOS gateways, así que
+ *     «gateway» y «NCU» no son sinónimos —en San José hay 21 NCU y 34 parejas
+ *     NCU+GW nombradas—;
+ *   · el gateway se distingue por el PUERTO MODBUS sobre la misma IP: 503 es el
+ *     GW1 y 504 el GW2. La IP identifica la NCU, el puerto el gateway;
+ *   · el reparto es por RANGO CONTIGUO de número de TCU, no por una lista.
+ *
+ * ESTO NO ADIVINA NADA. Se le pasa el fichero y la NCU, y los rangos salen de
+ * ahí. Sin `--mapa` no reparte: publica el agregado y dice que no ha repartido,
+ * porque inventarse el corte sería justo lo que este útil existe para no hacer.
+ */
+export function mapaGateways(fichero, ncu) {
+  const d = JSON.parse(fs.readFileSync(fichero, 'utf8'));
+  const ps = Array.isArray(d.plantas) ? d.plantas : [];
+  const re = new RegExp('NCU\\s*' + ncu + '\\s+GW\\s*(\\d+)', 'i');
+  const tramos = [];
+  for (const p of ps) {
+    const m = re.exec(String(p.nombre || ''));
+    if (!m) continue;
+    if (p.tcu_ini == null || p.tcu_fin == null) continue;
+    tramos.push({ gw: 'GW' + m[1], puerto: p.puerto ?? null,
+                  ini: p.tcu_ini, fin: p.tcu_fin, nombre: p.nombre });
+  }
+  if (!tramos.length) {
+    /* UNA NCU SIN «GW» EN EL NOMBRE NO ES UNA NCU DE UN SOLO GATEWAY: es una
+       NCU cuyo fichero no lo desglosa. Ayora y Fayón se nombran «Ayora NCU4»,
+       sin GW, y de ahí NO se sigue que tengan uno solo. No se reparte. */
+    const sinGw = ps.filter(p => new RegExp('NCU\\s*' + ncu + '(\\D|$)', 'i').test(String(p.nombre || '')));
+    return { tramos: [], sinGw: sinGw.length };
+  }
+  return { tramos, sinGw: 0 };
+}
+export const deQuienEs = (tramos, tcu) => {
+  const t = tramos.find(x => tcu >= x.ini && tcu <= x.fin);
+  return t ? t.gw : null;
+};
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const dir = process.argv[2];
-  if (!dir) { console.error('uso: node tools/stow_desde_scada.mjs <carpeta con TCU_*.csv y *EVENT_LOG*.csv> [desde] [hasta]'); process.exit(2); }
-  const desde = process.argv[3] ? fechaLocal(process.argv[3]) : undefined;
-  const hasta = process.argv[4] ? fechaLocal(process.argv[4]) : undefined;
+  const argv = process.argv.slice(2);
+  const opt = (n) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1] : null; };
+  const sueltos = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) { i++; continue; }
+    sueltos.push(argv[i]);
+  }
+  const dir = sueltos[0];
+  if (!dir) {
+    console.error('uso: node tools/stow_desde_scada.mjs <carpeta con TCU_*.csv y *EVENT_LOG*.csv> [desde] [hasta]');
+    console.error('     [--mapa <tcu-toolbox/plantas/X.json> --ncu <n>]   reparte por gateway');
+    process.exit(2);
+  }
+  const fMapa = opt('mapa'), nNcu = opt('ncu');
+  const desde = sueltos[1] ? fechaLocal(sueltos[1]) : undefined;
+  const hasta = sueltos[2] ? fechaLocal(sueltos[2]) : undefined;
   const { tcus, eventos } = analiza(dir, { desde, hasta });
   const hh = t => t == null ? '—' : new Date(Math.round(t) * 1000).toISOString().slice(11, 19);
   const cuant = xs => {
@@ -314,4 +378,91 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (g.length) console.log(`clics de grupo           ${(Math.max(...g) - Math.min(...g)).toFixed(0)} s   (${hh(Math.min(...g))} → ${hh(Math.max(...g))})`);
   if (au.length) console.log(`«sent to AUTO»           ${(Math.max(...au) - Math.min(...au)).toFixed(0)} s   (${hh(Math.min(...au))} → ${hh(Math.max(...au))})`);
   console.log(`fallos «Failed to set the security position»: ${eventos.fallos.length} sobre ${new Set(eventos.fallos.map(f => f.tcu)).size} TCU`);
+
+  /* ── EL REPARTO POR GATEWAY ────────────────────────────────────────────── */
+  if (!fMapa || !nNcu) {
+    console.log('\nSIN REPARTO POR GATEWAY: no se ha dado --mapa y --ncu.');
+    console.log('Todo lo de arriba es el AGREGADO de la NCU, y si sus gateways');
+    console.log('están en estados distintos, mezcla poblaciones.');
+  } else {
+    const { tramos, sinGw } = mapaGateways(fMapa, nNcu);
+    if (!tramos.length) {
+      console.log(`\nNO SE HA REPARTIDO: «${fMapa}» no desglosa gateways para la NCU ${nNcu}` +
+                  (sinGw ? ` (hay ${sinGw} entrada(s) de esa NCU, pero sin «GW» en el nombre).` : '.'));
+      console.log('Una NCU que el fichero no desglosa NO es una NCU de un gateway: es un dato');
+      console.log('que falta. No se supone el corte.');
+    } else {
+      console.log(`\n── REPARTO POR GATEWAY · ${path.basename(fMapa)} · NCU ${nNcu} ──\n`);
+      for (const t of tramos) {
+        console.log(`  ${t.gw}  puerto ${t.puerto}  TCU ${t.ini}–${t.fin}  (${t.fin - t.ini + 1})   «${t.nombre}»`);
+      }
+      const huerfanas = tcus.map(t => t.tcu).filter(id => deQuienEs(tramos, id) == null);
+      if (huerfanas.length) {
+        console.log(`\n  OJO: ${huerfanas.length} TCU del volcado NO caen en ningún rango: ` +
+                    huerfanas.slice(0, 12).join(', ') + (huerfanas.length > 12 ? '…' : ''));
+        console.log('  Eso o el mapa no es de esta NCU, o el reparto ha cambiado. No se reparten a ojo.');
+      }
+      const porGw = new Map();
+      for (const t of tcus) {
+        const gw = deQuienEs(tramos, t.tcu);
+        if (!gw) continue;
+        if (!porGw.has(gw)) porGw.set(gw, []);
+        porGw.get(gw).push(t);
+      }
+      const fallosPorGw = new Map();
+      for (const f of eventos.fallos) {
+        const gw = deQuienEs(tramos, f.tcu) || '(fuera de rango)';
+        fallosPorGw.set(gw, (fallosPorGw.get(gw) || 0) + 1);
+      }
+      /* UNA VELOCIDAD NEGATIVA NO ES UN STOW. El stow va HACIA la posición de
+         seguridad; un ajuste con pendiente negativa describe movimiento en el
+         otro sentido. Las guardas de racha miran la AMPLITUD (`grados_movimiento`)
+         y el ajuste (`r2_min`), que son magnitudes sin signo, así que un tramo
+         que se mueve al revés las pasa. Se cuenta aparte y NO entra en la
+         estadística: medido el 2026-10-03, hay exactamente uno. */
+      const noFisico = tcus.filter(t => t.es_stow && t.vel_grados_s < 0);
+      console.log('');
+      console.log('  gateway   TCU  stows  vel med °/s   55°(s)    B· pet→sec5    C· AUTO→arranque     fallos');
+      console.log('  ' + '─'.repeat(96));
+      for (const gw of [...porGw.keys()].sort()) {
+        const g = porGw.get(gw);
+        const gok = g.filter(t => t.es_stow && t.vel_grados_s > 0);
+        const gv = gok.length ? cuant(gok.map(t => t.vel_grados_s)) : null;
+        const gcon = gok.filter(t => t.t_peticion5_s != null);
+        const gb = gcon.filter(t => t.t_sec5_sostenido_s != null);
+        const gc = gcon.filter(t => t.t_primera_auto_s != null);
+        const B2 = gb.length ? cuant(gb.map(t => t.t_sec5_sostenido_s - t.t_peticion5_s)) : null;
+        const C2 = gc.length ? cuant(gc.map(t => t.t_arranque_s - t.t_primera_auto_s)) : null;
+        const nf = fallosPorGw.get(gw) || 0;
+        const tf = new Set(eventos.fallos.filter(f => deQuienEs(tramos, f.tcu) === gw).map(f => f.tcu)).size;
+        console.log('  ' + gw.padEnd(9) +
+          String(g.length).padStart(4) + String(gok.length).padStart(7) +
+          (gv ? gv.med.toFixed(4) : '—').padStart(13) +
+          (gv ? (55 / gv.med).toFixed(0) : '—').padStart(9) +
+          (B2 ? `   ${B2.med.toFixed(1)} (${B2.min.toFixed(0)}–${B2.max.toFixed(0)})` : '   —').padEnd(17) +
+          (C2 ? `  ${C2.med.toFixed(1)} (${C2.min.toFixed(1)}–${C2.max.toFixed(1)})` : '  —').padEnd(21) +
+          `${nf} sobre ${tf} TCU`);
+      }
+      if (noFisico.length) {
+        console.log('');
+        console.log(`  DESCARTADOS POR SENTIDO: ${noFisico.length} ajuste(s) con velocidad NEGATIVA, o sea`);
+        console.log('  movimiento en el sentido contrario al stow. No son stows y no entran arriba:');
+        for (const t of noFisico) {
+          console.log(`    TCU ${t.tcu} (${deQuienEs(tramos, t.tcu) || 'fuera de rango'})  ` +
+                      `${t.vel_grados_s.toFixed(4)} °/s  R² ${t.r2.toFixed(4)}`);
+        }
+        console.log('  Las guardas de racha miran AMPLITUD y AJUSTE, que no llevan signo, así que');
+        console.log('  un tramo que se mueve al revés las pasa. Por eso se filtra aquí y se dice.');
+      }
+      console.log('');
+      console.log('  LO QUE ESTA TABLA DECIDE: si los fallos se concentran en UN gateway, el');
+      console.log('  número publicable es el de los OTROS, y el agregado de arriba no lo es.');
+      console.log('  «A· petición → arranque» NO sale en esta tabla a propósito: el propio log');
+      console.log('  dice que el operador reparte los grupos a AUTO a lo largo de ~1.168 s, así');
+      console.log('  que A mide sobre todo SU ritmo. B y C son las que aíslan la máquina.');
+      console.log('  Lo que esta tabla NO dice es POR QUÉ falla ese gateway: la exportación de');
+      console.log('  TCU no trae ni una magnitud de radio, así que radio contra equipo sigue sin');
+      console.log('  decidirse. Para eso hace falta el volcado del inventario (RSSI y LQI).');
+    }
+  }
 }

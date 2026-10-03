@@ -450,6 +450,14 @@ jobs:
                                             canalEnvueltoCuela sinRutaConPuntos \
                                             legalidadNoSeCalcula sinGananciaEnLaRadiada
 
+          # EL REPARTO TCU -> GW -> NCU. La orden va por grupos y cada gateway
+          # sirve un RANGO de TCU, asi que una estadistica sobre la NCU entera
+          # mezcla poblaciones. Mide el parseo y la asignacion contra un fixture
+          # propio: el fichero real vive en SCADA y un banco que depende de otro
+          # repo sale verde en una maquina y rojo en la otra.
+          rojo node tests/test_stow_gateway.js rangoAbierto bordeDesplazado \
+                                               sinDesgloseSeInventa cuelaElSentido
+
           # el escenario guardable: un sha que falta NO compara igual, y nada
           # se guarda en el navegador
           rojo node tests/test_escenario.js huecoEsIgual sinRecalcular sinFormato textoInestable \
