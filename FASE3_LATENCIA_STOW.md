@@ -816,6 +816,66 @@ hay, y se puede medir en planta sin cambiar nada del sistema.** Ver §5.
   el problema al presupuesto de enlace, que es justo lo que el motor de
   `radio_pv_model.js` ya sabe calcular.
 
+#### 3.1 LoRa contra Wi-SUN, con los dos extremos — **y el orden se da la vuelta**
+
+**La pregunta que esto contesta:** la sensibilidad del módulo que se montaría no
+está publicada. Lo que sí hay son dos extremos — el **chip** como cota superior
+y el **módulo real por debajo, en una cantidad que nadie cuantifica**. Si el
+orden frente a Wi-SUN cambia entre uno y otro, eso es el resultado. **Cambia.**
+
+**Procedencia, y es distinta de la del resto del documento.** Las 25 filas de
+Wi-SUN las leyó esta sesión de las hojas de Silicon Labs y TI. Las 9 de LoRa
+**las leyó el propietario** del `SX1272/73 Rev. 3.1 (marzo 2017)`, porque el
+proxy deniega `semtech.my.salesforce.com`. Va escrito en cada `_cita` con el
+campo `leido_por`.
+
+**Careo a tasas comparables.** LoRa compra sensibilidad con tasa, así que
+compararlos a secas no dice nada: cada fila va con la suya.
+
+| LoRa SX1272 (cota) | Wi-SUN, lo mejor a tasa parecida | margen a favor de LoRa |
+|---|---|---:|
+| SF6 / BW 500 · **37.500 bps** · −116 | FG25 #1a 50.000 bps con FEC · −114,1 | **+1,9 dB** |
+| SF6 / BW 250 · 18.750 bps · −119 | FG25 #1a 50.000 bps con FEC · −114,1 | +4,9 dB |
+| SF6 / BW 125 · 9.380 bps · −122 | CC1312R7 2-GFSK 5.000 bps · −119 | +3,0 dB |
+| SF12 / BW 500 · 1.172 bps · −131 | CC1312R7 2-GFSK 2.500 bps · −121 | +10,0 dB |
+| SF12 / BW 250 · 586 bps · −134 | CC1312R7 2-GFSK 2.500 bps · −121 | +13,0 dB |
+| SF12 / BW 125 · **293 bps** · −137 | CC1312R7 2-GFSK 2.500 bps · −121 | **+16,0 dB** |
+
+Son **las seis filas sin FEC que la hoja publica**, no una selección. Las otras
+tres del extracto son las de `CR 4/5` (−136 / −133 / −130), que mueven cada
+margen 1 dB a la baja y no cambian ninguna de las dos conclusiones.
+
+**EL RESULTADO, y es doble:**
+
+1. **Donde LoRa va lento, el orden aguanta.** A 293 bps le sobran **16 dB**.
+   Ninguna degradación de módulo plausible se come eso, así que ahí LoRa gana
+   diga lo que diga la hoja del módulo.
+2. **Donde LoRa va rápido, el orden NO está determinado.** A 37.500 bps el
+   margen es **1,9 dB**. Un módulo que pierda dos decibelios respecto a su
+   integrado —que es exactamente lo que RF Solutions avisa en la p. 4 de su
+   propia hoja, «in practice the Module RF performance is considerably lower»—
+   **invierte el orden**. Y nadie ha cuantificado esa pérdida.
+
+> **Y HAY UNA RAZÓN MÁS FUERTE PARA NO CERRAR ESE EXTREMO, que es de método.**
+> Las 25 filas de Wi-SUN declaran su criterio; **las 9 de LoRa no**: el extracto
+> no lo trae y el campo queda a `null` con ese motivo. Cambiar de criterio
+> —`BER = 1e-2` frente a `10 % PER`— vale por sí solo **2-3 dB**, que es **más
+> que el margen de 1,9 dB**. O sea que en el extremo rápido la comparación no la
+> decide la radio: la decide un campo que falta.
+>
+> Publicarlo como «LoRa gana» sería exactamente el sesgo invisible contra el que
+> se creó el campo `criterio` (§2.4 de `radio_params.json`).
+
+**Lo que haría falta para cerrarlo**, por orden de lo que desbloquea: el
+**criterio de medida** de la tabla de sensibilidad de la Rev. 3.1 —una línea de
+la propia hoja—, y después la **sensibilidad del módulo por SF**, que RF
+Solutions no publica y habría que pedirle o medir.
+
+**Lo único medido del módulo**, y no es sensibilidad: su propio ensayo de
+alcance, **12,05 km con línea de vista**, con antena de hilo sin plano de masa y
+placa rudimentaria, y con el límite dicho por ellos —se quedaron sin terreno, no
+sin alcance—. Sirve de orden de magnitud y de contraste, no de parámetro.
+
 ### Wi-SUN FAN
 
 * Multicast por MPL, pensado justo para esto.

@@ -502,7 +502,7 @@
           "módulo trae certificación EU. Sin la cita —documento, página y fecha de lectura—",
           "no entra."
         ],
-        "_estado": "UN CANDIDATO, Y ES DE MODULO, NO DE CHIP. Leida el 2026-10-03 la hoja del modulo RF-LoRa de RF Solutions (DS-RF-LoRa-5, 10 paginas). NO trae tabla de sensibilidad: la rejilla SF x BW sigue PENDIENTE y con ella el balance de enlace. La hoja del Semtech SX1272/73 no se ha podido leer (403 del proxy en semtech.my.salesforce.com). Ninguno elegido: la eleccion es del cliente.",
+        "_estado": "UN CANDIDATO DE MONTAJE (modulo RF-LoRa-868 de RF Solutions) y, APARTE, la COTA SUPERIOR del chip que lleva dentro (Semtech SX1272, Rev. 3.1 marzo 2017) en `cota_superior_del_chip`. Las dos fichas van separadas A PROPOSITO: el modulo NO publica sensibilidad por SF y su «-130 dBm» de portada no lleva modo ni criterio, asi que queda a null. El chip publica SOLO los extremos SF6 y SF12 de cada BW; los SF 7-11 no estan en la Rev. 3.1 y no se interpolan. Las cifras del chip las leyo el propietario del PDF original: esta sesion no ha visto ese documento.",
         "_la_red_2026_09_24": [
           "MEDIDO hoy, host a host, y ha cambiado a mitad de sesión: el 2026-09-20 estaban",
           "denegados todos; ahora `digi.com`, `semtech.com`, `ti.com` y `silabs.com` dan 200",
@@ -686,10 +686,11 @@
                 "version": "DS-RF-LoRa-5 (PDF creado 2016-08-09; la hoja no declara revision ni fecha en su texto)",
                 "pagina": 6,
                 "leido_el": "2026-10-03"
-              }
+              },
+              "_IDENTICO_AL_DEL_CHIP": "OBSERVADO al carear las dos fichas: las corrientes de LoRa del modulo coinciden DIGITO A DIGITO con las del SX1272 (9,7/10,5/12 y 10,8/11,6/13 mA; 28/18/90 mA). O sea que esta hoja de modulo REPRODUCE los datos del integrado — exactamente la practica de la que ella misma avisa en su p. 4. Se trata como cifra heredada del chip, no como medida del modulo."
             },
             "alcance_medido_por_el_fabricante": {
-              "los_km": 12,
+              "los_km": 12.05,
               "nlos_km": 3,
               "condiciones": "Brighton-Shoreham Seafront, linea de vista. Transmisor sobre contenedor de plastico a 4 pies; receptor en el salpicadero de un vehiculo a 5 pies. Antena: un simple trozo de hilo, SIN plano de masa. 25 degC, 3,3 Vdc, seco, HR 45 %.",
               "literal_del_limite": "«we ran out of land to test a LOS beyond 12Km, so the maximum range is further than tested here»",
@@ -704,7 +705,46 @@
             "plan_de_canal": null,
             "_plan_de_canal_motivo": "Sale de ETSI EN 300 220-2 y CEPT/ERC 70-03, que siguen sin leerse. La hoja no da plan de canal.",
             "certificacion_eu": null,
-            "_certificacion_motivo": "La hoja dice «The RF-LoRa Module is CE compliant. Providing that certain procedures are followed» (p. 1), sin numero de norma ni informe. Una frase condicional no es una declaracion de conformidad, asi que el campo queda a null."
+            "_certificacion_motivo": "La hoja dice «The RF-LoRa Module is CE compliant. Providing that certain procedures are followed» (p. 1), sin numero de norma ni informe. Una frase condicional no es una declaracion de conformidad, asi que el campo queda a null.",
+            "papel": "CANDIDATO DE MONTAJE — es el modulo que se montaria. Confirmado por el propietario.",
+            "chip_que_integra": "Semtech SX1272 (SF 6-12), NO el SX1273 (SF 6-9). Ficha del chip aparte, como cota superior.",
+            "alimentacion_v": {
+              "min": 1.8,
+              "typ": 3.3,
+              "max": 3.6,
+              "_ojo": "La p. 6 trae DOS tablas distintas: «DC Characteristics» da 1,8/3,3/3,6 V y «Recommended Operating Conditions» da 2,2-3,7 V. No es lo mismo un rango de funcionamiento que uno recomendado; van las dos.",
+              "recomendado_min": 2.2,
+              "recomendado_max": 3.7,
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (la hoja no declara fecha; el PDF se creo 2016-08-09)",
+                "pagina": 6,
+                "leido_el": "2026-10-03",
+                "leido_por": "Inaki, del PDF original. NO lo leyo esta sesion para estas filas; el PDF del modulo si se vio aqui el 2026-10-03 y las paginas 1, 6, 7 y 8 concuerdan."
+              }
+            },
+            "presupuesto_enlace_db": {
+              "valor": 157,
+              "_condicion": "«157 dB maximum link budget», vineta de portada, sin desglose.",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (la hoja no declara fecha; el PDF se creo 2016-08-09)",
+                "pagina": 1,
+                "leido_el": "2026-10-03",
+                "leido_por": "Inaki, del PDF original. NO lo leyo esta sesion para estas filas; el PDF del modulo si se vio aqui el 2026-10-03 y las paginas 1, 6, 7 y 8 concuerdan."
+              }
+            },
+            "tasa_max_bps": {
+              "valor": 300000,
+              "_condicion": "«Programmable bit rate up to 300 kbps», vineta de portada.",
+              "_cita": {
+                "documento": "RF LoRa — LongRange Transceiver (RF Solutions Ltd)",
+                "version": "DS-RF-LoRa-5 (la hoja no declara fecha; el PDF se creo 2016-08-09)",
+                "pagina": 1,
+                "leido_el": "2026-10-03",
+                "leido_por": "Inaki, del PDF original. NO lo leyo esta sesion para estas filas; el PDF del modulo si se vio aqui el 2026-10-03 y las paginas 1, 6, 7 y 8 concuerdan."
+              }
+            }
           }
         ]
       },
@@ -829,7 +869,285 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": null
+      "tasa_bps": null,
+      "cota_superior_del_chip": {
+        "fabricante": "Semtech",
+        "modelo": "SX1272",
+        "papel": "COTA SUPERIOR — es el chip que va dentro del modulo, no un candidato de montaje",
+        "procedencia": "datasheet_de_CHIP",
+        "_jerarquia": [
+          "Esta ficha NO es un candidato: es el techo de lo que el modulo podria dar.",
+          "El candidato de montaje es RF-LoRa-868. La hoja del modulo avisa (p. 4) de que",
+          "«in practice the Module RF performance is considerably lower» que la del",
+          "integrado, y NADIE cuantifica cuanto. Asi que estas cifras acotan por arriba y",
+          "no se copian a la ficha del modulo."
+        ],
+        "banda_declarada_hz": [
+          860000000.0,
+          1020000000.0
+        ],
+        "variante": {
+          "sf_min": 6,
+          "sf_max": 12,
+          "_ojo_sx1273": "La hoja separa DOS variantes: SX1272 con SF 6-12 (-117 a -137 dBm) y SX1273 con SF 6-9 (-117 a -130 dBm). El modulo integra el SX1272. No son intercambiables.",
+          "_cita": {
+            "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+            "version": "Rev. 3.1, marzo de 2017",
+            "pagina": 11,
+            "leido_el": "2026-10-03",
+            "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+          }
+        },
+        "ptx_dbm": {
+          "pa_boost_dbm": 20,
+          "rfo_dbm": 13,
+          "_condicion": "+20 y +17 dBm por PA_BOOST; +13 y +7 dBm por el pin RFO.",
+          "_cita": {
+            "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+            "version": "Rev. 3.1, marzo de 2017",
+            "pagina": 11,
+            "leido_el": "2026-10-03",
+            "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+          }
+        },
+        "rx_sens_por_modo": [
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF6, BW 125 kHz",
+            "sf": 6,
+            "bw_hz": 125000,
+            "tasa_bps": 9380,
+            "cr": null,
+            "sens_dbm": -122,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 125 kHz",
+            "sf": 12,
+            "bw_hz": 125000,
+            "tasa_bps": 293,
+            "cr": null,
+            "sens_dbm": -137,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF6, BW 250 kHz",
+            "sf": 6,
+            "bw_hz": 250000,
+            "tasa_bps": 18750,
+            "cr": null,
+            "sens_dbm": -119,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 250 kHz",
+            "sf": 12,
+            "bw_hz": 250000,
+            "tasa_bps": 586,
+            "cr": null,
+            "sens_dbm": -134,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF6, BW 500 kHz",
+            "sf": 6,
+            "bw_hz": 500000,
+            "tasa_bps": 37500,
+            "cr": null,
+            "sens_dbm": -116,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 500 kHz",
+            "sf": 12,
+            "bw_hz": 500000,
+            "tasa_bps": 1172,
+            "cr": null,
+            "sens_dbm": -131,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 27,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 125 kHz, CR 4/5",
+            "sf": 12,
+            "bw_hz": 125000,
+            "tasa_bps": 293,
+            "cr": "4/5",
+            "sens_dbm": -136,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 26,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 250 kHz, CR 4/5",
+            "sf": 12,
+            "bw_hz": 250000,
+            "tasa_bps": 586,
+            "cr": "4/5",
+            "sens_dbm": -133,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 26,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          },
+          {
+            "modo_declarado_por_el_fabricante": "LoRa, SF12, BW 500 kHz, CR 4/5",
+            "sf": 12,
+            "bw_hz": 500000,
+            "tasa_bps": 1172,
+            "cr": "4/5",
+            "sens_dbm": -130,
+            "criterio": null,
+            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_cita": {
+              "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+              "version": "Rev. 3.1, marzo de 2017",
+              "pagina": 26,
+              "leido_el": "2026-10-03",
+              "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+            }
+          }
+        ],
+        "consumo": {
+          "rx_lora_ma": [
+            {
+              "lna_boost": false,
+              "bw_hz": 125000,
+              "ma": 9.7
+            },
+            {
+              "lna_boost": false,
+              "bw_hz": 250000,
+              "ma": 10.5
+            },
+            {
+              "lna_boost": false,
+              "bw_hz": 500000,
+              "ma": 12
+            },
+            {
+              "lna_boost": true,
+              "bw_hz": 125000,
+              "ma": 10.8
+            },
+            {
+              "lna_boost": true,
+              "bw_hz": 250000,
+              "ma": 11.6
+            },
+            {
+              "lna_boost": true,
+              "bw_hz": 500000,
+              "ma": 13
+            }
+          ],
+          "rx_fsk_ma": {
+            "lna_boost_off": 10.5,
+            "lna_boost_on": 11.2
+          },
+          "tx_ma": [
+            {
+              "dbm": 20,
+              "ma": 125,
+              "pin": "PA_BOOST"
+            },
+            {
+              "dbm": 17,
+              "ma": 90,
+              "pin": "PA_BOOST"
+            },
+            {
+              "dbm": 13,
+              "ma": 28,
+              "pin": "RFO"
+            },
+            {
+              "dbm": 7,
+              "ma": 18,
+              "pin": "RFO"
+            }
+          ],
+          "_cita": {
+            "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+            "version": "Rev. 3.1, marzo de 2017",
+            "pagina": 19,
+            "leido_el": "2026-10-03",
+            "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+          }
+        },
+        "otros": {
+          "rechazo_cocanal_gmsk_db": 25,
+          "rssi_formula": "RSSI(dBm) = -139 + Rssi, con LnaBoost activado. La constante -139 varia con el front-end.",
+          "_cita": {
+            "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
+            "version": "Rev. 3.1, marzo de 2017",
+            "pagina": 87,
+            "leido_el": "2026-10-03",
+            "leido_por": "Inaki, del PDF original. ESTA SESION NO HA VISTO ESTE DOCUMENTO: el proxy deniega semtech.my.salesforce.com con 403 en el CONNECT. Toda cifra de esta ficha es lectura suya, no careo propio."
+          }
+        },
+        "plan_de_canal": null,
+        "_plan_de_canal_motivo": "La hoja REMITE a ERC 70-03 para las tolerancias de cristal por sub-banda europea (p. 27) pero NO publica el plan de canal. Sigue dependiendo de ETSI EN 300 220-2 y CEPT/ERC 70-03.",
+        "certificacion_eu": null,
+        "_alcance_de_la_tabla": "SOLO LOS EXTREMOS. La Rev. 3.1 publica SF6 y SF12 de cada ancho de banda, no una fila por SF. LOS SF 7 A 11 NO ESTAN PUBLICADOS y NO SE INTERPOLAN: una interpolacion aqui seria un numero inventado con pinta de medido."
+      }
     },
     "wisun_fan_863": {
       "procedencia": "pendiente",
