@@ -39,6 +39,23 @@
 #
 set -o pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# NO SE MIDE SOBRE UN FUENTE MUTADO. `tools/correr_mutaciones.sh` rompe un
+# fuente a propósito, corre el banco y lo restaura; mientras tanto deja esta
+# marca. Medir en ese hueco da un resultado que no es ni el del código ni el de
+# la mutación, y COMMITEARLO empuja código averiado: pasó el 2026-10-03 con
+# `tools/_render_tabla.js`. Así que aquí se para, con rc = 2 —no comprobado—,
+# que es lo que es.
+if [[ -e "$RAIZ/.mutaciones-en-curso" ]]; then
+  echo "NO SE HA MEDIDO NADA: hay mutaciones en curso y el árbol tiene algún"
+  echo "fuente roto a propósito. Espera a que acaben."
+  echo
+  cat "$RAIZ/.mutaciones-en-curso"
+  echo
+  echo "Si no corre nada, la marca quedó huérfana de un corte: comprueba"
+  echo "\`git status\` y \`git diff\` antes de borrarla."
+  exit 2
+fi
 cd "$RAIZ" || exit 1
 LOGS="${LOGS_DIR:-$RAIZ/.bancos}"
 PATRON="${1:-}"
@@ -52,6 +69,7 @@ declare -A PISO=(
   [test_censo_motivos.js]=19
   [test_comparador.js]=60
   [test_render_tabla.js]=35
+  [test_legalidad.js]=56
   [test_comparador_visor.js]=19
   [test_escenario.js]=57
   [test_informe.js]=34

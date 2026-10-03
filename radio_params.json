@@ -1375,6 +1375,11 @@
           {
             "banda": "K",
             "rango": "863 MHz a 865 MHz",
+            "rango_hz": [
+              863000000.0,
+              865000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "46a",
@@ -1390,6 +1395,11 @@
           {
             "banda": "L",
             "rango": "865 MHz a 868 MHz",
+            "rango_hz": [
+              865000000.0,
+              868000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "47",
@@ -1405,6 +1415,11 @@
           {
             "banda": "M",
             "rango": "868,000 MHz a 868,600 MHz",
+            "rango_hz": [
+              868000000.0,
+              868600000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "48",
@@ -1420,6 +1435,11 @@
           {
             "banda": "N",
             "rango": "868,700 MHz a 869,200 MHz",
+            "rango_hz": [
+              868700000.0,
+              869200000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "50",
@@ -1435,6 +1455,11 @@
           {
             "banda": "P",
             "rango": "869,400 MHz a 869,650 MHz",
+            "rango_hz": [
+              869400000.0,
+              869650000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 500,
             "acceso_al_canal": "<= 10 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "54",
@@ -1450,6 +1475,11 @@
           {
             "banda": "P",
             "rango": "869,700 MHz a 870,000 MHz",
+            "rango_hz": [
+              869700000.0,
+              870000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 5,
             "acceso_al_canal": "sin requisito",
             "banda_decision_2017_1483_UE": "56a",
@@ -1465,6 +1495,11 @@
           {
             "banda": "Q",
             "rango": "869,700 MHz a 870,000 MHz",
+            "rango_hz": [
+              869700000.0,
+              870000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "56b",
@@ -2208,6 +2243,11 @@
           {
             "banda": "K",
             "rango": "863 MHz a 865 MHz",
+            "rango_hz": [
+              863000000.0,
+              865000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "46a",
@@ -2223,6 +2263,11 @@
           {
             "banda": "L",
             "rango": "865 MHz a 868 MHz",
+            "rango_hz": [
+              865000000.0,
+              868000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "47",
@@ -2238,6 +2283,11 @@
           {
             "banda": "M",
             "rango": "868,000 MHz a 868,600 MHz",
+            "rango_hz": [
+              868000000.0,
+              868600000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "48",
@@ -2253,6 +2303,11 @@
           {
             "banda": "N",
             "rango": "868,700 MHz a 869,200 MHz",
+            "rango_hz": [
+              868700000.0,
+              869200000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 0,1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "50",
@@ -2268,6 +2323,11 @@
           {
             "banda": "P",
             "rango": "869,400 MHz a 869,650 MHz",
+            "rango_hz": [
+              869400000.0,
+              869650000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 500,
             "acceso_al_canal": "<= 10 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "54",
@@ -2283,6 +2343,11 @@
           {
             "banda": "P",
             "rango": "869,700 MHz a 870,000 MHz",
+            "rango_hz": [
+              869700000.0,
+              870000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 5,
             "acceso_al_canal": "sin requisito",
             "banda_decision_2017_1483_UE": "56a",
@@ -2298,6 +2363,11 @@
           {
             "banda": "Q",
             "rango": "869,700 MHz a 870,000 MHz",
+            "rango_hz": [
+              869700000.0,
+              870000000.0
+            ],
+            "_rango_hz": "DERIVADO del campo `rango` de esta misma sub-banda, que es el texto de la norma citada abajo. No es una lectura nueva: es el mismo dato en forma que una maquina pueda comparar con `f_hz`. Derivado el 2026-10-03.",
             "erp_max_mw": 25,
             "acceso_al_canal": "<= 1 % de ciclo de trabajo o acceso educado",
             "banda_decision_2017_1483_UE": "56b",
