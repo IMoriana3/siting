@@ -945,6 +945,109 @@ alcance, **12,05 km con línea de vista**, con antena de hilo sin plano de masa 
 placa rudimentaria, y con el límite dicho por ellos —se quedaron sin terreno, no
 sin alcance—. Sirve de orden de magnitud y de contraste, no de parámetro.
 
+#### 3.2 Cada cuánto puede hablar — **la norma, leída** (2026-10-03)
+
+**Fuentes, y esta vez sí se han podido bajar:** `ETSI EN 300 220-2 V3.2.1
+(2018-06)` y `EN 300 220-1 V3.1.1 (2017-02)`. La parte 2 cita **esa misma
+versión** de la parte 1 como referencia normativa, así que el par es
+consistente. Los PDF **no van al repositorio** (ETSI prohíbe la reproducción);
+va su sha256 en `radio_params.json`.
+
+**RETRACTACIÓN DE UN SUPUESTO PROPIO.** Un cálculo anterior de esta fase daba
+«periodo mínimo al 1 %» como si el 1 % fuera la regla. **No lo es, de dos
+maneras.**
+
+**Primera: no hay un solo valor.** Tabla B.1, **normativa**, de la Decisión
+2017/1483/UE:
+
+| banda | rango | e.r.p. máx | acceso al canal |
+|---|---|---:|---|
+| K | 863–865 MHz | 25 mW | **≤ 0,1 %** o acceso educado |
+| L | 865–868 MHz | 25 mW | **≤ 1 %** o acceso educado |
+| M | 868,000–868,600 | 25 mW | **≤ 1 %** o acceso educado |
+| N | 868,700–869,200 | 25 mW | **≤ 0,1 %** o acceso educado |
+| **P** | **869,400–869,650** | **500 mW** | **≤ 10 %** o acceso educado |
+| P | 869,700–870,000 | 5 mW | **sin requisito** |
+| Q | 869,700–870,000 | 25 mW | **≤ 1 %** o acceso educado |
+
+Esto **vale igual para Wi-SUN FAN**: es la misma banda, la misma tabla.
+
+**Segunda: el ciclo puede no aplicar.** §4.3.3.0, literal:
+
+> *«Duty cycle applies to all transmitters **except EUT with polite spectrum
+> access** (described in clause 4.5) **where permitted** in annex B, table B.1»*
+
+Y §4.5.2.0: *«…**instead of** duty cycle where permitted by table B.1»*. El
+acceso educado (LBT + AFA) **sustituye** al ciclo, no se suma.
+
+**El presupuesto de cada régimen**, con `Tobs = 1 hora` (EN 300 220-1, §5.4.1):
+
+```
+ciclo  0,1 %      3,6 s de aire por hora
+ciclo  1 %         36 s/h
+ciclo 10 %        360 s/h      y en esa sub-banda, ademas, 500 mW
+educado           100 s/h POR CADA 200 kHz   (EN 300 220-1, Tabla 48)
+                  y su nota 3: «Longer accumulated transmission time is
+                  possible by implementing more AFA channels»
+```
+
+**EL ACCESO EDUCADO DA CASI EL TRIPLE DE AIRE QUE EL 1 % — PERO PROHÍBE LOS
+MODOS LARGOS.** Tabla 48 fija **`Ton Max` = 1 s** para una transmisión única (4 s
+para un diálogo o secuencia de sondeo). Con los 44 octetos de carga útil que
+declara `radio_params.json` y CR 4/5:
+
+| modo | tiempo en el aire | con ciclo del 1 % | con acceso educado |
+|---|---:|---|---|
+| **SF12 / 125** | **2.138 ms** | 16,8 msg/h → uno cada **214 s** | **ILEGAL**, excede `Ton Max` |
+| SF12 / 250 | 1.069 ms | 33,7 msg/h | **ILEGAL** |
+| SF11 / 125 | 1.151 ms | 31,3 msg/h | **ILEGAL** |
+| SF12 / 500 | 494 ms | 72,9 msg/h | 202 msg/h → uno cada **17,8 s** |
+| SF10 / 125 | 534 ms | 67,3 msg/h | 187 msg/h |
+| SF8 / 125 | 164 ms | 219 msg/h | 608 msg/h → uno cada **5,9 s** |
+| SF6 / 125 | 51 ms | 701 msg/h | 1.948 msg/h |
+
+**Los dos regímenes excluyen cosas distintas, y ése es el resultado:** con ciclo
+de trabajo SF12/BW125 es legal pero deja la flota en **17 mensajes por hora**;
+con acceso educado **no es legal en absoluto**, porque una sola transmisión de
+2,1 s supera el máximo de 1 s.
+
+> **Y CHOCA DE FRENTE CON EL §3.1.** Los **16 dB** de ventaja sobre Wi-SUN
+> estaban justo en **SF12/BW125**, el único punto donde el orden se sostenía sin
+> discusión. Ese punto **no es legal bajo acceso educado y es casi inusable bajo
+> ciclo de trabajo.** Donde LoRa gana por sensibilidad, la norma no le deja
+> hablar; donde la norma le deja hablar al ritmo de hoy, el orden frente a
+> Wi-SUN **no está determinado** (§3.1).
+>
+> Dicho en una frase: **la ventaja de LoRa y su régimen legal viven en extremos
+> opuestos de la misma tabla.**
+
+**Contraste con lo que hay puesto.** El Zigbee actual sondea cada TCU **cada
+18 s** —medido el 2026-09-24, 80 de 84 TCU en ese valor exacto— y a 2,4 GHz no
+le aplica este régimen. Para igualar esos 18 s, LoRa necesita quedarse en SF ≤ 8
+con ciclo del 1 %, o SF ≤ 10 con acceso educado. **Y ahí ya no tiene los 16 dB.**
+
+**Y UNA COINCIDENCIA ENTRE DOCUMENTOS INDEPENDIENTES.** La sub-banda **P,
+869,400–869,650 MHz**, es la que la norma premia: **500 mW e.r.p. y 10 % de
+ciclo**. Es **exactamente** la sub-banda estrecha en la que el **EFR32FG28**
+declara sus **+20 dBm** (Tabla 4.17, p. 48 de su hoja), ya anotada en su ficha
+con el reparo de no aplicarlos a la banda general. Dos documentos que no se
+citan entre sí, la misma sub-banda: ahora se entiende **por qué** el fabricante
+la separa.
+
+**Dos límites que NO se resuelven aquí:**
+
+1. El presupuesto educado es **«por cada 200 kHz»**, y una señal LoRa de 250 o
+   500 kHz ocupa **más de una** de esas porciones. La norma no dice cómo se
+   reparte, y aquí no se interpreta.
+2. **CEPT/ERC 70-03 sigue sin leerse** —`ecodocdb.dk` devuelve 403 en el CONNECT
+   del proxy—. Es referencia **informativa** del Anexo C y da el estado de
+   implementación por país; lo normativo de arriba no depende de él.
+
+**Lo que sigue a `null` a propósito:** `plan_de_canal` y `canal`. La Tabla B.1
+da **sub-bandas, potencia y ancho ocupado máximo**, que no es un plan de canal:
+faltan la rejilla y las frecuencias centrales. Llenar uno con la otra sería
+justo el tipo de salto que este documento no da.
+
 ### Wi-SUN FAN
 
 * Multicast por MPL, pensado justo para esto.
