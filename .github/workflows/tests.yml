@@ -440,6 +440,16 @@ jobs:
           # `pd` a pelo con algo que no cabe.
           rojo node tests/test_render_tabla.js decapita recortaSinMarcar sinRedondeo
 
+          # LA FILA DE LEGALIDAD. Pedía tres campos que no existen en
+          # radio_params.json y además no se calculaba en ninguna parte. Y la
+          # trampa que vigila: EN 300 328 da la potencia en e.i.r.p. y
+          # EN 300 220-2 en e.r.p., que difieren en los 2,15 dB del dipolo.
+          # Compararlas sin convertir es un error callado en la fila que dice
+          # si algo es legal.
+          rojo node tests/test_legalidad.js confundeErpConEirp cogeElSolapeGeneroso \
+                                            canalEnvueltoCuela sinRutaConPuntos \
+                                            legalidadNoSeCalcula sinGananciaEnLaRadiada
+
           # el escenario guardable: un sha que falta NO compara igual, y nada
           # se guarda en el navegador
           rojo node tests/test_escenario.js huecoEsIgual sinRecalcular sinFormato textoInestable \

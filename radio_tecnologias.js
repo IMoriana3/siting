@@ -61,6 +61,102 @@
     return celda(null, unidad || null, "pendiente", { motivo: motivo });
   }
 
+  /* ── EL LÍMITE RADIADO, Y LA TRAMPA DE LA UNIDAD ──────────────────────────
+   *
+   * LAS DOS NORMAS NO DAN LA POTENCIA EN LA MISMA UNIDAD, y eso no es un
+   * detalle de formato:
+   *
+   *     EN 300 328   (2,4 GHz)   20 dBm   e.i.r.p.   referida a la ISOTRÓPICA
+   *     EN 300 220-2 (868 MHz)   25 mW    e.r.p.     referida al DIPOLO
+   *
+   * Un dipolo de media onda tiene 2,15 dBi sobre la isotrópica, así que
+   *
+   *     e.i.r.p. = e.r.p. + 2,15 dB
+   *
+   * Y ESO ES JUSTO LO QUE ESTE CRITERIO PEDÍA MAL. El campo que exigía se
+   * llamaba `erp_max_dbm`: meter ahí los 20 dBm e.i.r.p. de la EN 300 328
+   * junto a los 14 dBm e.r.p. de la EN 300 220 habría comparado isotrópica
+   * contra dipolo — 2,15 dB de error, callado, en la fila que dice si algo es
+   * legal. Es la misma avería que el `slice(-n)` de la tabla: un número que
+   * parece bien y está mal.
+   *
+   * Aquí se normaliza todo a e.i.r.p. y la conversión va rotulada en la celda.
+   *
+   * LOS 2,15 dB NO SALEN DE NINGUNA DE LAS DOS NORMAS: son la ganancia del
+   * dipolo de media onda, que es una definición, no una lectura. Va dicho
+   * porque todo lo demás de este fichero sí sale de un documento citado. */
+  var DIPOLO_DBI = 2.15;
+
+  /* El límite aplicable, en e.i.r.p., o `null` si no se puede establecer. */
+  function limiteEirp(variante) {
+    var r = variante && variante.regimen_regulatorio_eu;
+    if (r && r.potencia_max_dbm_eirp != null) {
+      var cita = r._potencia_cita || {};
+      return { dbm: r.potencia_max_dbm_eirp, unidad_leida: "e.i.r.p.",
+               convertido: false, norma: cita.documento || null,
+               clausula: cita.clausula || null };
+    }
+    var c = variante && variante.ciclo_trabajo_eu;
+    if (c && c.sub_bandas && variante.f_hz != null) {
+      var f = variante.f_hz, elegida = null;
+      for (var i = 0; i < c.sub_bandas.length; i++) {
+        var b = c.sub_bandas[i];
+        if (!b.rango_hz || b.erp_max_mw == null) continue;
+        if (f < b.rango_hz[0] || f > b.rango_hz[1]) continue;
+        /* VARIAS SUB-BANDAS SOLAPAN: P y Q comparten 869,7-870,0 MHz con 5 y
+           25 mW. Se coge LA MÁS RESTRICTIVA. Quedarse con la generosa sería
+           elegir el límite que más conviene, que no es leer una norma. */
+        if (elegida == null || b.erp_max_mw < elegida.erp_max_mw) elegida = b;
+      }
+      if (elegida) {
+        var erpDbm = 10 * Math.log(elegida.erp_max_mw) / Math.LN10;
+        return { dbm: erpDbm + DIPOLO_DBI, unidad_leida: "e.r.p.",
+                 convertido: true, erp_dbm: erpDbm, dipolo_dbi: DIPOLO_DBI,
+                 sub_banda: elegida.banda, erp_max_mw: elegida.erp_max_mw,
+                 norma: (elegida._cita && elegida._cita.documento) || null,
+                 clausula: (elegida._cita && elegida._cita.clausula) || null };
+      }
+    }
+    return null;
+  }
+
+  /* ¿Es legal el punto de trabajo declarado? Verdicto, no número: el criterio
+     no se ordena de más a menos (`MEJOR_ES_MAS.legalidad` es `null`).
+     DOS DERIVACIONES, las dos rotuladas en la celda:
+       · la e.i.r.p. radiada se toma como `ptx_dbm + gtx_dbi`. NO modela
+         pérdidas de cable ni de conector, que RESTARÍAN: así que es una COTA
+         SUPERIOR de lo radiado, o sea el lado conservador para decir «cumple».
+       · el límite de 868 llega en e.r.p. y se convierte con los 2,15 dB. */
+  function legalidadDe(variante) {
+    var lim = limiteEirp(variante);
+    if (!lim) {
+      return falta("el régimen está en el fichero pero no da un límite de " +
+                   "potencia aplicable a `f_hz` — ver `regimen_regulatorio_eu` " +
+                   "o `ciclo_trabajo_eu` de esta variante", null);
+    }
+    var eirp = variante.ptx_dbm + variante.gtx_dbi;
+    var margen = lim.dbm - eirp;
+    var cumple = margen >= 0;
+    return celda(cumple ? "cumple" : "NO CUMPLE", null, "derivado", {
+      min: cumple ? "cumple" : "NO CUMPLE",
+      max: cumple ? "cumple" : "NO CUMPLE",
+      eirp_declarada_dbm: eirp,
+      limite_eirp_dbm: lim.dbm,
+      margen_db: margen,
+      canal: valorDe(variante, "canal.valor"),
+      norma: lim.norma,
+      clausula: lim.clausula,
+      _eirp_es_derivada: "ptx_dbm + gtx_dbi, SIN pérdidas de cable ni conector: " +
+                         "cota superior de lo radiado.",
+      _limite_convertido: lim.convertido
+        ? ("la norma da " + lim.erp_max_mw + " mW e.r.p. (" +
+           lim.erp_dbm.toFixed(2) + " dBm) en la sub-banda " + lim.sub_banda +
+           "; +" + lim.dipolo_dbi + " dB de dipolo para pasarlo a e.i.r.p.")
+        : "la norma ya lo da en e.i.r.p.; no se convierte nada",
+      motivo: null
+    });
+  }
+
   /* ── QUÉ NECESITA CADA CRITERIO ──────────────────────────────────────────
    * Declarado aquí y en un solo sitio. Si un criterio nuevo se olvida de
    * declarar lo suyo, no puede salir: `EXIGE[criterio]` sería `undefined` y el
@@ -85,7 +181,29 @@
        criterio publicaría una ocupación de radio que el serie no deja alcanzar:
        un número correcto sobre una pregunta que no es la que importa. */
     telemetria:          ["tasa_bps", "tasa_serie_bps", "carga_util_b", "periodo_s"],
-    legalidad:           ["norma", "erp_max_dbm", "ciclo_trabajo"]
+    /* LEGALIDAD. Esto pedía `norma`, `erp_max_dbm` y `ciclo_trabajo`, tres
+       campos que NO EXISTEN en `radio_params.json` y que nunca han existido:
+       la fila decía «no se puede» por un nombre equivocado, no por un hueco.
+       Y el criterio tampoco se calculaba en ninguna parte — sólo declaraba qué
+       necesitaría. Corregido el 2026-10-03.
+
+       Lo que de verdad hace falta para decir si un punto de trabajo es legal:
+
+         regimen_eu   la norma y su límite — ya está en el fichero, bajo
+                      `regimen_regulatorio_eu` (2,4 GHz) o `ciclo_trabajo_eu`
+                      (868 MHz); ver ALTERNATIVAS
+         ptx_dbm      la potencia conducida del equipo
+         gtx_dbi      la ganancia de la antena, que entra en la radiada
+         canal.valor  EL CANAL, y no es un adorno: el comentario del modelo
+                      congelado dice «Canal 26: máx +3» frente a los +19
+                      declarados. DIECISÉIS dB de diferencia según el canal,
+                      así que sin canal no hay límite que comparar. Ese dato
+                      sale del bloque 8a (`zigbee_inventario.ps1`), no de aquí.
+
+       O sea que la fila sigue diciendo «no se puede» para Zigbee — pero ahora
+       NOMBRA el canal, que es el bloqueo de verdad, en vez de un campo que no
+       existe. Una puerta tiene que decir qué le falta, no que le falta algo. */
+    legalidad:           ["regimen_eu", "ptx_dbm", "gtx_dbi", "canal.valor"]
   };
 
   var UNIDAD = {
@@ -105,6 +223,30 @@
     legalidad: "legalidad en España"
   };
 
+  /* Lee una ruta con puntos: `canal.valor` baja dos niveles. HACE FALTA, y no
+     es comodidad: `canal` es un OBJETO cuyo `valor` puede ser `null`, así que
+     mirar sólo `variante.canal` daba «está puesto» con el canal sin saber. Un
+     hueco envuelto en un objeto es un hueco. */
+  function valorDe(variante, ruta) {
+    if (!variante) return null;
+    var partes = String(ruta).split("."), v = variante;
+    for (var i = 0; i < partes.length; i++) {
+      if (v == null) return null;
+      v = v[partes[i]];
+    }
+    return v == null ? null : v;
+  }
+
+  /* UN REQUISITO QUE SE CUMPLE CON CUALQUIERA DE VARIAS RUTAS. El régimen
+     regulatorio vive bajo nombres distintos según la banda porque SON NORMAS
+     DISTINTAS: a 2,4 GHz la EN 300 328 (`regimen_regulatorio_eu`) y a 868 MHz
+     la EN 300 220 (`ciclo_trabajo_eu`). No se unifican en una sola clave
+     porque unificar el nombre insinuaría que es el mismo requisito, y no lo
+     es: ni la ventana de observación ni la unidad de potencia coinciden. */
+  var ALTERNATIVAS = {
+    regimen_eu: ["regimen_regulatorio_eu", "ciclo_trabajo_eu"]
+  };
+
   /* Qué parámetros de una variante están puestos. `null` y `undefined` cuentan
      igual: no está. Un 0 SÍ cuenta —0 dBm es una potencia— y por eso se mira
      `== null` y no la veracidad. */
@@ -113,8 +255,11 @@
     if (!exige) return ["el criterio «" + criterio + "» no declara qué necesita"];
     var f = [];
     for (var i = 0; i < exige.length; i++) {
-      var v = variante ? variante[exige[i]] : null;
-      if (v == null) f.push(exige[i]);
+      var req = exige[i], rutas = ALTERNATIVAS[req] || [req], hay = false;
+      for (var j = 0; j < rutas.length; j++) {
+        if (valorDe(variante, rutas[j]) != null) { hay = true; break; }
+      }
+      if (!hay) f.push(req);
     }
     return f;
   }
@@ -222,6 +367,14 @@
         motivo: motivoCuello
       });
     }
+
+    /* LA LEGALIDAD, si no la ha tumbado ya el bucle de `EXIGE` por un hueco.
+       Esto antes NO SE CALCULABA: el criterio declaraba qué necesitaba y nadie
+       lo rellenaba nunca, así que la fila salía «no se puede» incluso con el
+       dato delante. Y lo que declaraba necesitar —`norma`, `erp_max_dbm`,
+       `ciclo_trabajo`— no existe en `radio_params.json`. Corregido el
+       2026-10-03; ver el comentario de `EXIGE.legalidad`. */
+    if (!out.legalidad) out.legalidad = legalidadDe(variante);
 
     out._porHora = porHora;
     /* SI LA MALLA ES UN ÁRBOL, «sin camino alternativo» no informa: en un árbol
@@ -443,7 +596,10 @@
                    loQueFalta: loQueFalta, EXIGE: EXIGE, ROTULO: ROTULO,
                    MEJOR_ES_MAS: MEJOR_ES_MAS, celda: celda, falta: falta,
                    presupuesto: presupuesto, extremos: extremos,
-                   sensibilidadAlModulo: sensibilidadAlModulo };
+                   sensibilidadAlModulo: sensibilidadAlModulo,
+                   valorDe: valorDe, ALTERNATIVAS: ALTERNATIVAS,
+                   limiteEirp: limiteEirp, legalidadDe: legalidadDe,
+                   DIPOLO_DBI: DIPOLO_DBI };
   raiz.RadioTec = RadioTec;
   if (typeof module !== "undefined" && module.exports) module.exports = RadioTec;
 })(typeof window !== "undefined" ? window : globalThis);

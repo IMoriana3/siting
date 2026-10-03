@@ -52,6 +52,7 @@ declare -A PISO=(
   [test_censo_motivos.js]=19
   [test_comparador.js]=60
   [test_render_tabla.js]=35
+  [test_legalidad.js]=56
   [test_comparador_visor.js]=19
   [test_escenario.js]=57
   [test_informe.js]=34
