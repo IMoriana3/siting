@@ -856,20 +856,89 @@ margen 1 dB a la baja y no cambian ninguna de las dos conclusiones.
    propia hoja, «in practice the Module RF performance is considerably lower»—
    **invierte el orden**. Y nadie ha cuantificado esa pérdida.
 
-> **Y HAY UNA RAZÓN MÁS FUERTE PARA NO CERRAR ESE EXTREMO, que es de método.**
-> Las 25 filas de Wi-SUN declaran su criterio; **las 9 de LoRa no**: el extracto
-> no lo trae y el campo queda a `null` con ese motivo. Cambiar de criterio
-> —`BER = 1e-2` frente a `10 % PER`— vale por sí solo **2-3 dB**, que es **más
-> que el margen de 1,9 dB**. O sea que en el extremo rápido la comparación no la
-> decide la radio: la decide un campo que falta.
->
-> Publicarlo como «LoRa gana» sería exactamente el sesgo invisible contra el que
-> se creó el campo `criterio` (§2.4 de `radio_params.json`).
+#### El criterio de la tabla LoRa NO LO PUBLICA LA HOJA — y eso es un hallazgo
 
-**Lo que haría falta para cerrarlo**, por orden de lo que desbloquea: el
-**criterio de medida** de la tabla de sensibilidad de la Rev. 3.1 —una línea de
-la propia hoja—, y después la **sensibilidad del módulo por SF**, que RF
+**No es una omisión nuestra ni algo que quede por preguntar.** Buscado sobre el
+documento: **la tabla de sensibilidad LoRa del `SX1272/73 Rev. 3.1` no declara
+criterio de medida junto a la tabla**. El criterio que la hoja sí declara es el
+del modo **FSK**, que es otra magnitud y no sirve para estas filas.
+
+Las 25 filas de Wi-SUN de este repositorio sí lo llevan —`BER = 1e-2`,
+`10 % PER`, `1 % PER con 127 octetos`—, porque sus hojas lo publican. Las 9 de
+LoRa quedan con `criterio: null` **porque el fabricante no lo da**, y eso es
+distinto de un dato pendiente.
+
+**LA CONSECUENCIA, Y ES LA QUE DECIDE: el margen de 1,9 dB NO decide.** Se
+publican **las dos lecturas, sin elegir**, porque elegir una sería inventar el
+campo que falta:
+
+| a 37.500 bps, si el criterio de LoRa fuese… | LoRa normalizado | Wi-SUN FG25 #1a con FEC, `10 % PER` | quién gana |
+|---|---:|---:|---|
+| **`10 % PER`** (el mismo que Silabs) | −116,0 | −114,1 | **LoRa, por 1,9 dB** |
+| **un `BER` comparable al de TI** | −113 a −114 | −114,1 | **Wi-SUN, por 0,1 a 1,1 dB** |
+
+La corrección va en ese sentido y no en el contrario: `10 % PER con 127 octetos`
+es **2-3 dB más exigente** que `BER = 1e-2`, así que una cifra dada a BER es
+**optimista** cuando se la compara con una dada a PER, y hay que penalizarla
+para ponerlas en el mismo plano.
+
+**Así que en el extremo rápido el orden lo decide un campo ausente, no la
+radio.** Publicarlo como «LoRa gana» sería exactamente el sesgo invisible contra
+el que se creó el campo `criterio`.
+
+#### El de 16 dB sí se sostiene, y en los dos escenarios
+
+A **293 bps** el margen aguanta la ambigüedad entera, así que esto sí se puede
+afirmar:
+
+| a 293 bps, si el criterio de LoRa fuese… | margen sobre Wi-SUN |
+|---|---:|
+| `BER`, el mismo que declara TI en esa fila | **+16,0 dB** |
+| `10 % PER`, más exigente que el de TI | **+18 a +19 dB** |
+
+En el peor de los dos casos le sobran **dieciséis decibelios**. Ninguna
+degradación de módulo plausible —ni la corrección de criterio, ni las dos
+juntas— se come eso. **Donde LoRa va lento, gana, y no depende del dato que
+falta.**
+
+Lo que sí sigue colgando de ese margen es el precio: 293 bps son **1/8,5** de la
+tasa de la fila de Wi-SUN con la que se compara. LoRa compra sensibilidad con
+tiempo en el aire, y eso se paga en el ciclo de trabajo del 1 %.
+
+#### Se buscó en otros documentos de Semtech, y tampoco
+
+Antes de darlo por cerrado se intentaron los otros documentos que la propia hoja
+del módulo enlaza, por si el criterio estuviera en una nota de aplicación:
+
+```
+semtech.com/apps/filedown/down.php?file=LoraDesignGuide_STD.pdf
+semtech.com/images/datasheet/etsi-compliance-sx1272-LoRa-modem.pdf
+semtech.com/uploads/documents/LoraDesignGuide_STD.pdf
+```
+
+Los tres acaban en `info.semtech.com/find-documentation`, **el mismo formulario
+y los mismos 21.149 bytes**, y los ficheros viven detrás de
+`semtech.my.salesforce.com`, que el proxy deniega con 403 en el CONNECT. **Queda
+como vía abierta para quien sí alcance ese host**, y si el criterio aparece ahí
+va citado como procedente de **ese** documento y no de la hoja.
+
+**Lo que haría falta para cerrar el extremo rápido**, y ya no es «una línea de la
+hoja» porque la hoja no la trae:
+
+1. **El criterio de medida, de otra fuente de Semtech** — nota de aplicación,
+   guía del modem LoRa o la respuesta de su soporte. Citado como procedente de
+   **ese** documento, nunca de la Rev. 3.1.
+2. **O medir** una de las dos tecnologías contra la otra con **un criterio
+   propio y declarado**, que es lo que de verdad zanja una comparación entre
+   fabricantes.
+
+Y aparte, para el candidato real: la **sensibilidad del módulo por SF**, que RF
 Solutions no publica y habría que pedirle o medir.
+
+**Mientras tanto, lo que se puede afirmar sin ninguna de esas tres cosas:** que
+a tasa baja LoRa gana con dieciséis decibelios de holgura, y que a tasa alta
+**el orden no está determinado**. Las dos frases son publicables hoy; «LoRa es
+mejor» a secas, no.
 
 **Lo único medido del módulo**, y no es sensibilidad: su propio ensayo de
 alcance, **12,05 km con línea de vista**, con antena de hilo sin plano de masa y
