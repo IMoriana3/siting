@@ -243,10 +243,18 @@ perceptible con esta resolución.
    entre las 14:42:54 y las **16:30:39**, con 13 órdenes fallidas por medio.
    **El p100 de la planta entera no son 45 s**, y tampoco es el de ese bloque:
    es una avería sin diagnosticar (§2.4 ter).
-2. **Es un evento, una planta, una NCU con incidencia declarada.** Para
-   sostener «la radio no está en el camino crítico» como conclusión de la fase
-   hace falta **otro stow de una instalación sana**. El útil ya existe
-   (`tools/stow_desde_scada.mjs`); falta el fichero.
+2. **Es un evento, una planta, una NCU con incidencia declarada: San José
+   NCU 18** (confirmada el 2026-10-03, §2.4 ter). Para sostener «la radio no
+   está en el camino crítico» como conclusión de la fase hace falta **otro stow
+   de una instalación sana**. El útil ya existe (`tools/stow_desde_scada.mjs`);
+   falta el fichero.
+
+   **Y OJO CON UN ATAJO QUE AHORA PARECE DISPONIBLE Y NO LO ES.** Que GW2 tenga
+   cero fallos y las 75 medidas **no lo convierte en «una instalación sana»**:
+   es el gateway sano **de una NCU con incidencia declarada**, y la incidencia
+   es de la NCU. Lo que GW2 habilita es publicar el giro y el tramo B/C sin que
+   los contamine GW1 — no cerrar la fase con una sola NCU. Para eso sigue
+   haciendo falta un stow de otra instalación.
 
 ### 2.4 Giro — **MEDIDO**, 75 stows de un stow real
 
@@ -550,15 +558,30 @@ es exacto:**
 >   GW1 y 504 GW2. La IP identifica la NCU, el puerto el gateway;
 > * el reparto es por **rango contiguo** de número de TCU, no por una lista.
 >
-> **DE QUÉ NCU SALE EL FICHERO, dicho con su condicional.** El volcado trae TCU 1
-> a 122 sin huecos. Dos NCU de San José tienen GW1 = 1–38: la **11** y la **18**.
-> Sólo la 18 tiene GW2 llegando a **122** (la 11 acaba en 118), así que el único
-> candidato compatible con los tres números —122 en total, corte en 38, bloque
-> sano de 84— es **San José NCU 18**. Es una **identificación por coincidencia
-> numérica, no un dato recibido**, y por eso va dicha así y hay que confirmarla.
-> **Lo que NO depende de confirmarla**: las dos candidatas coinciden en que
-> **TCU 1–38 es el primer gateway**, así que la atribución «bloque B = GW1» vale
-> igual cuál de las dos sea.
+> **DE QUÉ NCU SALE EL FICHERO: SAN JOSÉ NCU 18. CONFIRMADO POR IÑAKI EL
+> 2026-10-03.**
+>
+> Cómo se llegó, porque el camino importa para saber qué vale: el volcado trae
+> TCU 1 a 122 sin huecos. Dos NCU de San José tienen GW1 = 1–38, la **11** y la
+> **18**, y sólo la 18 tiene GW2 llegando a **122** (la 11 acaba en 118). O sea
+> que los tres números —122 en total, corte en 38, bloque sano de 84— dejaban un
+> único candidato compatible. **Eso era una inferencia por coincidencia
+> numérica, no un dato**, y se publicó así, con su condicional y pidiendo
+> confirmación. Iñaki la ha confirmado, así que ahora **es un dato** y el
+> condicional se retira.
+>
+> Queda escrito el orden, que es la parte reutilizable: la coincidencia numérica
+> era única y exacta en tres cifras independientes, y **aun así no se dio por
+> buena hasta que alguien lo dijo.** Un encaje perfecto sigue siendo un encaje
+> mientras nadie confirme de qué equipo salió el fichero —que es la misma lección
+> del CSV sin contexto de estado de la instalación, sólo que del lado de la
+> identidad en vez del de la salud.
+>
+> **Y lo que ya no dependía de la confirmación**: las dos candidatas coinciden en
+> que **TCU 1–38 es el primer gateway**, así que la atribución «bloque B = GW1»
+> era firme antes de confirmar cuál de las dos era. Por eso el reparto se pudo
+> publicar sin esperar: lo que estaba en el aire era el NOMBRE de la NCU, no la
+> pertenencia de los dos bloques a los dos gateways.
 >
 > **UN AJUSTE DESCARTADO POR SENTIDO.** De los 76 ajustes que pasan las guardas,
 > uno tiene velocidad **negativa**: la **TCU 16** (GW1), −0,1932 °/s con R²
@@ -1338,28 +1361,32 @@ Ordenadas por lo que se puede decir de ellas hoy.
 > **Y tres cosas que se piden con él**, pedidas por Iñaki el 2026-10-01 y
 > detalladas en el §2.4 ter:
 >
-> 1. el **reparto TCU → gateway** de la NCU de la que salga, porque sin él no se
->    puede separar lo que falla de lo que no.
+> 1. ~~el **reparto TCU → gateway** de la NCU de la que salga~~ — **RESUELTO EL
+>    2026-10-03. Ver el §2.4 ter.**
 >
->    **CORRECCIÓN DEL 2026-10-03, y la hago porque este documento y yo dijimos
->    que ese reparto «no existe en ningún repo»:** el reparto **TCU → NCU** SÍ
->    existe, completo, en `Cobertura-Zigbee/config_tcu_sanjose.csv` (2.184 TCU
->    repartidas en 21 NCU, las 2.184 con NCU asignada) y en
->    `config_tcu_ayora.csv` (751 en 16). Lo que sigue sin existir es otra cosa, y
->    hay que decir cuál:
+>    El reparto existía y está en `SCADA/tools/tcu-toolbox/plantas/`, con los tres
+>    niveles TCU → GW → NCU y el gateway distinguido por el puerto Modbus. La NCU
+>    es **San José 18**, confirmada por Iñaki el mismo día. Resultado: **los 13
+>    fallos todos en GW1, los 75 stows válidos todos en GW2.**
 >
->    · **ese reparto no cubre la planta del stow**, porque este documento NUNCA
->      NOMBRA de qué planta salió el evento del 24-09 — dice «una planta, una NCU
->      con incidencia declarada» y nada más. Si fuera San José o Ayora, el mapa
->      ya está aquí;
->    · y **NCU no es necesariamente lo mismo que gateway**. El encargo habla de
->      «en esa NCU el primer gateway funciona mal», o sea de varios gateways
->      DENTRO de una NCU; si es así, `config_tcu_*.csv` da una granularidad más
->      gruesa que la que hace falta y no sirve para separar el gateway 1.
+>    **DOS AFIRMACIONES MÍAS QUE ESTABAN MAL, y las dejo escritas porque el error
+>    fue del mismo tipo las dos veces: afirmar una ausencia sin haber ido a
+>    mirar.**
 >
->    Las dos preguntas van al §5. Hasta contestarlas, lo honesto no es «no
->    existe» ni «ya está»: es que **existe un mapa, de dos plantas, a un nivel
->    que puede no ser el que se pide**;
+>    · Dije que el reparto **«no existe en ningún repo»**. Existía en dos sitios
+>      distintos: `Cobertura-Zigbee/config_tcu_*.csv` trae TCU → NCU de San José
+>      (2.184 en 21) y Ayora (751 en 16), y la toolbox de SCADA trae el reparto
+>      fino TCU → GW → NCU, que es el que hacía falta. Lo encontré sólo cuando
+>      Iñaki dijo que estaba.
+>    · Y dije que `zigbee_inventario.ps1` **no recoge el canal**. Lo recoge: le
+>      manda `query_setting` al gateway y vuelca la respuesta en crudo, y de cada
+>      nodo aplana el XML a columnas genéricamente.
+>
+>    Las dos veces el patrón es el mismo: **un «no existe» se afirmó tras buscar
+>    en los sitios donde yo esperaba que estuviera, no en todos.** Una ausencia es
+>    una afirmación como cualquier otra y necesita la misma medida que una
+>    presencia — y es más caro equivocarse en ella, porque un «no existe» PARA la
+>    búsqueda, mientras que un «no lo encuentro» la deja abierta;
 > 2. un volcado de **`zigbee_inventario.ps1`** (bloque 8a) de esa NCU — trae
 >    **RSSI y LQI por nodo**;
 > 3. o de **`zigbee_routes_logger.ps1`** — trae **rutas y saltos**.
