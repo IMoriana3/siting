@@ -805,6 +805,81 @@ usarlos para nada que se firme.
 **La comparación unicast ↔ broadcast es la palanca de radio más grande que
 hay, y se puede medir en planta sin cambiar nada del sistema.** Ver §5.
 
+#### 3.0 bis Lo que la norma le permite al Zigbee — **leída** (2026-10-03)
+
+**Fuente:** `ETSI EN 300 328 V2.2.2 (2019-07)`, bajada de etsi.org. Zigbee es
+**no-FHSS** (DSSS), así que le aplica la **cláusula 4.3.2**, no la 4.3.1 de
+salto de frecuencia. El PDF **no va al repositorio**; va su sha256 en
+`radio_params.json`.
+
+| | límite | cláusula |
+|---|---|---|
+| banda | 2 400 – 2 483,5 MHz | — |
+| potencia RF | **≤ 20 dBm e.i.r.p.** | 4.3.2.2.3 |
+| densidad espectral | **≤ 10 dBm/MHz** | 4.3.2.3.3 |
+| ciclo de trabajo | **sólo si NO es adaptativo** · `Tobs` = **1 s** · Tx-sequence ≤ 10 ms · Tx-gap ≥ la secuencia previa, mínimo 3,5 ms | 4.3.2.4 |
+| *Medium Utilization* | `MU = (Pout/100 mW) × DC` **≤ 10 %** · no aplica a adaptativo ni por debajo de 10 dBm | 4.3.2.5 |
+| adaptividad (LBT) | CCA ≥ **18 µs** · ocupación de canal **1–10 ms** + reposo ≥ 5 % · umbral **−70 dBm/MHz** a 20 dBm | 4.3.2.6.3 |
+| **señalización de control corta** | **≤ 10 % en cualquier ventana de 50 ms, SIN escuchar el canal** | 4.3.2.6.4.2 |
+
+**Tres cosas que esto cambia:**
+
+**1 · La ventana de observación es de UN SEGUNDO, no de una hora.** En 868 el
+ciclo se mide sobre `Tobs = 1 h` (EN 300 220-1 §5.4.1); aquí sobre **1 s**. Son
+restricciones de naturaleza distinta: allá un presupuesto a largo plazo, aquí
+una ocupación instantánea. **Comparar «1 %» de una banda con «10 %» de la otra
+sin decir sobre qué ventana es mezclar dos magnitudes que sólo comparten el
+símbolo de porcentaje.**
+
+**2 · Al Zigbee no le aplica el ciclo de trabajo.** La cláusula 4.3.2.4.1 lo
+limita a equipo **no adaptativo**, y Zigbee hace **CSMA/CA, que es LBT**. Es el
+mismo patrón que el acceso educado de 868 — pero aquí lo adaptativo es la norma,
+no la excepción, así que **no hay presupuesto acumulado que limite el ritmo**.
+
+**3 · Y el *Medium Utilization* compra tiempo con potencia.** `MU = (Pout/100 mW)
+× DC ≤ 10 %` significa que a **20 dBm** el ciclo queda acotado al 10 %, a
+**10 dBm** la fórmula da `DC ≤ 100 %` —sin restricción práctica— y **por debajo
+de 10 dBm el requisito no aplica**. Bajar potencia compra ritmo, explícitamente.
+
+> **Y LA PIEZA QUE IMPORTA PARA EL STOW.** La cláusula 4.3.2.6.4 define
+> *«Short Control Signalling Transmissions»*: control y gestión **sin escuchar
+> el canal**, hasta un **10 % en cualquier ventana de 50 ms**. **Una orden de
+> stow es exactamente eso** — control, corta, rara. A 2,4 GHz tiene **vía
+> regulatoria propia**, que es la contrapartida de lo que en 868 se resuelve con
+> clase C multicast.
+
+#### 3.3 Los tres regímenes, juntos — y lo que sólo se ve al cruzarlos
+
+| | **2,4 GHz** · Zigbee | **868 MHz** · LoRa y Wi-SUN |
+|---|---|---|
+| norma | EN 300 328 V2.2.2 | EN 300 220-1/-2 |
+| potencia máx | **100 mW** (20 dBm) | 25 mW · **500 mW** sólo en 869,400–869,650 |
+| **ventana de observación** | **1 segundo** | **1 hora** |
+| ciclo de trabajo | sólo si **no** adaptativo | 0,1 / 1 / 10 % **según sub-banda** |
+| la alternativa | adaptividad (LBT/DAA): **sin presupuesto acumulado** | acceso educado: **100 s/h por 200 kHz** |
+| máximo por transmisión | ocupación de canal **1–10 ms** | **1 s** (4 s en diálogo) |
+| vía para una orden de control | **señalización corta, sin CCA** | clase C multicast (LoRa) · MPL (Wi-SUN) |
+
+**EL RESULTADO, que no está en ninguna de las dos normas por separado:**
+
+El Zigbee de hoy sondea cada TCU **cada 18 s** —medido el 2026-09-24, 80 de 84
+TCU en ese valor exacto—. A 2,4 GHz **nada en la norma le pone techo a ese
+ritmo**: lo que lo limita es la ocupación instantánea y la contienda del medio,
+que son problemas de diseño de red, no de regulación.
+
+En 868, **los mismos 18 s obligan a SF ≤ 8** con ciclo del 1 %, o **SF ≤ 10**
+con acceso educado (§3.2). Y ahí **LoRa ya no tiene los 16 dB** de ventaja en
+sensibilidad, que vivían en SF12 (§3.1).
+
+> **Así que el salto a sub-giga no es sólo un cambio de alcance: es un cambio de
+> régimen regulatorio que acota el ritmo.** Esa es la frase que el §6 necesita, y
+> no sale de comparar sensibilidades: sale de comparar las dos normas.
+
+**Lo que esto NO dice**, y conviene fijarlo: ninguna de las dos normas dice cada
+cuánto puede hablar *la flota*. Acotan potencia y ocupación por equipo. El ritmo
+agregado lo decide el diseño de la red —unicast contra broadcast, profundidad de
+malla, contienda—, y eso sigue siendo lo del §2.3 y el cronómetro del §5.
+
 ### LoRa EU868
 
 * Clase C multicast: el nodo escucha siempre, así que la orden llega en una

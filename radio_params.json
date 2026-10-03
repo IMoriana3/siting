@@ -346,6 +346,14 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "250 kbps, la tasa PHY de 802.15.4 en 2,4 GHz (O-QPSK). DECLARADO POR INAKI el 2026-09-24, no leido del IEEE 802.15.4: por eso la clase es `declarado` y no `norma`. Cuando se cite el estandar (documento, version, pagina, fecha) pasa a `norma` y la cita se rellena."
+        },
+        "ciclo_trabajo": {
+          "clase": "leido",
+          "documento": "ETSI EN 300 328 V2.2.2 (2019-07), clausulas 4.3.2.2 a 4.3.2.6",
+          "version": "V2.2.2 (2019-07)",
+          "pagina": "29-35",
+          "leido_el": "2026-10-03",
+          "_de_donde": "Resuelto. A 2,4 GHz el ciclo solo aplica a equipo NO adaptativo; Zigbee hace CSMA/CA. Ver `regimen_regulatorio_eu`."
         }
       },
       "_pendiente_fase_2": "El encargo pide Ptx y sensibilidad del DATASHEET DEL MODELO EXACTO, citado. Esto de aquí es el valor que ya usaba el repo, no una lectura de datasheet: se sustituye en la fase 2 y hasta entonces la variante va rotulada como heredada, no como verificada.",
@@ -373,7 +381,106 @@
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "regimen_regulatorio_eu": {
+        "_RESUELTO_EL": "2026-10-03. Zigbee es NO-FHSS (DSSS), asi que le aplica la clausula 4.3.2, no la 4.3.1.",
+        "banda_hz": [
+          2400000000.0,
+          2483500000.0
+        ],
+        "potencia_max_dbm_eirp": 20,
+        "_potencia_cita": {
+          "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+          "version": "V2.2.2 (2019-07)",
+          "clausula": "4.3.2.2.3",
+          "pagina": 29,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+        },
+        "densidad_espectral_max_dbm_por_mhz": 10,
+        "_densidad_cita": {
+          "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+          "version": "V2.2.2 (2019-07)",
+          "clausula": "4.3.2.3.3",
+          "pagina": 29,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+        },
+        "_LA_VENTANA_ES_DE_UN_SEGUNDO": [
+          "DIFERENCIA DE FONDO CON 868, y no es un detalle: aqui el ciclo de trabajo se",
+          "define sobre un periodo de observacion de UN SEGUNDO (4.3.2.4.2), mientras que",
+          "en EN 300 220-1 (5.4.1) son UNA HORA. Son restricciones de naturaleza distinta:",
+          "alla un presupuesto a largo plazo, aqui una ocupacion instantanea.",
+          "Comparar «1 %» de una banda con «10 %» de la otra sin decir sobre que ventana",
+          "es mezclar dos magnitudes que solo comparten el simbolo de porcentaje."
+        ],
+        "ciclo_trabajo": {
+          "_aplicabilidad": "SOLO a equipo NO ADAPTATIVO, o a adaptativo operando en modo no adaptativo (4.3.2.4.1). Zigbee hace CSMA/CA, que es LBT: es adaptativo.",
+          "tobs_s": 1,
+          "tx_sequence_max_ms": 10,
+          "tx_gap_min_ms": 3.5,
+          "_tx_gap": "El hueco posterior ha de igualar la duracion de la secuencia que lo precede, con un minimo de 3,5 ms.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.4.3",
+            "pagina": 30,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "medium_utilization": {
+          "formula": "MU = (Pout / 100 mW) x DC",
+          "max_pct": 10,
+          "_aplicabilidad": "NO aplica a equipo adaptativo salvo que opere en modo no adaptativo. Y NO aplica a equipo con potencia declarada por debajo de 10 dBm e.i.r.p.",
+          "_LO_QUE_SIGNIFICA": "Cambia con la potencia: a 20 dBm (100 mW) el ciclo queda acotado al 10 %; a 10 dBm (10 mW) la formula da DC <= 100 %, o sea sin restriccion practica; y por debajo de 10 dBm el requisito NO APLICA. La norma compra tiempo con potencia.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.5",
+            "pagina": 31,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "adaptividad_lbt": {
+          "cca_min_us": 18,
+          "channel_occupancy_min_ms": 1,
+          "channel_occupancy_max_ms": 10,
+          "idle_period_min_pct_del_cot": 5,
+          "umbral_cca_dbm_por_mhz_a_20dbm": -70,
+          "umbral_cca_relajacion": "TL = -70 dBm/MHz + 10 x log10(100 mW / Pout), con Pout en mW e.i.r.p.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.6.3.2.2",
+            "pagina": 32,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "senalizacion_de_control_corta": {
+          "_que_es": "Transmisiones de control y gestion que el equipo adaptativo puede enviar SIN ESCUCHAR el canal.",
+          "max_pct": 10,
+          "ventana_ms": 50,
+          "_POR_QUE_IMPORTA_AQUI": "UNA ORDEN DE STOW ES EXACTAMENTE ESTO: control, corto, raro. A 2,4 GHz tiene via regulatoria propia, sin CCA previa, hasta el 10 % en cualquier ventana de 50 ms. Es la contrapartida de lo que en 868 se resuelve con clase C multicast.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.6.4.2",
+            "pagina": 35,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "_LO_QUE_ESTO_NO_DICE": "No dice cada cuanto puede hablar la flota: eso lo decide la contienda del medio y el disenyo de la red, no la norma. La norma acota la ocupacion instantanea y la potencia, y para el equipo adaptativo NO fija presupuesto acumulado."
+      }
     },
     "zigbee_std_24": {
       "procedencia": "heredado",
@@ -449,12 +556,119 @@
           "pagina": null,
           "leido_el": null,
           "_de_donde": "250 kbps, la tasa PHY de 802.15.4 en 2,4 GHz (O-QPSK). DECLARADO POR INAKI el 2026-09-24, no leido del IEEE 802.15.4: por eso la clase es `declarado` y no `norma`. Cuando se cite el estandar (documento, version, pagina, fecha) pasa a `norma` y la cita se rellena."
+        },
+        "ciclo_trabajo": {
+          "clase": "leido",
+          "documento": "ETSI EN 300 328 V2.2.2 (2019-07), clausulas 4.3.2.2 a 4.3.2.6",
+          "version": "V2.2.2 (2019-07)",
+          "pagina": "29-35",
+          "leido_el": "2026-10-03",
+          "_de_donde": "Resuelto. A 2,4 GHz el ciclo solo aplica a equipo NO adaptativo; Zigbee hace CSMA/CA. Ver `regimen_regulatorio_eu`."
         }
       },
       "carga_util_b": 44,
       "periodo_s": 30,
       "tasa_serie_bps": 19200,
-      "tasa_bps": 250000
+      "tasa_bps": 250000,
+      "regimen_regulatorio_eu": {
+        "_RESUELTO_EL": "2026-10-03. Zigbee es NO-FHSS (DSSS), asi que le aplica la clausula 4.3.2, no la 4.3.1.",
+        "banda_hz": [
+          2400000000.0,
+          2483500000.0
+        ],
+        "potencia_max_dbm_eirp": 20,
+        "_potencia_cita": {
+          "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+          "version": "V2.2.2 (2019-07)",
+          "clausula": "4.3.2.2.3",
+          "pagina": 29,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+        },
+        "densidad_espectral_max_dbm_por_mhz": 10,
+        "_densidad_cita": {
+          "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+          "version": "V2.2.2 (2019-07)",
+          "clausula": "4.3.2.3.3",
+          "pagina": 29,
+          "leido_el": "2026-10-03",
+          "leido_por": "esta sesion, del PDF de etsi.org",
+          "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+        },
+        "_LA_VENTANA_ES_DE_UN_SEGUNDO": [
+          "DIFERENCIA DE FONDO CON 868, y no es un detalle: aqui el ciclo de trabajo se",
+          "define sobre un periodo de observacion de UN SEGUNDO (4.3.2.4.2), mientras que",
+          "en EN 300 220-1 (5.4.1) son UNA HORA. Son restricciones de naturaleza distinta:",
+          "alla un presupuesto a largo plazo, aqui una ocupacion instantanea.",
+          "Comparar «1 %» de una banda con «10 %» de la otra sin decir sobre que ventana",
+          "es mezclar dos magnitudes que solo comparten el simbolo de porcentaje."
+        ],
+        "ciclo_trabajo": {
+          "_aplicabilidad": "SOLO a equipo NO ADAPTATIVO, o a adaptativo operando en modo no adaptativo (4.3.2.4.1). Zigbee hace CSMA/CA, que es LBT: es adaptativo.",
+          "tobs_s": 1,
+          "tx_sequence_max_ms": 10,
+          "tx_gap_min_ms": 3.5,
+          "_tx_gap": "El hueco posterior ha de igualar la duracion de la secuencia que lo precede, con un minimo de 3,5 ms.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.4.3",
+            "pagina": 30,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "medium_utilization": {
+          "formula": "MU = (Pout / 100 mW) x DC",
+          "max_pct": 10,
+          "_aplicabilidad": "NO aplica a equipo adaptativo salvo que opere en modo no adaptativo. Y NO aplica a equipo con potencia declarada por debajo de 10 dBm e.i.r.p.",
+          "_LO_QUE_SIGNIFICA": "Cambia con la potencia: a 20 dBm (100 mW) el ciclo queda acotado al 10 %; a 10 dBm (10 mW) la formula da DC <= 100 %, o sea sin restriccion practica; y por debajo de 10 dBm el requisito NO APLICA. La norma compra tiempo con potencia.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.5",
+            "pagina": 31,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "adaptividad_lbt": {
+          "cca_min_us": 18,
+          "channel_occupancy_min_ms": 1,
+          "channel_occupancy_max_ms": 10,
+          "idle_period_min_pct_del_cot": 5,
+          "umbral_cca_dbm_por_mhz_a_20dbm": -70,
+          "umbral_cca_relajacion": "TL = -70 dBm/MHz + 10 x log10(100 mW / Pout), con Pout en mW e.i.r.p.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.6.3.2.2",
+            "pagina": 32,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "senalizacion_de_control_corta": {
+          "_que_es": "Transmisiones de control y gestion que el equipo adaptativo puede enviar SIN ESCUCHAR el canal.",
+          "max_pct": 10,
+          "ventana_ms": 50,
+          "_POR_QUE_IMPORTA_AQUI": "UNA ORDEN DE STOW ES EXACTAMENTE ESTO: control, corto, raro. A 2,4 GHz tiene via regulatoria propia, sin CCA previa, hasta el 10 % en cualquier ventana de 50 ms. Es la contrapartida de lo que en 868 se resuelve con clase C multicast.",
+          "_cita": {
+            "documento": "ETSI EN 300 328 — Sistemas de transmision de banda ancha en 2,4 GHz con modulacion de banda ancha",
+            "version": "V2.2.2 (2019-07)",
+            "clausula": "4.3.2.6.4.2",
+            "pagina": 35,
+            "leido_el": "2026-10-03",
+            "leido_por": "esta sesion, del PDF de etsi.org",
+            "sha256_del_pdf": "35211bae77e40e835908d1b8757e82bbbb8895aee71d5e0a0a22131d4101a376"
+          }
+        },
+        "_LO_QUE_ESTO_NO_DICE": "No dice cada cuanto puede hablar la flota: eso lo decide la contienda del medio y el disenyo de la red, no la norma. La norma acota la ocupacion instantanea y la potencia, y para el equipo adaptativo NO fija presupuesto acumulado."
+      }
     },
     "_las_dos_de_sub_giga": [
       "LoRa Y Wi-SUN ENTRAN DECLARADAS Y APAGADAS, a propósito.",
