@@ -117,14 +117,19 @@ const seg = ((Date.now() - t0) / 1000).toFixed(1);
 
 /* ── LA TABLA ───────────────────────────────────────────────────────────── */
 const tecs = tabla.tecnologias;
-const pad = (s, n) => String(s).padEnd(n).slice(0, n);
-const pd = (s, n) => String(s).padStart(n).slice(-n);
+
+/* EL FORMATEO SALE DE `_render_tabla.js`, NO DE AQUÍ. Lo que había aquí
+   —`padStart(n).slice(-n)`— decapitaba los números que no cabían: la
+   ocupación del serie, 0,0611 %, se publicaba como "111111111111111". El
+   porqué, con la medida y el caso que no salta a la vista, está en la cabecera
+   de ese fichero; y `tests/test_render_tabla.js` lo vigila con mutación. */
+const { pd, pi: pad, paraLaVista } = require(path.join(RAIZ, 'tools', '_render_tabla.js'));
 
 function texto(c) {
   if (!c) return '—';
   if (c.min == null) return 'no se puede';
-  if (c.min === c.max) return String(c.min);
-  return c.min + '–' + c.max;
+  if (c.min === c.max) return paraLaVista(c.min);
+  return paraLaVista(c.min) + '–' + paraLaVista(c.max);
 }
 
 console.log(pad('criterio', 42) + tecs.map(t => pd(t.slice(0, 13), 15)).join('') + '   veredicto');
