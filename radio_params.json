@@ -919,7 +919,7 @@
             "cr": null,
             "sens_dbm": -122,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -936,7 +936,7 @@
             "cr": null,
             "sens_dbm": -137,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -953,7 +953,7 @@
             "cr": null,
             "sens_dbm": -119,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -970,7 +970,7 @@
             "cr": null,
             "sens_dbm": -134,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -987,7 +987,7 @@
             "cr": null,
             "sens_dbm": -116,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -1004,7 +1004,7 @@
             "cr": null,
             "sens_dbm": -131,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -1021,7 +1021,7 @@
             "cr": "4/5",
             "sens_dbm": -136,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -1038,7 +1038,7 @@
             "cr": "4/5",
             "sens_dbm": -133,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -1055,7 +1055,7 @@
             "cr": "4/5",
             "sens_dbm": -130,
             "criterio": null,
-            "_criterio_motivo": "NO CONSTA EN EL EXTRACTO. Las 25 filas de Wi-SUN de este fichero llevan el suyo (BER 1e-2, 10% PER, 1% PER con 127 octetos); estas no. Sin el, la comparacion entre tecnologias es indicativa y no concluyente: el propio cambio de criterio vale 2-3 dB.",
+            "_criterio_motivo": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER).",
             "_cita": {
               "documento": "SX1272/73 Datasheet — 860 MHz to 1020 MHz Low Power Long Range Transceiver (Semtech)",
               "version": "Rev. 3.1, marzo de 2017",
@@ -1146,7 +1146,8 @@
         "plan_de_canal": null,
         "_plan_de_canal_motivo": "La hoja REMITE a ERC 70-03 para las tolerancias de cristal por sub-banda europea (p. 27) pero NO publica el plan de canal. Sigue dependiendo de ETSI EN 300 220-2 y CEPT/ERC 70-03.",
         "certificacion_eu": null,
-        "_alcance_de_la_tabla": "SOLO LOS EXTREMOS. La Rev. 3.1 publica SF6 y SF12 de cada ancho de banda, no una fila por SF. LOS SF 7 A 11 NO ESTAN PUBLICADOS y NO SE INTERPOLAN: una interpolacion aqui seria un numero inventado con pinta de medido."
+        "_alcance_de_la_tabla": "SOLO LOS EXTREMOS. La Rev. 3.1 publica SF6 y SF12 de cada ancho de banda, no una fila por SF. LOS SF 7 A 11 NO ESTAN PUBLICADOS y NO SE INTERPOLAN: una interpolacion aqui seria un numero inventado con pinta de medido.",
+        "_criterio_ausente_en_la_hoja": "LA HOJA NO LO PUBLICA. Comprobado sobre el documento (Inaki, 2026-10-03): la tabla de sensibilidad LoRa de la Rev. 3.1 NO declara criterio de medida junto a la tabla. El unico criterio que la hoja declara es el del modo FSK, que es OTRA MAGNITUD y no sirve para estas filas. No es un dato pendiente de preguntar: es una ausencia del fabricante, y por eso el campo queda a null en vez de esperar. CONSECUENCIA, en FASE3_LATENCIA_STOW.md 3.1: con el campo ausente, el margen de 1,9 dB a 37.500 bps frente a Wi-SUN NO DECIDE --si fuese 10% PER gana LoRa por 1,9 dB; si fuese un BER comparable al de TI, la correccion de 2-3 dB lo invierte y gana Wi-SUN por 0,1 a 1,1--. El margen de 16 dB a 293 bps si se sostiene en los dos escenarios (16 dB con BER, 18-19 con PER)."
       }
     },
     "wisun_fan_863": {
