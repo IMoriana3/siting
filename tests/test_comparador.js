@@ -122,12 +122,40 @@ function TEC2() {
 }
 const fila = (k) => tabla.filas.find(f => f.criterio === k);
 
-/* REGLA 1 · un hueco no se rellena */
-for (const t of ['lora_eu868', 'wisun_fan_863', 'zigbee_std_24']) {
+/* REGLA 1 · un hueco no se rellena.
+   LA LISTA CAMBIÓ EL 2026-10-04, Y LA REGLA NO. `lora_eu868` salía aquí porque
+   estaba APAGADA —todo su balance a `null`—, no porque la regla hable de LoRa.
+   Ahora lleva un ESCENARIO DE REFERENCIA puesto a propósito, así que ya no es un
+   hueco y no sirve para medir qué pasa con los huecos. Los que quedan apagados
+   —Wi-SUN entero y la sensibilidad del Zigbee estándar— siguen midiéndolo igual.
+
+   Lo que NO se hace: bajar la exigencia a «alguna variante sin dato no da
+   número». La regla se comprueba sobre las que de verdad están sin dato, y si
+   algún día no quedara ninguna, este banco tiene que decir que no ha medido
+   nada en vez de pasar en verde — por eso el piso de abajo. */
+const APAGADAS = ['wisun_fan_863', 'zigbee_std_24'];
+check('quedan variantes apagadas con las que medir la regla (si no, esto no prueba nada)',
+      APAGADAS.length >= 2, APAGADAS.length);
+for (const t of APAGADAS) {
   const c = fila('tcu_cubiertas').celdas[t];
   check(t + ': sin sensibilidad NO sale número', c.valor === null && c.min === null, JSON.stringify(c.valor));
   check('  y dice qué le falta', /falta .*rx_sens_dbm/.test(c.motivo || ''), c.motivo);
 }
+
+/* REGLA 1 bis · Y EL ESCENARIO SÍ DA NÚMERO, PERO ROTULADO.
+   El riesgo nuevo que trae encender LoRa con un supuesto: que su columna se lea
+   como medida. El número tiene que salir —para eso se puso— y la procedencia
+   tiene que decir que es un escenario, no un dato de proyecto. */
+const cLora = fila('tcu_cubiertas').celdas.lora_eu868;
+check('lora_eu868: el escenario SÍ da número', cLora.min !== null, JSON.stringify(cLora.valor));
+check('  y la variante se declara como escenario de referencia',
+      TEC.lora_eu868.procedencia === 'escenario_de_referencia', TEC.lora_eu868.procedencia);
+check('  y su nombre lo dice, que es lo que se lee en la tabla',
+      /ESCENARIO DE REFERENCIA/.test(TEC.lora_eu868.nombre || ''), TEC.lora_eu868.nombre);
+check('  y la sensibilidad va rotulada como COTA DEL CHIP, no como medida del módulo',
+      /COTA SUPERIOR DEL CHIP/.test((TEC.lora_eu868._ESCENARIO_DE_REFERENCIA || []).join(' ')));
+check('  y queda escrito cómo retirarlo',
+      /PARA RETIRARLO/.test((TEC.lora_eu868._ESCENARIO_DE_REFERENCIA || []).join(' ')));
 check('zigbee_pro_24 SÍ sale, que es el que tiene los parámetros',
       fila('tcu_cubiertas').celdas.zigbee_pro_24.min === 4,
       JSON.stringify(fila('tcu_cubiertas').celdas.zigbee_pro_24));
@@ -299,8 +327,24 @@ for (const t of ['lora_eu868', 'wisun_fan_863']) {
   }
   check('las dos de Zigbee traen la capacidad RF y es la misma',
         TEC.zigbee_pro_24.tasa_bps === 250000 && TEC.zigbee_std_24.tasa_bps === 250000);
-  check('las dos de sub-giga NO se la inventan: va por SF y por modo PHY',
-        TEC.lora_eu868.tasa_bps === null && TEC.wisun_fan_863.tasa_bps === null);
+  /* LA CAPACIDAD RF DE SUB-GIGA NO ES UN NÚMERO DE LA TECNOLOGÍA: depende del SF
+     en LoRa y del modo PHY en Wi-SUN. Wi-SUN sigue a `null` porque nadie ha
+     elegido modo. LoRa ya trae un número, pero NO porque se haya inventado: es
+     el del modo CONCRETO del escenario de referencia —SF12/BW125— y la hoja del
+     chip lo publica. La regla sigue siendo que no se rellena sin elegir modo;
+     lo que ha cambiado es que en LoRa el modo está elegido y dicho. */
+  check('Wi-SUN NO se la inventa: sin modo PHY elegido, sigue a null',
+        TEC.wisun_fan_863.tasa_bps === null, TEC.wisun_fan_863.tasa_bps);
+  check('LoRa la trae porque su escenario ELIGE un modo, y es la del chip para ese modo',
+        TEC.lora_eu868.tasa_bps === 293, TEC.lora_eu868.tasa_bps);
+  check('  y ese modo está escrito, no es un número suelto',
+        /SF12\/BW125/.test(TEC.lora_eu868.nombre || ''), TEC.lora_eu868.nombre);
+  check('  y la tasa cuadra con la fila del chip para SF12/BW125',
+        (() => {
+          const f = (TEC.lora_eu868.cota_superior_del_chip.rx_sens_por_modo || [])
+            .find(x => x.sf === 12 && x.bw_hz === 125000);
+          return f && f.tasa_bps === TEC.lora_eu868.tasa_bps && f.sens_dbm === TEC.lora_eu868.rx_sens_dbm;
+        })(), 'la fila SF12/BW125 del chip tiene que dar 293 bps y -137 dBm');
   check('y el 250 kbps va como `declarado`, NO como `norma`: nadie ha citado el IEEE',
         TEC.zigbee_pro_24._citas.tasa_bps.clase === 'declarado',
         TEC.zigbee_pro_24._citas.tasa_bps.clase);
