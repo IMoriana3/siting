@@ -201,8 +201,18 @@ check('hoy el rótulo es SIN VERIFICAR, porque los parámetros son heredados',
       pr.rotulo === 'SIN VERIFICAR' && pr.nivel === 'heredado', pr.rotulo + ' / ' + pr.nivel);
 check('y dice CUÁL es el más débil, no sólo la clase',
       pr.peor.length > 0 && pr.peor.every(x => x.clase === 'heredado'));
-check('avisa de que el canal es desconocido y la potencia es cota superior',
-      pr.avisos.some(a => /canal/.test(a) && /cota superior/i.test(a)));
+/* EL CANAL SE LEYÓ EL 2026-10-05 (gateways de San José NCU 18: 15 y 19), así
+   que este aviso ya NO debe salir para la PRO: decía «hasta 16 dB de recorrido»
+   por no saber si era el 26, y ya se sabe que no. La regla sigue medida, pero
+   sobre una variante a la que de verdad le falta el canal. */
+check('con el canal leído, YA NO avisa de cota superior',
+      !pr.avisos.some(a => /canal/.test(a) && /cota superior/i.test(a)),
+      pr.avisos.join(' | '));
+const Vsc = Object.assign({}, V, { canal: { valor: null, procedencia: 'pendiente' } });
+const prSc = RadioZigbee.procedencia(PARAMS, Vsc, null);
+check('y a una variante SIN canal sí se lo avisa',
+      prSc.avisos.some(a => /canal/.test(a) && /cota superior/i.test(a)),
+      prSc.avisos.join(' | '));
 check('avisa de que sin sigma no hay probabilidad',
       pr.avisos.some(a => /sigma/.test(a) && /probabilidad/.test(a)));
 check('avisa de que la vegetación no está modelada',
