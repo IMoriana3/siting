@@ -591,6 +591,101 @@ es exacto:**
 > descarte** en vez de tirarlo callando. Que el único ajuste no físico esté en el
 > gateway averiado no es casualidad que este documento vaya a explicar.
 >
+> ## EL GATEWAY LLEVA SU PROPIO CONTADOR, Y DICE 8,4×. Medido el 2026-10-05.
+>
+> Se fue a buscar el **canal** y volvió bastante más. El `query_state` del RCI trae
+> un bloque `<zigbee_state>` con el estado de radio del coordinador, y preguntando
+> a los dos gateways de NCU 18 se puede **comparar el averiado contra el sano con
+> el mismo instrumento, el mismo día y la misma versión de todo**:
+>
+> | | **GW1** · TCU 1–38 | **GW2** · TCU 39–122 |
+> |---|---|---|
+> | canal | **15** (2425 MHz) | **19** (2445 MHz) |
+> | PAN | 0x4928 | 0xc463 |
+> | firmware / hardware | 0x4064 / 0x2e50 | **idénticos** |
+> | `tx_power` | 8 | 8 |
+> | `rssi` del último paquete | 82 | 84 |
+> | `children` | 20 | 20 |
+> | **`ack_failures`** | **30.805** | **1.227** |
+> | uptime | 857.024 s (9,9 d) | 287.962 s (3,3 d) |
+>
+> **EL CONTADOR CRUDO DICE 25×. NO ES 25×.** `ack_failures` es un acumulado desde
+> el arranque, y **GW1 lleva encendido 3,0 veces más**. Normalizado:
+>
+> ```
+>     GW1   30.805 / 857.024 s  =  129,4 fallos de ACK por hora
+>     GW2    1.227 / 287.962 s  =   15,3 fallos de ACK por hora
+>                                   ──────────────────────────
+>                                   factor 8,4
+> ```
+>
+> Un acumulado sin su tiempo no es una tasa. Publicar el 25 habría sido inflar el
+> resultado en un factor 3 por no mirar el `uptime`, que venía en el mismo volcado.
+>
+> **LO QUE ESTO SÍ ESTABLECE:** el gateway 1 falla **8,4 veces más** que el 2 en la
+> capa de radio, medido por el propio equipo, con **firmware, hardware, potencia
+> declarada y número de hijos idénticos** y con el nivel del último paquete casi
+> igual (82 contra 84). Ya no es «el propietario dice que va mal»: es una cifra.
+>
+> **Y UNA PIEZA QUE EMPUJA EN CONTRA DE LA EXPLICACIÓN FÁCIL.** Lo primero que uno
+> supone es interferencia de Wi-Fi. Pero los canales caen así:
+>
+> | | canal | MHz | contra el Wi-Fi |
+> |---|---|---|---|
+> | **GW1**, el averiado | 15 | 2425 | **FUERA** de los canales 1, 6 y 11 |
+> | **GW2**, el sano | 19 | 2445 | **DENTRO** del canal 6 (2426–2448) |
+>
+> O sea que **el gateway que falla está en el canal limpio y el que funciona está
+> metido en el Wi-Fi**. Si el problema de GW1 fuera Wi-Fi, esto tendría que salir
+> al revés. No lo descarta del todo —puede haber otro interferente, y esto depende
+> de que en esa planta haya Wi-Fi, que no consta— pero quita fuerza a la hipótesis
+> más cómoda.
+>
+> **LO QUE SIGUE SIN DECIDIRSE, y hay que decirlo:** 8,4× en fallos de ACK dice que
+> GW1 lo pasa mal, **no por qué**. Un ACK que no llega puede ser nivel bajo en el
+> nodo, un conector o una antena mala en el gateway, o un vecino ruidoso. El
+> `rssi` del volcado es **el del último paquete recibido, una sola muestra**, no
+> una distribución: no sirve para decidirlo. Para eso sigue haciendo falta el
+> censo por nodo con RSSI y LQI de las 122 TCU.
+>
+> **PERO EL CANAL YA NO ES CANDIDATO.** Ni 15 ni 19 son el 26, así que el castigo
+> de +19 a +3 dBm —dieciséis dB, más que cualquier otra cosa que este estudio
+> discuta— **no aplica a ninguno de los dos**. Esa pregunta queda cerrada.
+>
+> ### Y un número del equipo que contradice al del fichero
+>
+> Los dos gateways declaran **`tx_power` = 8**, y `radio_params.json` lleva
+> `ptx_dbm: 19` — que además es `heredado`, sin datasheet detrás.
+>
+> **No se ha cambiado nada, porque no se saben las unidades**: el campo puede ser
+> dBm o un índice de nivel, y no se ha encontrado documento que lo fije. Poner un
+> 8 porque el número coincide sería justo lo que esta cartera existe para impedir.
+>
+> Lo que estaría en juego, para que se vea por qué conviene resolverlo:
+>
+> * si son dBm, **todo el balance publicado lleva once dB de más**;
+> * y la fila de legalidad cambia de veredicto: con 19 + 3 dBi salen 22 dBm
+>   e.i.r.p. contra un límite de 20 —**NO CUMPLE**—, y con 8 + 3 salen 11, que
+>   cumple de sobra.
+>
+> Lo zanjaría la hoja del XBee-PRO que monta la planta, o un `ATPL`/`ATPP` por AT
+> contra el módulo.
+>
+> ### El volcado no está en el repositorio
+>
+> Trae `<private_community>` y `<public_community>` —cadenas SNMP, que son
+> credenciales— además de usuario, IP y MAC. Va su **sha256**
+> `c2a0f2a14a7fadc7ac9925f129a59f278b4303804f26b677581186d7f108bb30` y lo extraído;
+> el fichero no viaja. Misma regla que el Excel de direcciones.
+>
+> ### Cómo se obtuvo, que también es un resultado
+>
+> El PC de la planta **no deja ejecutar ficheros `.ps1`**. La política de ejecución
+> de Windows restringe los ficheros, no lo que se pega en una consola ya abierta,
+> así que se sacó con un trozo pegable —mismas llamadas RCI que
+> `zigbee_inventario.ps1`— sin tocar ninguna política ni pedir administrador. Está
+> en `Cobertura-Zigbee/docs/canal_sin_ps1.md`.
+
 > **Y LO QUE ESTO SIGUE SIN DECIDIR, que es el punto 4 del encargo:** POR QUÉ
 > falla GW1. La exportación de TCU **no trae ni una magnitud de radio**, así que
 > cruzar el retardo de cada TCU con su RSSI y sus saltos **sigue siendo

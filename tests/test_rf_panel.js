@@ -243,8 +243,10 @@ console.log('\n· lo que el panel puede ensenar');
         !!e.detalle.izquierda && !!e.detalle.derecha);
   check('la vegetacion sale NO MODELADA, no como 0 dB',
         e.vegetacionDb === null && e.motivos.indexOf('vegetacion_no_modelada') >= 0, e.motivos.join(','));
-  check('y el canal sin leer se declara cota superior',
-        e.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') >= 0, e.motivos.join(','));
+  // El canal se leyó el 2026-10-05 (15 y 19 en los gateways de San José NCU 18),
+  // así que la PRO ya no arrastra la cota superior de los 16 dB del canal 26.
+  check('con el canal leído, ya no se declara cota superior',
+        e.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') < 0, e.motivos.join(','));
   console.log('     (medido: ' + e.cruces.length + ' cruces · dominante en s=' +
               e.detalle.dominante.s.toFixed(1) + ' m con nu=' + e.detalle.dominante.nu.toFixed(3) +
               ' · difraccion ' + e.difraccionDb.toFixed(2) + ' dB · margen ' +

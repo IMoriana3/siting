@@ -234,14 +234,29 @@ check('la vegetación sale como NO MODELADA, no como 0 dB', pPro.vegetacionDb ==
 // EL CANAL. Entre el 26 y cualquier otro hay 16 dB de Ptx («Canal 26: máx +3»
 // dice el modelo congelado, frente a +19). Mientras no se lea del inventario,
 // el margen de la PRO es una COTA SUPERIOR y el motivo tiene que decirlo.
-check('sin canal leido, avisa de que la Ptx es una cota superior',
-      pPro.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') >= 0, pPro.motivos.join(','));
-check('el JSON declara el canal como pendiente, no lo supone',
-      PARAMS.tecnologias.zigbee_pro_24.canal.valor === null);
-const conCanal = Object.assign({}, PRO, { canal: { valor: 15 } });
-check('y con el canal leido, ese aviso desaparece',
-      ZB.presupuesto(enlace, conCanal, PROP, null)
-        .motivos.indexOf('canal_desconocido_ptx_es_cota_superior') < 0);
+// EL 2026-10-05 EL CANAL SE LEYÓ (del `zigbee_state` de los dos gateways de
+// San José NCU 18: 15 y 19), así que la PRO ya no es el ejemplo de canal
+// desconocido — es el ejemplo de lo contrario.
+check('la PRO ya tiene el canal leído, así que NO avisa de cota superior',
+      pPro.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') < 0, pPro.motivos.join(','));
+check('  y el JSON dice de dónde salió, no lo supone',
+      PARAMS.tecnologias.zigbee_pro_24.canal.procedencia === 'leido_del_gateway',
+      PARAMS.tecnologias.zigbee_pro_24.canal.procedencia);
+check('  y NO es el 26, que es el que costaba los 16 dB',
+      PARAMS.tecnologias.zigbee_pro_24.canal.valor !== 26);
+/* La regla —sin canal, la Ptx es cota superior— se mide ahora sobre la STD,
+   que sigue sin canal. Con la comprobación previa de que QUEDA alguna: si
+   algún día se leyeran todas, este banco tiene que decir que no ha medido
+   nada en vez de pasar en verde por haberse quedado sin caso. */
+check('queda alguna variante sin canal con la que medir la regla (si no, esto no prueba nada)',
+      STD.canal == null || STD.canal.valor == null,
+      JSON.stringify(STD.canal));
+check('y a ésa SÍ se le avisa de que la Ptx es una cota superior',
+      pStd.motivos.indexOf('canal_desconocido_ptx_es_cota_superior') >= 0, pStd.motivos.join(','));
+const sinCanal = Object.assign({}, PRO, { canal: { valor: null, procedencia: 'pendiente' } });
+check('y un `canal` que existe pero con el valor a null tampoco cuela: avisa igual',
+      ZB.presupuesto(enlace, sinCanal, PROP, null)
+        .motivos.indexOf('canal_desconocido_ptx_es_cota_superior') >= 0);
 console.log('     (medido: PRO ' + pPro.margenDb.toFixed(2) + ' dB de margen · pérdida total ' +
             pPro.perdidaTotalDb.toFixed(2) + ' dB, de los cuales ' +
             pPro.difraccionDb.toFixed(2) + ' de difracción)');

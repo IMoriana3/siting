@@ -183,13 +183,33 @@ check('«regimen_eu» NO figura como que falta en LoRa',
 // `canal` es `{valor: null, procedencia: "pendiente", _ojo: [...]}`. Mirar la
 // clave pelada da «está puesto». Y el canal decide el límite: el comentario del
 // modelo congelado dice «Canal 26: máx +3» frente a los +19 declarados.
-check('el canal de Zigbee PRO sigue sin saberse (si no, esto no probaría nada)',
-      R.valorDe(TEC.zigbee_pro_24, 'canal.valor') == null);
-check('pero el objeto `canal` SÍ existe, que es lo que hacía cuela el hueco',
-      TEC.zigbee_pro_24.canal != null);
-check('y el criterio dice que falta `canal.valor`',
-      R.loQueFalta(TEC.zigbee_pro_24, 'legalidad').indexOf('canal.valor') >= 0,
+/* EL CANAL YA SE LEYÓ (2026-10-05, del `zigbee_state` de los dos gateways de
+   San José NCU 18: 15 y 19). Así que `zigbee_pro_24` ya NO sirve de ejemplo de
+   hueco envuelto — y la regla que protegía sigue viva, sólo que ahora se mide
+   EN LAS DOS DIRECCIONES, que es más de lo que medía antes:
+     · con el canal puesto, el criterio NO lo pide;
+     · con el canal a null dentro de un objeto que existe, SÍ lo pide. */
+check('el canal de Zigbee PRO ya está leído', R.valorDe(TEC.zigbee_pro_24, 'canal.valor') != null,
+      R.valorDe(TEC.zigbee_pro_24, 'canal.valor'));
+check('  y es uno de los dos medidos en planta, 15 o 19',
+      [15, 19].indexOf(R.valorDe(TEC.zigbee_pro_24, 'canal.valor')) >= 0,
+      R.valorDe(TEC.zigbee_pro_24, 'canal.valor'));
+check('  y NO es el 26, que era el que costaba 16 dB',
+      R.valorDe(TEC.zigbee_pro_24, 'canal.valor') !== 26);
+check('con el canal puesto, el criterio ya no lo pide',
+      R.loQueFalta(TEC.zigbee_pro_24, 'legalidad').indexOf('canal.valor') < 0,
       JSON.stringify(R.loQueFalta(TEC.zigbee_pro_24, 'legalidad')));
+
+/* LA OTRA DIRECCIÓN, con una variante construida a propósito: un `canal` que
+   existe como objeto pero con el `valor` a null. Es el caso que hacía colar el
+   hueco antes de que `loQueFalta` bajara por rutas con puntos. */
+const sinCanal = clona(TEC.zigbee_pro_24);
+sinCanal.canal = { valor: null, procedencia: 'pendiente', _ojo: ['construido por el banco'] };
+check('un `canal` cuyo `valor` es null SÍ se pide', 
+      R.loQueFalta(sinCanal, 'legalidad').indexOf('canal.valor') >= 0,
+      JSON.stringify(R.loQueFalta(sinCanal, 'legalidad')));
+check('  aunque el objeto `canal` exista, que es lo que lo hacía colar',
+      sinCanal.canal != null);
 check('valorDe baja por la ruta con puntos', R.valorDe({ a: { b: 7 } }, 'a.b') === 7);
 check('valorDe no se rompe con la rama ausente', R.valorDe({}, 'a.b.c') === null);
 check('valorDe trata el 0 como PUESTO (0 dBm es una potencia)',
@@ -287,9 +307,11 @@ check('`unaTecnologia` llama a legalidadDe',
 // y extremo a extremo: con el canal puesto, la celda trae veredicto; sin él, motivo
 const conCanal = R.legalidadDe(zb);
 check('con el canal puesto, la celda trae veredicto', conCanal.min != null, conCanal.min);
-const sinCanal = clona(TEC.zigbee_pro_24);
 const faltaSin = R.loQueFalta(sinCanal, 'legalidad');
 check('sin el canal, el criterio lo NOMBRA en vez de callarse',
       faltaSin.length === 1 && faltaSin[0] === 'canal.valor', JSON.stringify(faltaSin));
+check('y con él puesto, Zigbee PRO ya no tiene nada que pedir para la legalidad',
+      R.loQueFalta(TEC.zigbee_pro_24, 'legalidad').length === 0,
+      JSON.stringify(R.loQueFalta(TEC.zigbee_pro_24, 'legalidad')));
 
 fin();
