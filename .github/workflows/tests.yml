@@ -305,6 +305,16 @@ jobs:
           # nadie los contaba: el dato estaba y no se leia.
           rojo node tests/test_censo_motivos.js sinDenominador sinPorcentaje sinMudos informeMudo
 
+          # EL ESTADO DE LOS DOS GATEWAYS. Las dos primeras mutaciones son el
+          # error que de verdad se cometio el 2026-10-05: comparar dos
+          # contadores acumulados desde arranques distintos (25,1x en vez de
+          # 8,4x) y quedarse en una sola normalizacion. `arranqueExacto` y
+          # `quizaEsNo` muerden la cuenta que decide si el contador vio el stow
+          # del 24-09; las dos son el vacio-como-PASS aplicado a una fecha.
+          rojo node tests/test_gateway_estado.js sinNormalizar sinNodos nodosInventados \
+                                                 canalCorrido todoIgual \
+                                                 arranqueExacto quizaEsNo
+
           # EL ARRANQUE DE CADA TCU EN UN STOW. Las cuatro primeras son las que
           # el banco sintetico encontro midiendo, no supuestas: sin la recta de
           # seguimiento salia +0,52 s de SESGO PURO (error medio y error
