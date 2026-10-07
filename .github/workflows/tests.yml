@@ -42,6 +42,7 @@ jobs:
         run: |
           url=https://github.com/IMoriana3/cobertura-zigbee.git
           [ -n "$TOK" ] && url="https://x-access-token:${TOK}@github.com/IMoriana3/cobertura-zigbee.git"
+          rm -rf ../Cobertura-Zigbee   # runner del NAS persistente: siempre limpio
           git clone --depth 1 -q "$url" ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
