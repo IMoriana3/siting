@@ -5,9 +5,13 @@ name: tests
 on:
   push:
   pull_request:
+# DONDE CORRE: `runs-on` sale de la variable de repositorio `RUNNER_TESTS`
+# (`nas` = el runner del Synology, ver docs/ci/RUNNER-NAS.md) y, si no esta
+# puesta, de `ubuntu-latest`. Desde 2026-10-07 el repo es PRIVADO y los
+# minutos de GitHub de la cuenta estan bloqueados por facturacion: va al NAS.
 jobs:
   node:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.RUNNER_TESTS && (startsWith(vars.RUNNER_TESTS, '[') && fromJSON(vars.RUNNER_TESTS) || vars.RUNNER_TESTS) || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,10 +32,17 @@ jobs:
       # con rc = 2 y el censo del final lo publica como NO COMPROBADO, que es
       # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
       # aprobado.
-      - name: el repo hermano, al lado (es publico)
+      # Desde 2026-10-07 el hermano es PRIVADO: el clon necesita el secreto
+      # REPOS_TOKEN (token de solo lectura, ver docs/ci/RUNNER-NAS.md). Sin el,
+      # se intenta anonimo, que solo vale si vuelve a ser publico.
+      - name: el repo hermano, al lado
         continue-on-error: true
+        env:
+          TOK: ${{ secrets.REPOS_TOKEN }}
         run: |
-          git clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
+          url=https://github.com/IMoriana3/cobertura-zigbee.git
+          [ -n "$TOK" ] && url="https://x-access-token:${TOK}@github.com/IMoriana3/cobertura-zigbee.git"
+          git clone --depth 1 -q "$url" ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
       # EL CORREDOR, que ya no mira solo el codigo de salida.

@@ -1,0 +1,29 @@
+# Runner propio de GitHub Actions para IMoriana3/siting en el Synology DS923+.
+# Mismo montaje que IMoriana3/SolarGPTfull ci/nas-runner/docker-compose.yml; cambian
+# el repo, el nombre del contenedor/runner, la carpeta y el tope de memoria.
+# Instrucciones: docs/ci/RUNNER-NAS.md.
+#
+# ⚠ Va al repo con el MARCADOR del token, nunca con un token real.
+services:
+  github-runner:
+    image: myoung34/github-runner:ubuntu-jammy
+    container_name: github-runner-siting
+    restart: unless-stopped
+    environment:
+      REPO_URL: https://github.com/IMoriana3/siting
+      RUNNER_SCOPE: repo
+      RUNNER_NAME: ds923-nas-siting
+      LABELS: nas
+      RUNNER_TOKEN: "PEGA_AQUI_EL_TOKEN_DE_REGISTRO"
+      RUNNER_WORKDIR: /runner/work
+      CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /runner/config
+      RUNNER_TOOL_CACHE: /runner/toolcache
+      AGENT_TOOLSDIRECTORY: /runner/toolcache
+      DISABLE_AUTOMATIC_DEREGISTRATION: "true"
+      # ⚠ NO definir EPHEMERAL, ni a "false": la imagen lo activa con cualquier valor.
+    volumes:
+      - /volume1/docker/github-runner-siting/runner:/runner
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    security_opt:
+      - no-new-privileges:true
