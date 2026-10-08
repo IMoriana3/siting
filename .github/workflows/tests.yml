@@ -28,10 +28,17 @@ jobs:
       # con rc = 2 y el censo del final lo publica como NO COMPROBADO, que es
       # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
       # aprobado.
-      - name: el repo hermano, al lado (es publico)
+      # 2026-10-08: cobertura-zigbee pasó a PRIVADO. El clon lleva el secreto
+      # LECTURA_TOKEN como cabecera de esa orden (no queda en la config); sin él,
+      # el clonado falla y los careos salen NO COMPROBADOS, como cualquier otro
+      # fallo de red.
+      - name: el repo hermano, al lado (privado desde 2026-10-08)
         continue-on-error: true
+        env:
+          LECTURA_TOKEN: ${{ secrets.LECTURA_TOKEN }}
         run: |
-          git clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
+          AUTH=(); [ -n "$LECTURA_TOKEN" ] && AUTH=(-c "http.extraHeader=Authorization: basic $(printf 'x-access-token:%s' "$LECTURA_TOKEN" | base64 -w0)")
+          git "${AUTH[@]}" clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
       # EL CORREDOR, que ya no mira solo el codigo de salida.
