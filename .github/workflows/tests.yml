@@ -5,9 +5,13 @@ name: tests
 on:
   push:
   pull_request:
+# DONDE CORRE: `runs-on` sale de la variable de repositorio `RUNNER_TESTS`
+# (`nas` = el runner del Synology, ver docs/ci/RUNNER-NAS.md) y, si no esta
+# puesta, de `ubuntu-latest`. Desde 2026-10-07 el repo es PRIVADO y los
+# minutos de GitHub de la cuenta estan bloqueados por facturacion: va al NAS.
 jobs:
   node:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.RUNNER_TESTS && (startsWith(vars.RUNNER_TESTS, '[') && fromJSON(vars.RUNNER_TESTS) || vars.RUNNER_TESTS) || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,16 +32,18 @@ jobs:
       # con rc = 2 y el censo del final lo publica como NO COMPROBADO, que es
       # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
       # aprobado.
-      # 2026-10-08: cobertura-zigbee pasó a PRIVADO. El clon lleva el secreto
-      # LECTURA_TOKEN como cabecera de esa orden (no queda en la config); sin él,
-      # el clonado falla y los careos salen NO COMPROBADOS, como cualquier otro
-      # fallo de red.
-      - name: el repo hermano, al lado (privado desde 2026-10-08)
+      # Desde 2026-10-07 el hermano es PRIVADO: el clon necesita el secreto
+      # REPOS_TOKEN o LECTURA_TOKEN (solo lectura, ver docs/ci/RUNNER-NAS.md). Sin el,
+      # se intenta anonimo, que solo vale si vuelve a ser publico.
+      - name: el repo hermano, al lado
         continue-on-error: true
         env:
-          LECTURA_TOKEN: ${{ secrets.LECTURA_TOKEN }}
+          TOK: ${{ secrets.REPOS_TOKEN || secrets.LECTURA_TOKEN }}
         run: |
-          AUTH=(); [ -n "$LECTURA_TOKEN" ] && AUTH=(-c "http.extraHeader=Authorization: basic $(printf 'x-access-token:%s' "$LECTURA_TOKEN" | base64 -w0)")
+          # El token va como cabecera de ESTA orden (forma de main, a8e4a4a): no
+          # queda en la config del clon, que en el NAS persiste en disco.
+          AUTH=(); [ -n "$TOK" ] && AUTH=(-c "http.extraHeader=Authorization: basic $(printf 'x-access-token:%s' "$TOK" | base64 -w0)")
+          rm -rf ../Cobertura-Zigbee   # runner del NAS persistente: siempre limpio
           git "${AUTH[@]}" clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
