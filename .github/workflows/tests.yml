@@ -33,17 +33,18 @@ jobs:
       # distinto de verde. Un fallo de red no es un hallazgo, pero tampoco un
       # aprobado.
       # Desde 2026-10-07 el hermano es PRIVADO: el clon necesita el secreto
-      # REPOS_TOKEN (token de solo lectura, ver docs/ci/RUNNER-NAS.md). Sin el,
+      # REPOS_TOKEN o LECTURA_TOKEN (solo lectura, ver docs/ci/RUNNER-NAS.md). Sin el,
       # se intenta anonimo, que solo vale si vuelve a ser publico.
       - name: el repo hermano, al lado
         continue-on-error: true
         env:
-          TOK: ${{ secrets.REPOS_TOKEN }}
+          TOK: ${{ secrets.REPOS_TOKEN || secrets.LECTURA_TOKEN }}
         run: |
-          url=https://github.com/IMoriana3/cobertura-zigbee.git
-          [ -n "$TOK" ] && url="https://x-access-token:${TOK}@github.com/IMoriana3/cobertura-zigbee.git"
+          # El token va como cabecera de ESTA orden (forma de main, a8e4a4a): no
+          # queda en la config del clon, que en el NAS persiste en disco.
+          AUTH=(); [ -n "$TOK" ] && AUTH=(-c "http.extraHeader=Authorization: basic $(printf 'x-access-token:%s' "$TOK" | base64 -w0)")
           rm -rf ../Cobertura-Zigbee   # runner del NAS persistente: siempre limpio
-          git clone --depth 1 -q "$url" ../Cobertura-Zigbee \
+          git "${AUTH[@]}" clone --depth 1 -q https://github.com/IMoriana3/cobertura-zigbee.git ../Cobertura-Zigbee \
             && echo "hermano clonado: $(du -sh ../Cobertura-Zigbee | cut -f1)" \
             || echo "SIN HERMANO: el clonado fallo. Los careos saldran con rc = 2."
       # EL CORREDOR, que ya no mira solo el codigo de salida.
