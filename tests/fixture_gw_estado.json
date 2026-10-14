@@ -1,0 +1,92 @@
+{
+  "_que_es_esto": [
+    "LAS MAGNITUDES DEL `zigbee_state` DE LOS DOS GATEWAYS DE SAN JOSE NCU 18,",
+    "extraidas del volcado que volvio de planta el 2026-10-05. Esta ficha existe",
+    "porque EL VOLCADO NO PUEDE SUBIR AL REPOSITORIO: su `query_setting` lleva las",
+    "dos CADENAS DE COMUNIDAD SNMP -la de lectura y la de escritura, que son",
+    "credenciales- y el nombre de usuario. Aqui va SOLO lo que hace falta para",
+    "rehacer las cuentas publicadas, y ni una cosa mas.",
+    "",
+    "Y NO SE ESCRIBEN AQUI NI LOS NOMBRES DE ESAS ETIQUETAS, a proposito: la guarda",
+    "de `tests/test_gateway_estado.js` busca sus literales en este fichero y no",
+    "distingue una credencial de una mencion. Eso es lo que se quiere. Una guarda de",
+    "credenciales que se pueda sortear escribiendo prosa alrededor no sirve, asi que",
+    "el precio -no poder nombrarlas- se paga y se deja dicho por que.",
+    "",
+    "LO QUE SE HA DEJADO FUERA A PROPOSITO: el `gateway_addr` (la MAC de cada",
+    "coordinador) y todo el `query_setting`. Las MAC no hacen falta para ninguna de",
+    "las cuentas: que son dos equipos distintos ya lo dicen los dos PAN.",
+    "",
+    "HUELLA DEL VOLCADO del que sale esto, para que se pueda carear si alguien lo",
+    "tiene delante:",
+    "  sha256 = c2a0f2a14a7fadc7ac9925f129a59f278b4303804f26b677581186d7f108bb30",
+    "  nombre = zigbee_canal.xml   ·   fecha = 2026-10-05"
+  ],
+  "_como_se_extrajo": [
+    "Un aviso para quien repita la extraccion: la respuesta RCI del gateway lleva su",
+    "PROPIA etiqueta `<gateway>` -la puerta de enlace IP de la seccion de red-, asi",
+    "que `</gateway>` aparece 8 veces en un volcado de 4 bloques. Partir por",
+    "`<gateway nombre=\"` (la etiqueta CON atributos) y no por el cierre.",
+    "Costo un KeyError antes de verlo."
+  ],
+  "_nodos_de_donde_salen": [
+    "El reparto TCU->gateway NO sale de este volcado: sale del volcado del stow del",
+    "2026-09-24 y del `ncu`/`gw` por tracker del replanteo, que coincidieron",
+    "2289/2289. GW1 lleva las TCU 1-38 y GW2 las 39-122."
+  ],
+  "gateways": [
+    {
+      "nombre": "SJ-NCU18-GW1",
+      "papel": "el averiado: los 13 fallos de orden del stow del 2026-09-24",
+      "tcu": [1, 38],
+      "nodos": 38,
+      "canal": 15,
+      "pan_id": "0x4928",
+      "ext_pan_id": "0x2026010240191801",
+      "ack_failures": 30805,
+      "uptime_s": 857024,
+      "children": 20,
+      "rssi": 82,
+      "supply_voltage_mv": 3371,
+      "tx_power": 8,
+      "firmware_version": "0x4064",
+      "hardware_version": "0x2e50",
+      "device_type": "0xa0003",
+      "caps": "0x17f",
+      "max_payload": 255,
+      "association": "0x0",
+      "net_addr": "0x0",
+      "parent_addr": "0xfffe"
+    },
+    {
+      "nombre": "SJ-NCU18-GW2",
+      "papel": "el control: los 75 stows medidos, cero fallos",
+      "tcu": [39, 122],
+      "nodos": 84,
+      "canal": 19,
+      "pan_id": "0xc463",
+      "ext_pan_id": "0x2026010240191802",
+      "ack_failures": 1227,
+      "uptime_s": 287962,
+      "children": 20,
+      "rssi": 84,
+      "supply_voltage_mv": 3365,
+      "tx_power": 8,
+      "firmware_version": "0x4064",
+      "hardware_version": "0x2e50",
+      "device_type": "0xa0003",
+      "caps": "0x17f",
+      "max_payload": 255,
+      "association": "0x0",
+      "net_addr": "0x0",
+      "parent_addr": "0xfffe"
+    }
+  ],
+  "_el_reloj_no_existe": [
+    "Los dos gateways dan `datetime = ... 1970 (based on uptime)`. No tienen NTP ni",
+    "reloj con pila: su fecha es el uptime contado desde 1970. Consecuencia para",
+    "cualquier cuenta que se haga con sus contadores: LA UNICA BASE DE TIEMPO",
+    "DISPONIBLE ES `uptime`, y nada de lo que publican se puede fechar para carearlo",
+    "con la exportacion de SCADA."
+  ]
+}

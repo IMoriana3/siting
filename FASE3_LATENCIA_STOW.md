@@ -622,10 +622,70 @@ es exacto:**
 > Un acumulado sin su tiempo no es una tasa. Publicar el 25 habría sido inflar el
 > resultado en un factor 3 por no mirar el `uptime`, que venía en el mismo volcado.
 >
-> **LO QUE ESTO SÍ ESTABLECE:** el gateway 1 falla **8,4 veces más** que el 2 en la
-> capa de radio, medido por el propio equipo, con **firmware, hardware, potencia
-> declarada y número de hijos idénticos** y con el nivel del último paquete casi
-> igual (82 contra 84). Ya no es «el propietario dice que va mal»: es una cifra.
+> ### Y HAY UNA SEGUNDA NORMALIZACIÓN, que no es obvio cuál toca
+>
+> **GW1 lleva 38 TCU y GW2 lleva 84.** Si el tráfico escala con el número de nodos,
+> comparar fallos por segundo compara una red de 38 contra una de 84, y lo que hay
+> que comparar es **fallos por nodo**:
+>
+> ```
+>     GW1   3.105,6 fallos/día  /  38 TCU  =  81,73 por TCU y día
+>     GW2     368,1 fallos/día  /  84 TCU  =   4,38 por TCU y día
+>                                             ─────────────────────
+>                                             factor 18,6
+> ```
+>
+> **Las dos cuentas se publican con su supuesto, porque no se sabe cómo escala el
+> sondeo** —si la NCU pregunta a ritmo fijo, el tráfico total es parecido y vale el
+> 8,4; si pregunta nodo a nodo, escala y vale el 18,6:
+>
+> | cifra | qué supone | vale si |
+> |---|---|---|
+> | **8,4 ×** | los dos gateways cursan tráfico comparable | el sondeo va por NCU a ritmo fijo |
+> | **18,6 ×** | el tráfico escala con el número de nodos | el sondeo va nodo a nodo |
+> | ~~25,1 ×~~ | **nada**: es el error de no normalizar | nunca |
+>
+> O sea: **entre 8 y 19 veces peor**, y el intervalo no se puede estrechar sin saber
+> cómo sondea la NCU. Lo que no cambia en todo el intervalo es el signo.
+>
+> **LO QUE ESTO SÍ ESTABLECE:** el gateway 1 falla **entre 8 y 19 veces más** que el
+> 2 en la capa de radio, medido por el propio equipo, con **todo lo configurable
+> idéntico** y con el nivel del último paquete casi igual (82 contra 84). Ya no es
+> «el propietario dice que va mal»: es una cifra.
+>
+> **Y «todo lo configurable» es literal**, que es lo que hace esta comparación
+> valiosa — descarta cuatro causas de un golpe:
+>
+> | campo | GW1 | GW2 | lo que descarta |
+> |---|---|---|---|
+> | `firmware_version` | 0x4064 | 0x4064 | no es una versión distinta |
+> | `hardware_version` | 0x2e50 | 0x2e50 | no es otro modelo |
+> | `device_type` | 0xa0003 | 0xa0003 | no es otro papel en la red |
+> | `caps` | 0x17f | 0x17f | no es otro juego de capacidades |
+> | `max_payload` | 255 | 255 | no es un tamaño de trama distinto |
+> | `tx_power` | 8 | 8 | **no es un ajuste de potencia de sitio** |
+> | `supply_voltage` | 3371 mV | 3365 mV | **6 mV, el 0,18 %: no es la alimentación** |
+>
+> **Lo único que difiere es el canal, el PAN, el uptime y el contador.** Nada más.
+>
+> ### UNA CORRECCIÓN A LO QUE ESTE APARTADO DECÍA: el `children` no vale de prueba
+>
+> La primera versión de este apartado puso «**número de hijos idénticos**» en la
+> lista de cosas iguales, como si fuera una pieza más del argumento. **No lo es, y
+> conviene explicar por qué para no volver a usarla.**
+>
+> Los dos dicen `children` = **20**. Pero GW1 lleva **38** TCU y GW2 lleva **84**:
+> dos redes con 2,2 veces distinto número de nodos no pueden dar el mismo número de
+> hijos por casualidad. Ese 20 está **topado por la tabla de hijos del
+> coordinador**, no medido — y de hecho 20 < 38, así que ni en GW1 cuadra con los
+> nodos que tiene. La mayoría de las TCU cuelgan de routers, no del coordinador.
+>
+> **Consecuencia práctica:** `children` **no dice cuántos nodos están vivos**, y
+> leerlo como «20 de 38 en pie» sería inventarse una avería o descartarla sin dato.
+> Para saber cuántos contestan hace falta el recorrido nodo a nodo.
+>
+> Que los dos coincidan no es, por tanto, evidencia de nada. Lo que sí es evidencia
+> está en la tabla de arriba.
 >
 > **Y UNA PIEZA QUE EMPUJA EN CONTRA DE LA EXPLICACIÓN FÁCIL.** Lo primero que uno
 > supone es interferencia de Wi-Fi. Pero los canales caen así:
@@ -641,12 +701,86 @@ es exacto:**
 > de que en esa planta haya Wi-Fi, que no consta— pero quita fuerza a la hipótesis
 > más cómoda.
 >
+> ## NINGUNO DE LOS DOS CONTADORES VIO EL STOW DEL 24-09
+>
+> Esto hay que decirlo antes de que alguien lea los 30 805 fallos como «los fallos
+> de aquel día», porque **no lo son**. Los dos gateways han arrancado DESPUÉS.
+>
+> El equipo no tiene reloj: su `datetime` sale `Sat Jan 10 22:03:44 1970 (based on
+> uptime)`, o sea **contado desde 1970 porque no hay NTP ni pila**. Así que lo único
+> con lo que se puede situar un arranque es restar el `uptime` del momento del
+> volcado — y del volcado se sabe **el día, no la hora**. Eso da una ventana de 24
+> horas, no un instante, y hay que razonar sobre la ventana:
+>
+> | | uptime | arrancó entre | ¿vio el 24-09? |
+> |---|---|---|---|
+> | **GW1** | 857.024 s = 9,92 d | **25-sep 01:56** y 26-sep 01:56 | **NO** |
+> | **GW2** | 287.962 s = 3,33 d | **1-oct 16:00** y 2-oct 16:00 | **NO** |
+>
+> **La respuesta no depende de la hora que no se sabe**: incluso con el arranque más
+> temprano de la ventana, GW1 empezó a contar **un día después** del stow. Las dos
+> ventanas caen enteras después del 24.
+>
+> **Y eso no debilita el hallazgo: lo refuerza.** Los 8,4× (o 18,6×) no son una
+> radiografía del incidente de hace once días — son **lo que GW1 está haciendo
+> ahora**. La avería no fue un episodio del 24 de septiembre que ya pasó: **sigue
+> viva**, y se puede medir cualquier día sin esperar a otro stow.
+>
+> **Un cabo que conviene tirar:** GW1 arrancó **el día siguiente** al stow fallido.
+> O lo reiniciaron a mano al ver los 13 fallos, o se reinició solo. Lo primero es
+> una intervención que no consta en ningún sitio; lo segundo sería un síntoma por
+> derecho propio. **Merece la pregunta en planta**, y no se puede resolver desde
+> aquí: con el reloj a 1970 el equipo no guarda la fecha de su propio arranque.
+>
+> ### Una confirmación de la topología que no se iba buscando
+>
+> El `ext_pan_id` de los dos es casi el mismo, y lo que cambia es el final:
+>
+> ```
+>     GW1   0x20260102401918 01
+>     GW2   0x20260102401918 02
+>                            ↑↑
+> ```
+>
+> Catorce dígitos idénticos y el último par numerándolos **01** y **02**. Eso
+> **confirma por un camino independiente** el reparto que se había deducido de dos
+> fuentes distintas —el volcado del stow y el `ncu`/`gw` por tracker del replanteo,
+> que coincidieron 2289/2289— y de paso que la regla de las IP apunta bien: la
+> `.87` es el 01 y la `.88` es el 02. Tres caminos y ninguno se contradice.
+>
+> Que los dos dígitos de delante sean **18** y la NCU sea la **18** es sugerente,
+> pero eso es leer un patrón en hexadecimal sin documentación que lo respalde, así
+> que se deja como hipótesis y no se usa para nada.
+>
 > **LO QUE SIGUE SIN DECIDIRSE, y hay que decirlo:** 8,4× en fallos de ACK dice que
 > GW1 lo pasa mal, **no por qué**. Un ACK que no llega puede ser nivel bajo en el
 > nodo, un conector o una antena mala en el gateway, o un vecino ruidoso. El
 > `rssi` del volcado es **el del último paquete recibido, una sola muestra**, no
 > una distribución: no sirve para decidirlo. Para eso sigue haciendo falta el
 > censo por nodo con RSSI y LQI de las 122 TCU.
+>
+> ### Lo poco que el `rssi` sí dice, y por qué no depende del convenio
+>
+> El campo vuelve como un entero positivo sin unidad: **82** en GW1 y **84** en GW2.
+> No hay datasheet a mano para fijar el convenio, y caben dos lecturas:
+>
+> | lectura | GW1 | GW2 | quién sale mejor |
+> |---|---|---|---|
+> | magnitud de un dBm negativo, que es lo habitual en estos módulos | **−82 dBm** | −84 dBm | **GW1, por 2 dB** |
+> | una escala de calidad 0–255 | 82 | 84 | GW2, por 2 sobre 82 |
+>
+> **La conclusión es la misma en las dos, y por eso se puede publicar:** los dos
+> niveles están a **2 unidades sobre 82, un 2,4 %**. Con cualquiera de los dos
+> convenios, **el nivel del gateway averiado NO está hundido respecto al del sano**.
+> Si GW1 estuviera al borde de la sensibilidad y GW2 holgado, 2 unidades no es lo
+> que se vería; se verían decenas.
+>
+> **Eso quita la versión simple de la hipótesis de cobertura** —«GW1 no llega»— que
+> junto con el canal limpio deja la pelota bastante en el campo del equipo. Pero
+> **no la cierra**, y la razón es la misma de antes: una sola muestra, del nodo que
+> habló último. Un gateway cuyos tres nodos cercanos van bien y cuyos treinta y
+> cinco lejanos van mal daría exactamente este número. **Es el primer dato de radio
+> que existe sobre GW1, y no es el que decide.**
 >
 > **PERO EL CANAL YA NO ES CANDIDATO.** Ni 15 ni 19 son el 26, así que el castigo
 > de +19 a +3 dBm —dieciséis dB, más que cualquier otra cosa que este estudio
