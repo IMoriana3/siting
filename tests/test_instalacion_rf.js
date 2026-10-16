@@ -46,6 +46,7 @@ check("no se heredan 19 ni 8 dBm de otra NCU", gw1.potenciaDbm === null && gw2.p
 check("no se inventa ganancia de patrón", gw1.patronDb === null);
 check("identidad TCU con otra antena", tc.antenaId === "AW5405-11-001-C" && cerca(tc.gananciaPicoDbi, 1.83));
 check("no se acepta gateway sin inventario", falla(function () { I.extremoGateway(ncu, "G3"); }));
+check("las dos PAN/redes no se unen por compartir antena", falla(function () { I.balance(gw1, gw2, 80); }));
 const dups = plantilla(); dups.gateways[1].puerto = 1;
 check("no se acepta compartir un puerto entre dos GW", falla(function () { I.extremoGateway(dups, "G1"); }));
 const malos = plantilla(); malos.comun.cable.perdidaDb = -1;
