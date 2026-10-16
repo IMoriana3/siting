@@ -73,7 +73,7 @@ check("la cota superior usa la pérdida mínima", cerca(b.rssiCotaSuperiorDbm, -
 const rev = I.balance(tx, gx, 80);
 check("también hay combinador en TCU→GW", cerca(rev.rssiCondicionalDbm[1], -75.45));
 check("la potencia TX depende del transmisor", cerca(b.rssiCondicionalDbm[1] - rev.rssiCondicionalDbm[1], 3));
-const exacta = plantilla(); exacta.gateways[0] = ncuC.gateways[0]; exacta.comun.combinador.perdidaDb = 3.01;
+const exacta = plantilla(); exacta.gateways[0] = ncuC.gateways[0]; exacta.comun.combinador.perdidaDb = 3.01; exacta.comun.conexionesPerdidaDb = 0; exacta.comun.antena.patronDb = 0;
 const be = I.balance(I.extremoGateway(exacta, "G1"), tx, 80);
 check("con todas las pérdidas conocidas hay RSSI escalar", cerca(be.rssiDbm, -72.45));
 check("margen sale de RSSI menos sensibilidad de RX", cerca(be.margenDb, 29.55));
