@@ -93,6 +93,8 @@
   }
   function balance(tx, rx, perdidaPropagacionDb) {
     if (!tx || !rx) throw new Error("balance RF: faltan extremos");
+    if (tx.tipo === "GW" && rx.tipo === "GW" && tx.comunId && tx.comunId === rx.comunId && tx.id !== rx.id)
+      throw new Error("dos gateways de la misma NCU tienen PAN/canal independientes: no existe salto inter-GW");
     var lp = numero(perdidaPropagacionDb, "perdida de propagacion");
     if (lp === null) throw new Error("balance RF: falta perdida de propagacion");
     var faltan = (tx.faltan || []).map(function (n) { return "TX: " + n; })
@@ -116,9 +118,10 @@
         cima + ptr + prr - tx.perdidaConocidaMaxDb - rx.perdidaConocidaMaxDb,
         cima + ptr + prr - tx.perdidaConocidaMinDb - rx.perdidaConocidaMinDb
       ];
-      if (!faltan.length && intervalo[0] === intervalo[1]) {
+      if (faltan.filter(function (f) { return f !== "sensibilidad RX del equipo"; }).length === 0 &&
+          intervalo[0] === intervalo[1]) {
         rssi = intervalo[0];
-        margen = rssi - sensibilidad;
+        if (sensibilidad !== null) margen = rssi - sensibilidad;
       }
     }
     return {
