@@ -234,6 +234,38 @@
        calculados y el motivo, que es lo que se necesita para diagnosticarlo. */
     if (salidaSinMargen) return salida;
 
+    /* MONTAJE RF OPCIONAL: cada extremo declara su propia radio y cadena RF.
+     * No se impone a todas las plantas. Dos GW pueden compartir físicamente la
+     * antena sin compartir PAN ni malla. La propagación sigue siendo RPV: este
+     * módulo sólo aplica una vez las pérdidas de terminal TX y RX.
+     *
+     * Sin potencia o con conectores/patrón sin caracterizar, NO publicamos un
+     * margen puntual: radio_instalacion devuelve un intervalo CONDICIONAL que
+     * se conserva sólo como evidencia, no colorea el mapa. */
+    if (enlace.montajeRf) {
+      var RI = (typeof require !== "undefined" && typeof module !== "undefined")
+        ? require("./radio_instalacion.js") : raiz.RadioInstalacion;
+      if (!RI) {
+        motivos.push("modulo_montaje_rf_no_cargado");
+        return salida;
+      }
+      salida.montajeRf = RI.balance(enlace.montajeRf.tx, enlace.montajeRf.rx, perdida);
+      salida.patron = {nombre: null, motivo: "el patron por extremo se declara en montajeRf"};
+      if (salida.montajeRf.rssiDbm == null) {
+        motivos.push("montaje_rf_no_cerrado");
+        return salida;
+      }
+      salida.prxDbm = salida.montajeRf.rssiDbm;
+      if (salida.montajeRf.margenDb == null) {
+        motivos.push("sin_sensibilidad_no_hay_margen");
+        return salida;
+      }
+      salida.margenDb = salida.montajeRf.margenDb;
+      if (propagacion.sigma_db == null) motivos.push("sin_sigma_no_hay_probabilidad");
+      else salida.pEnlace = phi(salida.margenDb / propagacion.sigma_db);
+      return salida;
+    }
+
     if (variante.ptx_dbm == null || variante.gtx_dbi == null || variante.grx_dbi == null) {
       motivos.push("balance_incompleto");
       return salida;
