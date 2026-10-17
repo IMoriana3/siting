@@ -71,6 +71,7 @@ declare -A PISO=(
   [test_gateway_estado.js]=56
   [test_instalacion_rf.js]=29
   [test_careo_elburgo_datos.py]=19
+  [test_careo_elburgo_modelo.js]=16
   [test_comparador.js]=67
   [test_render_tabla.js]=35
   [test_legalidad.js]=60
