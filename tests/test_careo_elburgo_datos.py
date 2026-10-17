@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory() as td:
     check('solo acepta esclavos asignados al gateway',a['recuentos']['angulos_esclavo_fuera_de_ambito']==1)
     check('no convierte error Modbus en inclinación plana',c['recuentos']['angulos_error_de_lectura']==1)
     check('fecha holdout no entra en descubrimiento previo',a['holdout']['pct_continuidad_identidad_de_primer_salto']==50)
+    check('primer salto separado por hora UTC para el careo',a['primeros_saltos_14_18_utc']['2026-10-10T14']['TCU_A']==1)
     check('mediana de histograma impar exacta',m.mediana_hist({2:2,3:1})==2)
     check('mediana de histograma par exacta',m.mediana_hist({2:1,3:1})==2.5)
     serial=json.dumps(data)
