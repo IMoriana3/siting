@@ -71,6 +71,7 @@ def analizar(zip_path, desde, hasta, holdout=None):
     conteos = {g: collections.Counter() for g in GWS}
     primero = {g: collections.Counter() for g in GWS}
     diarios = {g: collections.defaultdict(collections.Counter) for g in GWS}
+    primeros_horas_clave = {g: collections.defaultdict(collections.Counter) for g in GWS}
     hist_hops = {g: collections.Counter() for g in GWS}
     horas = {g: collections.defaultdict(collections.Counter) for g in GWS}
     destinos = {g: set() for g in GWS}
@@ -158,6 +159,8 @@ def analizar(zip_path, desde, hasta, holdout=None):
                 ct["primer_salto_" + tipo(first)] += 1
                 primero[g][first] += 1
                 diarios[g][d][first] += 1
+                if r["timestamp"][11:13] in {"14", "18"}:
+                    primeros_horas_clave[g][d + "T" + r["timestamp"][11:13]][first] += 1
                 if (g, first) not in coords:
                     ct["primer_salto_sin_posicion"] += 1
         try:
@@ -238,6 +241,7 @@ def analizar(zip_path, desde, hasta, holdout=None):
             "primeros_saltos_distintos":len(primero[g]),
             "top_primeros_saltos":top,
             "primeros_saltos_por_dia":{day:dict(c.most_common()) for day,c in sorted(diarios[g].items())},
+            "primeros_saltos_14_18_utc":{dhr:dict(c.most_common()) for dhr,c in sorted(primeros_horas_clave[g].items())},
             "tcus_mas_cercanas_en_plano":[{"nodo":name,"distancia_m":d} for d,name in cercano],
             "series_horarias":hrs,
             "holdout":test}
